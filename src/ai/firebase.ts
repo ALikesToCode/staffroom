@@ -25,10 +25,10 @@ export const app = initializeApp(
 );
 
 // App Check protects the Gemini API. Firebase AI Logic enforces it.
-if (configured) {
+if (configured && typeof window !== 'undefined') {
   const debugToken = env.VITE_APPCHECK_DEBUG_TOKEN;
   if (debugToken) {
-    (self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN: string | boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN =
+    (globalThis as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN: string | boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN =
       debugToken === 'true' ? true : debugToken;
   }
   const siteKey = env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
