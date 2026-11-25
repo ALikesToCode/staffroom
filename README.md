@@ -60,6 +60,17 @@ Without a Firebase project the on-device half still works: the guard, the gates,
 
 To try it: press **Use the sample class**, then **Run the guard**.
 
+## Deploy
+
+```bash
+# .env.production.local must leave VITE_APPCHECK_DEBUG_TOKEN empty and set
+# VITE_RECAPTCHA_ENTERPRISE_SITE_KEY to a key registered under App Check.
+pnpm build
+firebase deploy --only hosting,firestore:rules,remoteconfig --project <your-project-id>
+```
+
+A debug token must never be built into a hosted site: it would let anyone pass App Check.
+
 ## Tests
 
 ```bash
