@@ -9,6 +9,10 @@ verdict "fits": the advice is sensible given the private facts, or does not touc
 verdict "conflict": the advice would be unkind, unsafe or impossible for this child given the private facts.
 verdict "unsure": the advice touches on the private facts and the teacher should think before using it.
 
+Most advice fits. Choose "fits" unless you can point to one private fact that the advice runs against. A hard home life alone is not a reason to doubt kind, ordinary advice.
+Choose "conflict" only when a fact makes the advice impossible or harmful as written: for example, advice to stay after school for a child who must leave early, or advice to phone a parent who is not at home.
+Judge only the child named in "Private facts about". Do not judge the advice for other children.
+
 reason is one short sentence for the teacher. Name the private fact that matters.`;
 
 const SCHEMA = {
