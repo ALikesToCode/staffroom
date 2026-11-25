@@ -34,7 +34,7 @@ if (configured) {
   const siteKey = env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
   if (siteKey || debugToken) {
     initializeAppCheck(app, {
-      provider: new ReCaptchaEnterpriseProvider(siteKey ?? 'debug-token-only'),
+      provider: new ReCaptchaEnterpriseProvider(siteKey || 'debug-token-only'),
       isTokenAutoRefreshEnabled: true,
     });
   }
