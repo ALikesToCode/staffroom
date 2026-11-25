@@ -1,0 +1,14 @@
+{
+  "parameters": {
+    "cloud_model": {
+      "defaultValue": { "value": "gemini-3.5-flash-lite" },
+      "description": "The cloud model that drafts from the redacted text.",
+      "valueType": "STRING"
+    },
+    "locked_kinds": {
+      "defaultValue": { "value": "contact,id" },
+      "description": "Kinds of item a teacher may never release to the cloud. Any of: student, adult, place, contact, id, private.",
+      "valueType": "STRING"
+    }
+  }
+}

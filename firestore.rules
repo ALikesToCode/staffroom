@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Audit copies of receipts. A user can read and add their own; nobody can edit or delete one.
+    match /users/{uid}/receipts/{receiptId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['id', 'createdAt', 'task', 'label', 'guard', 'sent', 'draft', 'check', 'signOff'])
+        && request.resource.data.sent.text is string
+        && request.resource.data.sent.text.size() < 20000;
+      allow update, delete: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

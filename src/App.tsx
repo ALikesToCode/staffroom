@@ -604,6 +604,11 @@ export function App() {
                       ))}
                     </ul>
                   )}
+                  {guardWhere === 'RULES_ONLY' && (
+                    <p className="caution">
+                      No model has read this note. Anything you have not marked yourself will be sent exactly as written below.
+                    </p>
+                  )}
                   <label className="read-it">
                     <input type="checkbox" checked={readIt} onChange={(e) => setReadIt(e.target.checked)} />I have read this text
                     and I am content to send it.
