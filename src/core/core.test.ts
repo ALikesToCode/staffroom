@@ -3,6 +3,7 @@ import { findByRule, nameParts } from './rules';
 import { addByTeacher, buildVault, deterministicCandidates, redact, restore, segment, PRIVATE_TOKEN } from './vault';
 import { checkOutgoing, checkReply } from './gate';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from './samples';
+import { plainText } from './text';
 
 describe('pattern rules', () => {
   it('finds phone numbers, emails and identity numbers', () => {
@@ -201,5 +202,19 @@ describe('check and receipt', () => {
     expect(json).not.toContain('epilepsy');
     expect(receipt.guard.found.student).toBe(2);
     expect(receipt.check.conflict).toBe(1);
+  });
+});
+
+describe('plainText', () => {
+  it('removes markdown marks and keeps the words', () => {
+    expect(plainText('1. **Check in Briefly:** ask [Student 1] *after* school.')).toBe('1. Check in Briefly: ask [Student 1] after school.');
+    expect(plainText('## Support Plan\n__Maths__ review with `[Student 2]`')).toBe('Support Plan\nMaths review with [Student 2]');
+  });
+  it('leaves stand-ins, lists and ordinary punctuation alone', () => {
+    const text = '[Student 1] and [Adult 1]: 3 * 4 = 12, see roll_no_6B. - first\n- second';
+    expect(plainText(text)).toBe(text);
+  });
+  it('drops an unpaired bold mark', () => {
+    expect(plainText('**Note: sit near [Student 3]')).toBe('Note: sit near [Student 3]');
   });
 });

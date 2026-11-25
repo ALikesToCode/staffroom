@@ -1,11 +1,12 @@
 import type { Draft, Task, Where } from '../core/types';
+import { plainText } from '../core/text';
 import { modelFor } from './routes';
 
 const SYSTEM = `You help a school teacher in India with practical, kind, specific classroom advice.
 
 The teacher's notes have been redacted before they reached you. Text in square brackets such as [Student 1], [Adult 1] or [Place 1] stands for a person or place whose identity is withheld. Always refer to them by exactly the same stand-in, brackets included. [withheld] marks a private detail you are not allowed to know. Do not guess what it is and do not ask for it.
 
-Write plainly. No diagnosis, no labels for children, nothing that costs money.`;
+Write plainly, in plain text with no markdown: no asterisks, no # headings. No diagnosis, no labels for children, nothing that costs money.`;
 
 const SCHEMA = {
   type: 'object',
@@ -46,8 +47,8 @@ export async function writeDraft(redacted: string, task: Task, cloudModel: strin
   const onDevice = result.response.inferenceSource === 'on_device';
   return {
     draft: {
-      title: String(draft.title ?? task.label),
-      items: draft.items.map((i) => ({ heading: String(i.heading ?? ''), text: String(i.text ?? '') })),
+      title: plainText(String(draft.title ?? task.label)),
+      items: draft.items.map((i) => ({ heading: plainText(String(i.heading ?? '')), text: plainText(String(i.text ?? '')) })),
     },
     where: onDevice ? 'ON_DEVICE' : 'IN_CLOUD',
     model: onDevice ? 'Gemini Nano (Chrome built-in)' : cloudModel,
