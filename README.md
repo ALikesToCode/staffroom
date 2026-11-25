@@ -3,6 +3,7 @@
 **What a teacher writes about a child stays on the teacher's device.** A small on-device model guards the door; a large cloud model does the writing and only ever sees what the teacher approved.
 
 Built for [#BuildHybridAI 2026](https://firebasehybridaihackathon.devpost.com/) with Firebase AI Logic hybrid inference. Platform: Web (Chrome on desktop).
+**Try it:** https://staffroom-hybrid-8a71.web.app (Chrome on a desktop; press **Use the sample class**, then **Run the guard**).
 
 ## The problem
 

@@ -4,6 +4,10 @@
 
 What a teacher writes about a child stays on the teacher's device. The cloud only ever sees what the teacher approved.
 
+**Live app:** https://staffroom-hybrid-8a71.web.app
+
+**Code:** https://github.com/ALikesToCode/staffroom
+
 ## Inspiration
 
 Teachers keep the most useful notes about a class in their heads or in a notebook: who is missing school and why, who has a health condition, whose home is in trouble. Those notes are exactly what a large model needs to write a good support plan, and exactly what should not be pasted into one. I work on teacher training in public education in India, and I build agent systems that stay under control. Staffroom puts the two together: the capable model does the heavy writing, and a small model on the device is the guard that decides what it is allowed to see.
