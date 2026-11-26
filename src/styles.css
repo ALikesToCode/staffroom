@@ -772,6 +772,7 @@ mark.released {
 }
 
 .route-rules_only,
+.route-skipped,
 .route-not_run {
   color: var(--amber);
 }
@@ -853,6 +854,7 @@ mark.released {
 }
 
 .read-it input {
+  flex: none;
   margin-top: 4px;
   width: 16px;
   height: 16px;
@@ -1153,7 +1155,7 @@ footer {
 
 /* ------------------------------------------------------------------ small screens */
 
-@media (max-width: 920px) {
+@media (max-width: 900px) {
   .app {
     padding: 0 14px 32px;
   }
@@ -1209,6 +1211,94 @@ footer {
   .vault .switch {
     grid-column: 3;
     grid-row: 1 / span 2;
+  }
+
+  /* Everything below keeps the page readable down to a 380px screen: no grid
+     keeps more than one flexible column, and long words wrap instead of
+     pushing the page wider than the screen. */
+
+  .top {
+    gap: 12px;
+  }
+
+  .brand {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  nav,
+  .route {
+    flex-wrap: wrap;
+  }
+
+  .head-links {
+    justify-content: flex-start;
+  }
+
+  .note-view,
+  .items,
+  .vault .what,
+  .caution,
+  .alert,
+  .hint,
+  .page {
+    overflow-wrap: anywhere;
+  }
+
+  .verdict {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .verdict b {
+    white-space: normal;
+  }
+
+  .facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .facts dd {
+    margin-bottom: 8px;
+  }
+
+  .routes,
+  .routes tbody,
+  .routes tr,
+  .routes td {
+    display: block;
+  }
+
+  .routes thead {
+    display: none;
+  }
+
+  .routes tr {
+    padding: 10px 0;
+    border-top: 1px solid #ece4d2;
+  }
+
+  .routes tr:first-child {
+    border-top: 0;
+  }
+
+  .routes td {
+    border-top: 0;
+    padding: 3px 14px;
+  }
+
+  .routes code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .receipts summary strong {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .page {
+    padding: 20px 0;
   }
 }
 
