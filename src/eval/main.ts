@@ -7,8 +7,8 @@ import { CASES, prepare, totals, type EvalCase, type EvalRow } from './cases';
 import { prepareFull } from './full';
 import { HELDOUT } from './heldout';
 import { runRuleSet } from './rules';
-import { FIT_CASES, FIT_CHILD_CASES, fitRow, fitTotals, type FitRow } from './fit';
-import { FIT_CHILD_SYSTEM, onDeviceFit } from '../ai/fit';
+import { FIT_CASES, FIT_CHILD_CASES, fitRow, fitTotals, lessonFitCases, lessonFitRow, lessonFitTotals, type FitRow, type LessonFitRow } from './fit';
+import { FIT_CHILD_SYSTEM, FIT_LESSON_SYSTEM, fitLessonSchema, onDeviceFit } from '../ai/fit';
 import { runLessonSet } from './lesson';
 
 // A developer page, not part of the app. It runs fixed cases through the same check the app runs and shows
@@ -161,8 +161,25 @@ async function runFit() {
   const ask = onDeviceFit();
   const askChild = onDeviceFit(FIT_CHILD_SYSTEM);
   const cases = [...FIT_CASES.map((c) => ({ c, child: false })), ...FIT_CHILD_CASES.map((c) => ({ c, child: true }))];
+  const lessonRows: (LessonFitRow & { run: number; ms: number })[] = [];
+  const lessonCases = lessonFitCases();
   const report = (done: boolean) =>
-    (json.textContent = JSON.stringify({ done, at: new Date().toISOString(), userAgent: navigator.userAgent, set, runsPerCase: runs, totals: fitTotals(rows), rows }, null, 2));
+    (json.textContent = JSON.stringify(
+      {
+        done,
+        at: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        set,
+        runsPerCase: runs,
+        totals: fitTotals(rows),
+        rows,
+        // What each child needs in a lesson. "rating" on each point is null: it is for a person who reads the point to fill in.
+        lessonTotals: lessonFitTotals(lessonRows),
+        lessonRows,
+      },
+      null,
+      2,
+    ));
   let n = 0;
   for (let r = 1; r <= runs; r++) {
     for (const { c, child } of cases) {
@@ -198,9 +215,43 @@ async function runFit() {
       cell(tr, String(row.ms));
       report(false);
     }
+    // What each child needs in each of the five lessons: one request for a child, as in the app.
+    let m = 0;
+    for (const c of lessonCases) {
+      status.textContent = `Run ${r} of ${runs}: lesson and child ${++m} of ${lessonCases.length} (${c.id})`;
+      const began = performance.now();
+      const row = { ...(await lessonFitRow(c, (stages) => onDeviceFit(FIT_LESSON_SYSTEM, fitLessonSchema(stages)))), run: r, ms: 0 };
+      row.ms = Math.round(performance.now() - began);
+      lessonRows.push(row);
+      const tr = table.insertRow();
+      const said = (p: LessonFitRow['first'][number]) =>
+        `[${p.stage}] ${p.do} (${p.realStage ? 'a stage of the lesson' : 'no such stage'}; ${p.rulePasses ? 'no rule fires' : p.realStage ? `a rule matched “${p.matched.join('”, “')}”` : 'not read by rule'}; ${
+          p.repeats.length > 0 ? `repeats private words: ${p.repeats.join(', ')}` : 'repeats no private words'
+        }; rating: not rated)`;
+      cell(tr, String(r));
+      cell(tr, c.id);
+      cell(tr, `the note about ${c.child}`);
+      cell(tr, `${c.lesson}: the whole lesson, one line for each stage`);
+      cell(tr, 'at most two points, each for a stage, that no rule fires on');
+      cell(tr, row.error ? 'failed' : !row.read ? 'no answer could be read' : `${row.offered.length} offered`, row.error || !row.read ? 'wrong' : '');
+      cell(
+        tr,
+        row.error ??
+          [
+            row.first.length > 0 ? `First answer: ${row.first.map(said).join(' ')}` : 'First answer: no points.',
+            row.requests > 1 ? `Asked once more. Offered: ${row.offered.map(said).join(' ') || 'nothing'}.` : '',
+            row.droppedByRule > 0 ? `Left out by rule: ${row.droppedByRule}.` : '',
+          ]
+            .filter(Boolean)
+            .join(' '),
+      );
+      cell(tr, String(row.ms));
+      report(false);
+    }
   }
   const t = fitTotals(rows);
-  status.textContent = `Done (${SET_NAME.fit}). First answers: ${t.produced} of ${t.cases} were a rewrite, ${t.rulePasses} had no rule fire on them, ${t.saysFact} repeated words of the private fact. Offered after at most one retry: ${t.offered} of ${t.cases} (${t.offeredSaysFact} repeating words of the fact). Stopped: ${t.errors}.`;
+  const l = lessonFitTotals(lessonRows);
+  status.textContent = `Done (${SET_NAME.fit}). What each child needs in a lesson: ${l.calls} calls, ${l.read} read, ${l.noPoints} with no points; ${l.points} points in first answers, ${l.realStage} naming a stage of the lesson, ${l.rulePasses} with no rule firing, ${l.repeatsPrivate} repeating private words; ${l.offered} offered, ${l.droppedByRule} left out by rule; stopped ${l.errors}; rated by a person ${l.rated}. Steps: First answers: ${t.produced} of ${t.cases} were a rewrite, ${t.rulePasses} had no rule fire on them, ${t.saysFact} repeated words of the private fact. Offered after at most one retry: ${t.offered} of ${t.cases} (${t.offeredSaysFact} repeating words of the fact). Stopped: ${t.errors}.`;
   report(true);
   document.body.dataset.state = 'done';
 }

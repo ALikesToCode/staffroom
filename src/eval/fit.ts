@@ -1,5 +1,21 @@
 import type { Constraint } from '../core/types';
-import { factWordsIn, fitForChild, fitHits, fitPrompt, fitStep, readFit, type FitAsk, type FitInput } from '../ai/fit';
+import {
+  factWordsIn,
+  fitForChild,
+  fitHits,
+  fitLessonForChild,
+  fitPrompt,
+  fitStep,
+  readFit,
+  type FitAsk,
+  type FitInput,
+  type FitPoint,
+  type FitStage,
+  type LessonFitInput,
+} from '../ai/fit';
+import { childNotes, pointHits, stageLines } from '../core/points';
+import { repeatsForChild } from '../core/repeats';
+import { LESSON_CASES, sampleClass } from './lesson';
 
 /**
  * A set for measuring the fit: a step of advice that goes against one
@@ -152,3 +168,143 @@ export function fitTotals(rows: FitRow[]): FitTotals {
 
 /** The first prompt of a pair, for the table. */
 export const fitFirstPrompt = (c: FitCase) => fitPrompt(fitInput(c));
+
+// ---------------------------------------------------------------- a lesson: what each child needs in it
+
+/** One call: one of the five hand-written lessons and one child of the sample class the note says something about. */
+export interface LessonFitCase {
+  id: string;
+  lesson: string;
+  child: string;
+  input: LessonFitInput;
+  check: (point: FitPoint) => string[];
+  /** The words of the private note that a point is read for. */
+  repeats: (text: string) => string[];
+}
+
+/** The five lessons of the lesson set, each with each of the sample's children the note speaks of: 25 calls. */
+export function lessonFitCases(): LessonFitCase[] {
+  const { note, entities, constraints, tokens } = sampleClass();
+  const notes = childNotes(note, entities, constraints);
+  return LESSON_CASES.flatMap((lesson) => {
+    const stages = stageLines(lesson.stages, entities, tokens);
+    return notes.map((n) => ({
+      id: `${lesson.id}/${n.child.split(' ')[0].toLowerCase()}`,
+      lesson: lesson.subject,
+      child: n.child,
+      input: { childName: n.child, childNote: n.text, stages },
+      check: (p: FitPoint) => pointHits(p.text, n.id, p.itemIndex, lesson.stages, constraints, note).map((h) => h.matched),
+      repeats: (text: string) => repeatsForChild(text, n.id, entities, constraints),
+    }));
+  });
+}
+
+/** One point of an answer, as the page reports it. The rating is for a person who reads it: nothing here fills it in. */
+export interface LessonFitPoint {
+  stage: string;
+  do: string;
+  /** True when the stage it names is a stage of this lesson. */
+  realStage: boolean;
+  /** True when no rule fires on it for that child. Not read for a point with no real stage. */
+  rulePasses: boolean;
+  matched: string[];
+  /** The words of the private note about the child that it repeats, in runs of three or more or from the sensitive list. */
+  repeats: string[];
+  /** A human rating, filled in by hand afterwards. Always null here. */
+  rating: null;
+}
+
+export interface LessonFitRow {
+  id: string;
+  lesson: string;
+  child: string;
+  /** The points of the first answer, as the model gave them, before any guard. */
+  first: LessonFitPoint[];
+  /** The points offered to the teacher, after the guards and at most one more request. */
+  offered: LessonFitPoint[];
+  read: boolean;
+  requests: number;
+  droppedByRule: number;
+  unknownStage: number;
+  error?: string;
+}
+
+const rawPoints = (raw: string): { stage: string; do: string }[] => {
+  try {
+    const parsed = JSON.parse(raw) as { points?: unknown } | null;
+    if (!parsed || !Array.isArray(parsed.points)) return [];
+    return (parsed.points as { stage?: unknown; do?: unknown }[])
+      .filter((p) => p && typeof p.do === 'string' && p.do.trim().length > 0)
+      .map((p) => ({ stage: typeof p.stage === 'string' ? p.stage : '', do: (p.do as string).replace(/\s+/g, ' ').trim() }));
+  } catch {
+    return [];
+  }
+};
+
+/** Run one call as the app runs it. `asker` builds the request for a lesson's stages, as onDeviceFit does. */
+export async function lessonFitRow(c: LessonFitCase, asker: (stages: FitStage[]) => FitAsk): Promise<LessonFitRow> {
+  const answers: string[] = [];
+  const ask = asker(c.input.stages);
+  const recording: FitAsk = async (prompt) => {
+    const answer = await ask(prompt);
+    if (answer.onDevice) answers.push(answer.text);
+    return answer;
+  };
+  const report = (stage: string, text: string): LessonFitPoint => {
+    const itemIndex = c.input.stages.findIndex((s) => s.name.toLowerCase() === stage.trim().toLowerCase());
+    const matched = itemIndex >= 0 ? c.check({ itemIndex, stage, text }) : [];
+    return { stage, do: text, realStage: itemIndex >= 0, rulePasses: itemIndex >= 0 && matched.length === 0, matched, repeats: c.repeats(text), rating: null };
+  };
+  const row: LessonFitRow = { id: c.id, lesson: c.lesson, child: c.child, first: [], offered: [], read: false, requests: 0, droppedByRule: 0, unknownStage: 0 };
+  try {
+    const got = await fitLessonForChild(c.input, c.check, recording);
+    row.offered = got.points.map((p) => report(p.stage, p.text));
+    row.read = got.read;
+    row.requests = got.asked;
+    row.droppedByRule = got.droppedByRule;
+    row.unknownStage = got.unknownStage;
+  } catch (e) {
+    row.error = e instanceof Error ? e.message : String(e);
+  }
+  if (answers.length > 0) row.first = rawPoints(answers[0]).map((p) => report(p.stage, p.do));
+  return row;
+}
+
+export interface LessonFitTotals {
+  calls: number;
+  /** Calls whose first answer could be read. */
+  read: number;
+  /** Calls whose first answer gave no point. */
+  noPoints: number;
+  /** Points in first answers, and how many of them name a real stage, pass the rules, and repeat private words. */
+  points: number;
+  realStage: number;
+  rulePasses: number;
+  repeatsPrivate: number;
+  /** Points offered after the guards. */
+  offered: number;
+  offeredRepeatsPrivate: number;
+  droppedByRule: number;
+  errors: number;
+  /** Offered points a person has rated. Nothing here rates one. */
+  rated: number;
+}
+
+export function lessonFitTotals(rows: LessonFitRow[]): LessonFitTotals {
+  const first = rows.flatMap((r) => r.first);
+  const offered = rows.flatMap((r) => r.offered);
+  return {
+    calls: rows.length,
+    read: rows.filter((r) => r.read).length,
+    noPoints: rows.filter((r) => r.read && r.first.length === 0).length,
+    points: first.length,
+    realStage: first.filter((p) => p.realStage).length,
+    rulePasses: first.filter((p) => p.rulePasses).length,
+    repeatsPrivate: first.filter((p) => p.repeats.length > 0).length,
+    offered: offered.length,
+    offeredRepeatsPrivate: offered.filter((p) => p.repeats.length > 0).length,
+    droppedByRule: rows.reduce((n, r) => n + r.droppedByRule, 0),
+    errors: rows.filter((r) => r.error !== undefined).length,
+    rated: offered.filter((p) => p.rating !== null).length,
+  };
+}

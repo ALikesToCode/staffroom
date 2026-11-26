@@ -8,6 +8,7 @@ import { RULE_CASES, runRuleSet } from './rules';
 import { FIT_CASES, FIT_CHILD_CASES, fitInput, fitRow, fitTotals } from './fit';
 import { LESSON_CASES, runLessonSet } from './lesson';
 import { ruleConflicts } from '../core/conflicts';
+import { lessonFitCases, lessonFitRow, lessonFitTotals } from './fit';
 import type { FitAsk } from '../ai/fit';
 
 describe('the rule layer measured on fresh pairs', () => {
@@ -220,5 +221,40 @@ describe('the fit set for a lesson', () => {
     expect(prompts[0]).toMatch(/Say what this child does instead\.$/);
     expect(row.offered).toMatchObject({ ok: true, requests: 1 });
     expect(row.first).toMatchObject({ produced: true, rulePasses: true });
+  });
+});
+
+describe('the fit set: what each child needs in each lesson', () => {
+  const cases = lessonFitCases();
+
+  it('has the five lessons of the lesson set for each of the five children the sample note speaks of', () => {
+    expect(cases).toHaveLength(25);
+    expect(new Set(cases.map((c) => c.id)).size).toBe(25);
+    expect([...new Set(cases.map((c) => c.child))]).toEqual(['Aarav Sharma', 'Meenal', 'Kabir', 'Ishaan', 'Tanvi']);
+    expect(cases[0].input.stages.map((s) => s.name)).toEqual(['Starter', 'Teach', 'Practise', 'Check', 'Homework']);
+    expect(cases[1].input.childNote).toContain('has epilepsy');
+  });
+
+  it('reports each point of the first answer and of the offer, and rates none', async () => {
+    const meenal = cases.find((c) => c.id === 'english/meenal')!;
+    const answers = [
+      JSON.stringify({ points: [{ stage: 'Check', do: 'Let her read hers aloud.' }, { stage: 'Plenary', do: 'Ask her first.' }, { stage: 'Homework', do: 'She can finish it after school with you.' }] }),
+      JSON.stringify({ points: [{ stage: 'Homework', do: 'She has epilepsy, so keep it short.' }] }),
+    ];
+    let n = 0;
+    const row = await lessonFitRow(meenal, () => async () => ({ text: answers[n++] ?? '', onDevice: true }));
+    expect(row.first.map((p) => [p.stage, p.realStage, p.rulePasses, p.rating])).toEqual([
+      ['Check', true, true, null],
+      ['Plenary', false, false, null],
+      ['Homework', true, false, null],
+    ]);
+    expect(row.first[2].matched).toEqual(['after school']);
+    expect(row.offered.map((p) => p.do)).toEqual(['Let her read hers aloud.', 'She has epilepsy, so keep it short.']);
+    expect(row.offered[1].repeats.length).toBeGreaterThan(0);
+    expect(row).toMatchObject({ read: true, requests: 2, droppedByRule: 0, unknownStage: 1 });
+    expect(lessonFitTotals([row])).toEqual({ calls: 1, read: 1, noPoints: 0, points: 3, realStage: 2, rulePasses: 1, repeatsPrivate: 0, offered: 2, offeredRepeatsPrivate: 1, droppedByRule: 0, errors: 0, rated: 0 });
+    const stopped = await lessonFitRow(meenal, () => async () => ({ text: 'x', onDevice: false }));
+    expect(stopped.error).toMatch(/did not run on the device/);
+    expect(lessonFitTotals([stopped])).toMatchObject({ calls: 1, read: 0, errors: 1, points: 0 });
   });
 });
