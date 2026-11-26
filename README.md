@@ -83,7 +83,7 @@ pnpm typecheck
 
 ## Measuring the on-device check
 
-[`eval.html`](eval.html) is a developer page that measures the check on the real on-device model. With `pnpm dev` running, open http://127.0.0.1:5173/eval.html in Chrome on a desktop. It puts 24 fixed, invented cases ([`src/eval/cases.ts`](src/eval/cases.ts)) through the same code the app uses, on the same `ONLY_ON_DEVICE` route: 12 where the advice conflicts with a withheld fact (time, place, health, money, family, travel) and 12 where the same fact is there and the advice is fine. Each case runs once; add `?runs=3` to run each three times. The page shows a table and the same results as JSON in `<pre id="eval-json">`: for each case what was expected, what the check said, its reason and the time taken, and totals for conflicts caught, compatible cases wrongly flagged as a conflict, unsure answers and failures.
+[`eval.html`](eval.html) is a developer page that measures the check on the real on-device model. With `pnpm dev` running, open http://127.0.0.1:5173/eval.html in Chrome on a desktop. It puts 24 fixed, invented cases ([`src/eval/cases.ts`](src/eval/cases.ts)) through the same code the app uses, on the same `ONLY_ON_DEVICE` route: 12 where the advice conflicts with a withheld fact (time, place, health, money, family, travel) and 12 where the same fact is there and the advice is fine. Each case runs once; add `?runs=3` to run each three times. The page shows a table and the same results as JSON in `<pre id="eval-json">`: for each case what was expected, what the check said, its reason and the time taken, and totals for conflicts caught, compatible cases wrongly flagged as a conflict, unsure answers and failures. The results of the run quoted under the limits below are in [`docs/check-eval-2026-11-26.json`](docs/check-eval-2026-11-26.json).
 
 ## Limits, stated plainly
 
@@ -92,7 +92,7 @@ pnpm typecheck
 - "Offline" means the guard, the check and the fallback draft keep working once the page and the on-device model have loaded. The page itself is not installed for an offline start.
 - Sign-off is by the person using the browser. Anonymous sign-in gives the browser an account; it does not prove who that person is.
 - A small model can miss a private detail, and the exit gate cannot find a private detail nobody marked. That is why the teacher reads the outgoing text and why the class list and rules do not depend on the model.
-- The on-device check is a small model too. In nine runs of the sample note on 26 November 2026 (Chrome 158) it flagged a conflict with the after-school club in four. A conflict it flags is worth reading; "no conflict found" is not a guarantee.
+- The on-device check is a small model too. On 26 November 2026 (Chrome 158), three runs of the 24 fixed cases on [`eval.html`](eval.html) flagged 35 of 36 conflicting items and wrongly flagged 4 of 36 harmless ones. The check's instructions were adjusted while looking at these same cases, so this is not a held-out test. On the full sample note, where an item has several steps and a child has several facts, it did worse: in three runs in which the cloud draft proposed the after-school club, it caught the conflict once and missed it twice, and in one of those runs it flagged a harmless item. A conflict it flags is worth reading; "no conflict found" is not a guarantee.
 - The on-device check is advice to the teacher, not a verdict. The teacher signs off.
 
 ## Licence

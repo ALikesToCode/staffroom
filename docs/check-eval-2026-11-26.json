@@ -1,0 +1,669 @@
+{
+ "done": true,
+ "at": "2026-11-26T02:18:21.461Z",
+ "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36",
+ "runsPerCase": 3,
+ "totals": {
+  "runs": 72,
+  "conflictCases": 36,
+  "conflictsCaught": 35,
+  "conflictsUnsure": 0,
+  "conflictsMissed": 1,
+  "compatibleCases": 36,
+  "compatiblePassed": 32,
+  "compatibleFlaggedAsConflict": 4,
+  "compatibleUnsure": 0,
+  "failures": 0,
+  "medianMs": 948
+ },
+ "rows": [
+  {
+   "id": "time-1-conflict",
+   "run": 1,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Meenal to stay after school, but she must leave at the last bell to walk home before dark.",
+   "ms": 1223
+  },
+  {
+   "id": "time-1-compatible",
+   "run": 1,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't require anything that conflicts with Meenal needing to leave at the last bell to walk home before dark.",
+   "ms": 1079
+  },
+  {
+   "id": "time-2-conflict",
+   "run": 1,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Aarav cannot reach school before the first bell each morning.",
+   "ms": 913
+  },
+  {
+   "id": "time-2-compatible",
+   "run": 1,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't require Aarav to do anything that conflicts with his existing situation.",
+   "ms": 1004
+  },
+  {
+   "id": "place-3-conflict",
+   "run": 1,
+   "topic": "place",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The fact states Tanvi is not allowed near the river road due to her brother's injury.",
+   "ms": 1014
+  },
+  {
+   "id": "place-3-compatible",
+   "run": 1,
+   "topic": "place",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require Tanvi to go to the river road, which she is restricted from due to her brother's injury.",
+   "ms": 1151
+  },
+  {
+   "id": "place-4-conflict",
+   "run": 1,
+   "topic": "place",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The child may not leave the school grounds on weekdays.",
+   "ms": 893
+  },
+  {
+   "id": "place-4-compatible",
+   "run": 1,
+   "topic": "place",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require Kabir to leave the school grounds, which is a constraint.",
+   "ms": 934
+  },
+  {
+   "id": "health-5-conflict",
+   "run": 1,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice instructs Diya to be seated where flashing lights will be present, which can trigger a seizure due to her epilepsy.",
+   "ms": 1111
+  },
+  {
+   "id": "health-5-compatible",
+   "run": 1,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't require anything that would trigger Diya's seizures; it's simply asking her to read.",
+   "ms": 1038
+  },
+  {
+   "id": "health-6-conflict",
+   "run": 1,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice asks Ishaan to run on a dusty field, which triggers his asthma.",
+   "ms": 960
+  },
+  {
+   "id": "health-6-compatible",
+   "run": 1,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require running or breathing dust, which Ishaan cannot do.",
+   "ms": 940
+  },
+  {
+   "id": "health-7-conflict",
+   "run": 1,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Sana to touch and eat peanuts, which her severe nut allergy strictly prohibits.",
+   "ms": 1050
+  },
+  {
+   "id": "health-7-compatible",
+   "run": 1,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't require anything that conflicts with Sana's nut allergy.",
+   "ms": 930
+  },
+  {
+   "id": "money-8-conflict",
+   "run": 1,
+   "topic": "money",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The family cannot afford to buy the practice workbook.",
+   "ms": 825
+  },
+  {
+   "id": "money-8-compatible",
+   "run": 1,
+   "topic": "money",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't require anything Rohan cannot do, and the fact doesn't preclude him from receiving a free workbook.",
+   "ms": 1144
+  },
+  {
+   "id": "money-9-conflict",
+   "run": 1,
+   "topic": "money",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Nisha's family has no phone and no internet at home.",
+   "ms": 913
+  },
+  {
+   "id": "money-9-compatible",
+   "run": 1,
+   "topic": "money",
+   "expected": "compatible",
+   "got": "conflict",
+   "reason": "Nisha's family has no internet, so she cannot access a digital worksheet.",
+   "ms": 935
+  },
+  {
+   "id": "family-10-conflict",
+   "run": 1,
+   "topic": "family",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The facts state Farhan's mother died, making it impossible for him to bring her to a parents meeting.",
+   "ms": 987
+  },
+  {
+   "id": "family-10-compatible",
+   "run": 1,
+   "topic": "family",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice asks to invite Farhan's grandmother, who looks after him, to the meeting. This aligns with the fact that he lives with her.",
+   "ms": 1183
+  },
+  {
+   "id": "family-11-conflict",
+   "run": 1,
+   "topic": "family",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The fact states the father should not be contacted by the school.",
+   "ms": 939
+  },
+  {
+   "id": "family-11-compatible",
+   "run": 1,
+   "topic": "family",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require contacting Lata's father, which is prohibited.",
+   "ms": 890
+  },
+  {
+   "id": "travel-12-conflict",
+   "run": 1,
+   "topic": "travel",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Om is away every Friday and Saturday.",
+   "ms": 764
+  },
+  {
+   "id": "travel-12-compatible",
+   "run": 1,
+   "topic": "travel",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "Om is away on Fridays and Saturdays, so Tuesday morning is a suitable time for the test.",
+   "ms": 1001
+  },
+  {
+   "id": "time-1-conflict",
+   "run": 2,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The fact states Meenal must leave at the last bell to walk home, so staying after school conflicts with that requirement.",
+   "ms": 1090
+  },
+  {
+   "id": "time-1-compatible",
+   "run": 2,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require anything that conflicts with Meenal's obligation to leave at the last bell before dark.",
+   "ms": 1035
+  },
+  {
+   "id": "time-2-conflict",
+   "run": 2,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Aarav cannot reach school before the first bell each morning.",
+   "ms": 909
+  },
+  {
+   "id": "time-2-compatible",
+   "run": 2,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice simply suggests a pairing, which doesn't conflict with Aarav's morning routine or inability to arrive early.",
+   "ms": 1114
+  },
+  {
+   "id": "place-3-conflict",
+   "run": 2,
+   "topic": "place",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Tanvi to go near the river road, which is forbidden due to her brother's injury.",
+   "ms": 1100
+  },
+  {
+   "id": "place-3-compatible",
+   "run": 2,
+   "topic": "place",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't require Tanvi to be near the river road, which she is restricted from due to her brother's injury.",
+   "ms": 1098
+  },
+  {
+   "id": "place-4-conflict",
+   "run": 2,
+   "topic": "place",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Kabir may not leave the school grounds on weekdays.",
+   "ms": 843
+  },
+  {
+   "id": "place-4-compatible",
+   "run": 2,
+   "topic": "place",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "Kabir is able to read a book even if he is in the school hostel.",
+   "ms": 948
+  },
+  {
+   "id": "health-5-conflict",
+   "run": 2,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Diya to be near flashing lights, which can trigger her seizures.",
+   "ms": 977
+  },
+  {
+   "id": "health-5-compatible",
+   "run": 2,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice asks Diya to read, which does not require exposure to flashing lights.",
+   "ms": 922
+  },
+  {
+   "id": "health-6-conflict",
+   "run": 2,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Ishaan to run, which is contraindicated due to his asthma.",
+   "ms": 930
+  },
+  {
+   "id": "health-6-compatible",
+   "run": 2,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "conflict",
+   "reason": "The advice requires Ishaan to be near the relay race, potentially exposing him to dust and strenuous activity (even if he's not running).",
+   "ms": 1234
+  },
+  {
+   "id": "health-7-conflict",
+   "run": 2,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Sana to touch and eat peanuts, which her allergy prohibits.",
+   "ms": 1049
+  },
+  {
+   "id": "health-7-compatible",
+   "run": 2,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require Sana to touch or eat peanuts, which she cannot do due to her allergy.",
+   "ms": 1027
+  },
+  {
+   "id": "money-8-conflict",
+   "run": 2,
+   "topic": "money",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The family cannot afford anything extra this term.",
+   "ms": 817
+  },
+  {
+   "id": "money-8-compatible",
+   "run": 2,
+   "topic": "money",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require any financial resources from Rohan or his family.",
+   "ms": 904
+  },
+  {
+   "id": "money-9-conflict",
+   "run": 2,
+   "topic": "money",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Nisha's family has no internet at home.",
+   "ms": 861
+  },
+  {
+   "id": "money-9-compatible",
+   "run": 2,
+   "topic": "money",
+   "expected": "compatible",
+   "got": "conflict",
+   "reason": "Nisha's family has no internet, so she cannot access a digital worksheet.",
+   "ms": 938
+  },
+  {
+   "id": "family-10-conflict",
+   "run": 2,
+   "topic": "family",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Farhan's mother has died.",
+   "ms": 773
+  },
+  {
+   "id": "family-10-compatible",
+   "run": 2,
+   "topic": "family",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice asks to invite Farhan's grandmother, who looks after him, to the meeting, and the facts state that he lives with her.",
+   "ms": 1163
+  },
+  {
+   "id": "family-11-conflict",
+   "run": 2,
+   "topic": "family",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The facts state her father must not be contacted by the school.",
+   "ms": 900
+  },
+  {
+   "id": "family-11-compatible",
+   "run": 2,
+   "topic": "family",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't require contacting Lata's father, which is restricted.",
+   "ms": 877
+  },
+  {
+   "id": "travel-12-conflict",
+   "run": 2,
+   "topic": "travel",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Om is away on Fridays.",
+   "ms": 719
+  },
+  {
+   "id": "travel-12-compatible",
+   "run": 2,
+   "topic": "travel",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "Om is away on Fridays and Saturdays, so the test can be held on Tuesday morning.",
+   "ms": 863
+  },
+  {
+   "id": "time-1-conflict",
+   "run": 3,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Meenal to stay after the last bell, but she must leave at the last bell to walk home.",
+   "ms": 1078
+  },
+  {
+   "id": "time-1-compatible",
+   "run": 3,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice asks Meenal to practice writing, which doesn't conflict with her need to leave at the last bell to walk home before dark.",
+   "ms": 1152
+  },
+  {
+   "id": "time-2-conflict",
+   "run": 3,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "fits",
+   "reason": "Aarav cannot reach school before the first bell each morning.",
+   "ms": 929
+  },
+  {
+   "id": "time-2-compatible",
+   "run": 3,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice involves pairing Aarav with a classmate, which doesn't conflict with his existing schedule or inability to arrive early for school.",
+   "ms": 1171
+  },
+  {
+   "id": "place-3-conflict",
+   "run": 3,
+   "topic": "place",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The facts state Tanvi is not allowed near the river road due to her brother's injury.",
+   "ms": 1054
+  },
+  {
+   "id": "place-3-compatible",
+   "run": 3,
+   "topic": "place",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require Tanvi to go near the river road, which she is not allowed to do.",
+   "ms": 1115
+  },
+  {
+   "id": "place-4-conflict",
+   "run": 3,
+   "topic": "place",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Kabir may not leave the school grounds on weekdays.",
+   "ms": 884
+  },
+  {
+   "id": "place-4-compatible",
+   "run": 3,
+   "topic": "place",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "Kabir may not leave the school grounds on weekdays.",
+   "ms": 770
+  },
+  {
+   "id": "health-5-conflict",
+   "run": 3,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice asks Diya to sit at the front for a flashing strobe-light demonstration, which can trigger a seizure due to her epilepsy.",
+   "ms": 1184
+  },
+  {
+   "id": "health-5-compatible",
+   "run": 3,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require anything that conflicts with Diya's medical condition; reading is not triggered by flashing lights.",
+   "ms": 1015
+  },
+  {
+   "id": "health-6-conflict",
+   "run": 3,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Ishaan to run, which he cannot do due to asthma.",
+   "ms": 893
+  },
+  {
+   "id": "health-6-compatible",
+   "run": 3,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require running or breathing dust, which Ishaan cannot do.",
+   "ms": 993
+  },
+  {
+   "id": "health-7-conflict",
+   "run": 3,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Sana to eat peanut sweets, which contradicts her severe nut allergy.",
+   "ms": 916
+  },
+  {
+   "id": "health-7-compatible",
+   "run": 3,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't require any action that contradicts Sana's nut allergy.",
+   "ms": 928
+  },
+  {
+   "id": "money-8-conflict",
+   "run": 3,
+   "topic": "money",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The fact states the family cannot afford extra expenses.",
+   "ms": 833
+  },
+  {
+   "id": "money-8-compatible",
+   "run": 3,
+   "topic": "money",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice asks Rohan to receive a workbook, which is possible regardless of his family's financial situation.",
+   "ms": 1042
+  },
+  {
+   "id": "money-9-conflict",
+   "run": 3,
+   "topic": "money",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Nisha's family has no internet at home, so she cannot watch online video lessons.",
+   "ms": 950
+  },
+  {
+   "id": "money-9-compatible",
+   "run": 3,
+   "topic": "money",
+   "expected": "compatible",
+   "got": "conflict",
+   "reason": "Nisha's family has no internet, so she cannot access a digital worksheet.",
+   "ms": 904
+  },
+  {
+   "id": "family-10-conflict",
+   "run": 3,
+   "topic": "family",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice asks Farhan to bring his mother, but his mother died in March, so he cannot do this.",
+   "ms": 1043
+  },
+  {
+   "id": "family-10-compatible",
+   "run": 3,
+   "topic": "family",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice asks to invite Farhan's grandmother, who looks after him, to the meeting.",
+   "ms": 990
+  },
+  {
+   "id": "family-11-conflict",
+   "run": 3,
+   "topic": "family",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The fact states the father must not be contacted by the school.",
+   "ms": 911
+  },
+  {
+   "id": "family-11-compatible",
+   "run": 3,
+   "topic": "family",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require any contact with Lata's father, which is restricted.",
+   "ms": 985
+  },
+  {
+   "id": "travel-12-conflict",
+   "run": 3,
+   "topic": "travel",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Om is away on Fridays and Saturdays, so a Friday morning test is impossible.",
+   "ms": 883
+  },
+  {
+   "id": "travel-12-compatible",
+   "run": 3,
+   "topic": "travel",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "Om is away on Fridays and Saturdays, so Tuesday morning is a suitable time.",
+   "ms": 925
+  }
+ ]
+}
