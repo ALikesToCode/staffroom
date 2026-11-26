@@ -1554,3 +1554,24 @@ footer {
 .caught dd {
   margin: 0;
 }
+
+/* ---------------------------------------------------------------- the recorded run */
+
+.replay-banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  margin: 0;
+  padding: 10px 16px;
+  background: #1d1b16;
+  color: #f4efe4;
+  font-weight: 600;
+}
+
+.replay-banner .link {
+  color: inherit;
+}

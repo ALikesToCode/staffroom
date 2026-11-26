@@ -4,6 +4,7 @@ import { buildVault } from '../core/vault';
 import { CloudText, DeviceText } from './parts';
 import { Caught, ConstraintsPanel } from './Constraints';
 import type { Constraint } from '../core/types';
+import { App } from '../App';
 
 describe('CloudText', () => {
   it('shows each stand-in literally, square brackets included', () => {
@@ -96,5 +97,15 @@ describe('Caught', () => {
     const typed = renderToStaticMarkup(<Caught check={{ verdict: 'conflict', reason: 'r', by: 'rule', constraintId: 'a' }} constraint={constraint} />);
     expect(typed).toContain('Nothing of this: the words are not in the text that was sent.');
     expect(renderToStaticMarkup(<Caught check={{ verdict: 'fits', reason: 'r' }} constraint={constraint} />)).toBe('');
+  });
+});
+
+describe('the first screen', () => {
+  it('offers the guard, and no recorded run until the file has been read and is in the right form', () => {
+    const text = renderToStaticMarkup(<App />).replace(/<[^>]+>/g, ' ');
+    expect(text).toContain('Run the guard');
+    expect(text).not.toContain('Watch a recorded run');
+    expect(text).not.toContain('Recorded run.');
+    expect(text).not.toContain('Download this run as JSON');
   });
 });

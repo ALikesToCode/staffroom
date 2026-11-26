@@ -13,6 +13,7 @@ import {
   RESERVED,
   restore,
   segment,
+  TOKEN_RE,
 } from './core/vault';
 import { checkReply, safeTitle, type Violation } from './core/gate';
 import { draftLine, loadReceipts, makeReceipt, recordIdTail, storeReceipts, type ReceiptRecord } from './core/receipts';
@@ -35,7 +36,8 @@ import {
   unconfirmConstraint,
 } from './core/constraints';
 import { Caught, ConstraintsPanel } from './ui/Constraints';
-import { checkNeed, needIsTyped, needLine, outgoingOf, type Need } from './core/needs';
+import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
+import { asRecordedRun, captureRun, RECORDED_FILE, replayBanner, replayNext, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyFor } from './core/family';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
@@ -205,6 +207,14 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   /** The last copy to the clipboard: the whole text or one item, and whether it worked. */
   const [copied, setCopied] = useState<{ what: 'all' | number; ok: boolean } | null>(null);
+  /** The recorded run kept beside the app, when there is one and it is in the right form. */
+  const [recorded, setRecorded] = useState<RecordedRun | null>(null);
+  /** Set while a recorded run is replayed. Nothing is sent, no model is asked and no receipt is written. */
+  const [replay, setReplay] = useState<RecordedRun | null>(null);
+  /** The teacher's own note and settings, put aside while a recorded run is on screen. */
+  const stash = useRef<{ note: string; classList: string[]; constraints: Constraint[]; task: TaskId } | null>(null);
+  /** ?capture=1: a developer switch that offers the finished run as a file in the form of a recorded run. */
+  const capture = useMemo(() => new URLSearchParams(globalThis.location?.search ?? '').get('capture') === '1', []);
   const noteRef = useRef<HTMLDivElement>(null);
   /** The policy as last loaded, readable at the moment of sending even before a re-render. */
   const policyRef = useRef<Policy>(DEFAULT_POLICY);
@@ -222,6 +232,11 @@ export function App() {
     // The second argument takes a school policy that arrives after the wait. The approval is bound
     // to the policy, so a tick made under the fallback does not carry over.
     loadPolicy(undefined, usePolicy).then(usePolicy);
+    // The recorded run is a file beside the app. No file, or one in another form: no replay is offered.
+    fetch(`${import.meta.env.BASE_URL}${RECORDED_FILE}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setRecorded(asRecordedRun(data) ?? null))
+      .catch(() => setRecorded(null));
     const stop = watchUser((u) => setUid(u?.uid ?? null));
     const on = () => setOnline(true);
     const off = () => setOnline(false);
@@ -234,13 +249,17 @@ export function App() {
     };
   }, []);
 
-  useEffect(() => write(session, NOTE_KEY, note, note === ''), [note]);
-  useEffect(() => write(session, CLASS_LIST_KEY, classList, classList.length === 0), [classList]);
+  // A recorded run on screen is not the teacher's note: it is never written over what the tab keeps.
+  useEffect(() => {
+    if (!replay) write(session, NOTE_KEY, note, note === '');
+  }, [note, replay]);
+  useEffect(() => {
+    if (!replay) write(session, CLASS_LIST_KEY, classList, classList.length === 0);
+  }, [classList, replay]);
   useEffect(() => write(local, 'staffroom.keepCopies', keepCopies, false), [keepCopies]);
-  useEffect(
-    () => write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints }, constraints.length === 0),
-    [constraints],
-  );
+  useEffect(() => {
+    if (!replay) write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints }, constraints.length === 0);
+  }, [constraints, replay]);
 
   /** Read the records kept in the teacher's account. They hold no text, so there is none to show. */
   const refreshRecords = useCallback(async (user: string) => {
@@ -264,15 +283,17 @@ export function App() {
   // an item of a locked kind is withheld even if the vault says released (the policy can arrive late).
   // After approval the vault is the one that was approved, so the record matches what was sent.
   const entities = useMemo(
-    () => sent?.entities ?? lockConstraints(applyLocks(rawEntities, policy.lockedKinds), constraints),
-    [sent, rawEntities, policy.lockedKinds, constraints],
+    // In a replay the vault is the recorded one, as it stood: today's policy is not applied to it.
+    () => (replay ? rawEntities : (sent?.entities ?? lockConstraints(applyLocks(rawEntities, policy.lockedKinds), constraints))),
+    [replay, sent, rawEntities, policy.lockedKinds, constraints],
   );
   // The redacted note, with the needs the teacher chose to tell under it. The gate runs on both.
   const going = useMemo(() => outgoingOf(note, entities, sent?.constraints ?? constraints), [note, entities, sent, constraints]);
-  const outgoing = going.text;
+  // In a replay the text shown is the text that was sent on the day, as recorded.
+  const outgoing = replay ? replay.outgoing : going.text;
   /** True when not one stand-in was written: the outgoing text is the note as the teacher wrote it. */
-  const nothingWithheld = going.noteAsWritten;
-  const violations = going.violations;
+  const nothingWithheld = replay ? false : going.noteAsWritten;
+  const violations = replay ? [] : going.violations;
   const approval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel);
   const asWrittenApproval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel, true);
   const readIt = readKey !== null && readKey === approval;
@@ -319,6 +340,7 @@ export function App() {
 
   const runGuard = async () => {
     // A run that is cleared or forgotten while it waits for the model must not write its findings afterwards.
+    if (replay) return;
     const run = ++runRef.current;
     const gone = () => runRef.current !== run;
     setError(null);
@@ -402,6 +424,7 @@ export function App() {
    * allows, so releasing is asked about first: see the question under the item.
    */
   const toggle = (e: Entity) => {
+    if (replay) return;
     setUnconfirmAsk(null);
     // A confirmed constraint holds its words back. They are released only after it is unconfirmed.
     if (e.withheld && heldByConstraints(constraints).has(e.id)) {
@@ -460,16 +483,16 @@ export function App() {
   // A touch selection raises no mouse or key event in the note, so the selection itself is listened to.
   // An emptied selection is ignored here: tapping a button can empty it before the tap arrives.
   useEffect(() => {
-    if (stage !== 'review') return;
+    if (stage !== 'review' || replay) return;
     const onChange = () => readSelection(true);
     document.addEventListener('selectionchange', onChange);
     return () => document.removeEventListener('selectionchange', onChange);
-  }, [stage, readSelection]);
+  }, [stage, replay, readSelection]);
 
   /** Mark the selection. Text already in the vault is set back to withheld; a cut word is widened to the whole word. */
   const withholdSelection = (kind: Kind) => {
     const span = selectionSpan.current ?? undefined;
-    if (!span) return;
+    if (!span || replay) return;
     setEntities((list) => addByTeacher(note, list, selection, kind, span));
     selectionSpan.current = null;
     setSelection('');
@@ -481,7 +504,7 @@ export function App() {
 
   /** The vault and the constraints change together: confirming a constraint withholds its words. */
   const hold = (held: { entities: Entity[]; constraints: Constraint[] }) => {
-    if (stage !== 'review') return;
+    if (stage !== 'review' || replay) return;
     setEntities(held.entities);
     setConstraints(held.constraints);
   };
@@ -513,7 +536,7 @@ export function App() {
   const approveAndSend = async () => {
     // Everything is worked out again at the moment of sending: the current locks, the text they give,
     // and the gate on exactly that text. It is sent only if it is the text the teacher ticked as read.
-    if (!policyReadyRef.current || sendingRef.current) return;
+    if (!policyReadyRef.current || sendingRef.current || replay) return;
     const sentPolicy = policyRef.current;
     const current = lockConstraints(applyLocks(rawEntities, sentPolicy.lockedKinds), constraints);
     const approved = outgoingOf(note, current, constraints);
@@ -649,7 +672,7 @@ export function App() {
   const signOff = async () => {
     // Locked at once, before anything is awaited: a second click, or a keep or strike made while the
     // receipt is being written, changes nothing. What is recorded is what was on screen at the click.
-    if (signingRef.current || stage !== 'result' || !result || !sent || replyBlocked) return;
+    if (signingRef.current || stage !== 'result' || !result || !sent || replyBlocked || replay) return;
     // Signing off with nothing kept is allowed: it rejects the whole draft, and is recorded like any other sign-off.
     if (kept.some((k) => k === null)) return;
     signingRef.current = true;
@@ -701,7 +724,7 @@ export function App() {
 
   /** Keep or strike one item. Nothing changes once sign-off has begun. */
   const decide = (i: number, keep: boolean) => {
-    if (signingRef.current || stage !== 'result') return;
+    if (signingRef.current || stage !== 'result' || replay) return;
     setKept((k) => k.map((v, j) => (j === i ? keep : v)));
   };
 
@@ -717,7 +740,7 @@ export function App() {
   /** Copy to the clipboard and say plainly whether it worked. The browser can refuse. */
   const copy = async (what: 'all' | number, text: string) => {
     // Nothing is copied before sign-off, from a flagged reply that was not read, or when no item was kept.
-    if (replyBlocked || stage !== 'signed' || !kept.some((k) => k === true)) return;
+    if (replay || replyBlocked || stage !== 'signed' || !kept.some((k) => k === true)) return;
     let ok = true;
     try {
       await navigator.clipboard.writeText(text);
@@ -792,6 +815,92 @@ export function App() {
       // Storage is switched off, so nothing was kept there.
     }
     window.getSelection()?.removeAllRanges();
+  };
+
+  // ---------------------------------------------------------------- the recorded run
+
+  /** Show the recorded run in place of the teacher's note, which is put aside and brought back on leaving. */
+  const startReplay = () => {
+    if (!recorded || replay) return;
+    stash.current = { note, classList, constraints, task };
+    clearRun();
+    setReplay(recorded);
+    setNote(recorded.note);
+    setClassList(recorded.classList);
+    setConstraints(recorded.constraints);
+    setTask(recorded.task);
+    setView('desk');
+  };
+
+  const leaveReplay = () => {
+    const back = stash.current;
+    stash.current = null;
+    clearRun();
+    setReplay(null);
+    setNote(back?.note ?? '');
+    setClassList(back?.classList ?? []);
+    setConstraints(back?.constraints ?? []);
+    setTask(back?.task ?? 'plan');
+  };
+
+  /** The next screen of the replay. Everything shown comes from the file: no model is asked and nothing is sent. */
+  const nextInReplay = () => {
+    if (!replay || !['write', 'review', 'result'].includes(stage)) return;
+    const to = replayNext(stage as ReplayStage);
+    if (to === 'review') {
+      setEntities(replay.entities);
+      setGuardWhere(replay.where.guard);
+    }
+    if (to === 'result') {
+      const tokens = [...new Set(replay.outgoing.match(TOKEN_RE) ?? [])];
+      setSent({
+        text: replay.outgoing,
+        at: replay.recordedAt,
+        entities: replay.entities,
+        tokens,
+        online: true,
+        policy: replay.policy,
+        constraints: replay.constraints,
+        needs: sharedNeeds(replay.constraints, replay.entities),
+      });
+      setResult({ draft: replay.draft, where: replay.where.draft, model: replay.draftModel });
+      const replyText = [replay.draft.title, ...replay.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
+      // The return gate is plain code, so it is run again here on the recorded reply.
+      setReplyIssues(checkReply(replyText, replay.entities, tokens, replay.outgoing));
+      setReplyRead(false);
+      setChecks(replay.checks);
+      setKept(startsKept(replay.checks));
+      setCheckWhere(replay.where.check);
+    }
+    setStage(to);
+  };
+
+  /** ?capture=1: save the run on screen as a file in the form of a recorded run. */
+  const downloadRun = () => {
+    if (!sent || !result || replay) return;
+    const run = captureRun(
+      {
+        task,
+        note,
+        classList,
+        entities: sent.entities,
+        constraints: sent.constraints,
+        outgoing: sent.text,
+        policy: sent.policy,
+        draft: result.draft,
+        checks,
+        where: { guard: guardWhere, draft: result.where, check: checkWhere },
+        draftModel: result.model,
+      },
+      new Date(),
+      navigator.userAgent,
+    );
+    const url = URL.createObjectURL(new Blob([JSON.stringify(run, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = RECORDED_FILE;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const loadSample = () => {
@@ -877,7 +986,7 @@ export function App() {
           <input
             type="checkbox"
             checked={e.withheld}
-            disabled={locked || stage !== 'review'}
+            disabled={locked || stage !== 'review' || Boolean(replay)}
             onChange={() => toggle(e)}
             aria-label={`Withhold ${e.surfaces[0]}`}
           />
@@ -1011,6 +1120,15 @@ export function App() {
         </div>
       </header>
 
+      {replay && (
+        <p className="replay-banner" role="status">
+          <span>{replayBanner(replay)}</span>
+          <button className="link" onClick={leaveReplay}>
+            Leave the recorded run
+          </button>
+        </p>
+      )}
+
       {view === 'how' && <How policy={policy} device={device} />}
       {view === 'receipts' && (
         <Receipts
@@ -1047,7 +1165,7 @@ export function App() {
                 <div className="card-head">
                   <h3>Your note</h3>
                   <span className="head-links">
-                    {editing ? (
+                    {replay ? null : editing ? (
                       <button className="link" onClick={loadSample}>
                         Use the sample class
                       </button>
@@ -1058,7 +1176,7 @@ export function App() {
                         </button>
                       )
                     )}
-                    {!busy && (note !== '' || classList.length > 0) && (
+                    {!busy && !replay && (note !== '' || classList.length > 0) && (
                       <button
                         className="link forget"
                         onClick={() => (receipts.length > 0 ? setForgetAsk(true) : forgetNote(false))}
@@ -1097,6 +1215,7 @@ export function App() {
                   <>
                     <textarea
                       value={note}
+                      readOnly={Boolean(replay)}
                       maxLength={NOTE_MAX}
                       onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
                       placeholder="Write what you noticed this week, as you would in your own notebook. Names, family matters, health: write it all. The guard reads it here, on this device, before anything is sent."
@@ -1121,6 +1240,7 @@ export function App() {
                         {policy.lockedKinds.includes('student') ? 'always withheld' : 'withheld by default'}, with or without a model.
                       </p>
                       <textarea
+                        readOnly={Boolean(replay)}
                         value={classList.join('\n')}
                         onChange={(e) => setClassList(e.target.value.split('\n').map((s) => s.trimStart()))}
                         onBlur={() => setClassList((l) => l.map((s) => s.trim()).filter(Boolean))}
@@ -1136,7 +1256,7 @@ export function App() {
                       <legend>What do you want help with?</legend>
                       {TASKS.map((t) => (
                         <label key={t.id} className={task === t.id ? 'task on' : 'task'}>
-                          <input type="radio" name="task" checked={task === t.id} onChange={() => setTask(t.id)} />
+                          <input type="radio" name="task" checked={task === t.id} disabled={Boolean(replay)} onChange={() => setTask(t.id)} />
                           <strong>{t.label}</strong>
                           <span>{t.blurb}</span>
                         </label>
@@ -1156,12 +1276,32 @@ export function App() {
                         straight away.
                       </p>
                     )}
-                    <div className="actions">
-                      <button className="primary" disabled={note.trim().length < 20 || note.length > NOTE_MAX} onClick={runGuard}>
-                        Run the guard
-                      </button>
-                      <span className="hint">Nothing is sent. The guard runs here.</span>
-                    </div>
+                    {replay ? (
+                      <div className="actions">
+                        <button className="primary" onClick={nextInReplay}>
+                          Next
+                        </button>
+                        <span className="hint">Recorded run: the next screen shows what the guard found on the day.</span>
+                      </div>
+                    ) : (
+                      <div className="actions">
+                        <button className="primary" disabled={note.trim().length < 20 || note.length > NOTE_MAX} onClick={runGuard}>
+                          Run the guard
+                        </button>
+                        <span className="hint">Nothing is sent. The guard runs here.</span>
+                        {recorded && (
+                          <button className="secondary" onClick={startReplay}>
+                            Watch a recorded run
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {recorded && !replay && (
+                      <p className="hint">
+                        No on-device model in this browser? The recorded run replays a real run on the sample class, screen by
+                        screen. Nothing is sent while you watch it.
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>
@@ -1180,7 +1320,7 @@ export function App() {
                         ),
                       )}
                     </div>
-                    {stage === 'review' && (
+                    {stage === 'review' && !replay && (
                       <div className="select-bar" aria-live="polite">
                         {selection ? (
                           <>
@@ -1260,7 +1400,7 @@ export function App() {
                   <ConstraintsPanel
                     constraints={constraints}
                     students={entities.filter((e) => e.kind === 'student')}
-                    editable
+                    editable={!replay}
                     selection={selection}
                     actions={constraintActions}
                     needOf={needOf}
@@ -1419,16 +1559,16 @@ export function App() {
                                     : ''}
                                 Choose to keep it or strike it before you sign off.
                               </p>
-                              <button className="link" disabled={signing} onClick={() => decide(i, true)}>
+                              <button className="link" disabled={signing || Boolean(replay)} onClick={() => decide(i, true)}>
                                 Keep this item
                               </button>
-                              <button className="link" disabled={signing} onClick={() => decide(i, false)}>
+                              <button className="link" disabled={signing || Boolean(replay)} onClick={() => decide(i, false)}>
                                 Strike this item
                               </button>
                             </div>
                           )}
                           {stage === 'result' && kept[i] !== null && (
-                            <button className="link" disabled={signing} onClick={() => decide(i, !kept[i])}>
+                            <button className="link" disabled={signing || Boolean(replay)} onClick={() => decide(i, !kept[i])}>
                               {kept[i] ? 'Strike this item' : 'Keep this item'}
                             </button>
                           )}
@@ -1441,13 +1581,42 @@ export function App() {
                       <input
                         type="checkbox"
                         checked={replyRead}
-                        disabled={stage !== 'result'}
+                        disabled={stage !== 'result' || Boolean(replay)}
                         onChange={(e) => setReplyRead(e.target.checked)}
                       />
                       I have read the flagged reply and I still want to use it.
                     </label>
                   )}
-                  {stage === 'result' ? (
+                  {capture && !replay && (
+                    <div className="actions">
+                      <button className="secondary" onClick={downloadRun}>
+                        Download this run as JSON
+                      </button>
+                      <span className="hint">For the recorded run: the file holds this note, the vault, the constraints, the draft and the verdicts.</span>
+                    </div>
+                  )}
+                  {replay ? (
+                    <div className="actions">
+                      {stage === 'result' ? (
+                        <>
+                          <button className="primary" onClick={nextInReplay}>
+                            Next
+                          </button>
+                          <span className="hint">
+                            Recorded run: in a live run you keep or strike each item here, then sign off. Nothing is signed off now.
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="stamp">End of the recorded run</span>
+                          <span className="hint">No receipt was written.</span>
+                          <button className="secondary" onClick={leaveReplay}>
+                            Leave the recorded run
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ) : stage === 'result' ? (
                     <div className="actions">
                       {kept.some((k, i) => k === null && noConflictFound(checks[i])) && (
                         <button className="secondary" disabled={signing} onClick={() => !signingRef.current && setKept((k) => keepNoConflict(k, checks))}>
@@ -1586,7 +1755,11 @@ export function App() {
                     <CloudText text={outgoing} />
                   </pre>
                   <p className="hint policy-line">
-                    {policyReady ? `Policy: ${policy.from}. Drafting model: ${policy.cloudModel}.` : 'Policy: loading. Approval waits for it.'}
+                    {replay
+                      ? `Policy on the day: ${replay.policy.from}. Drafting model: ${replay.policy.cloudModel}.`
+                      : policyReady
+                        ? `Policy: ${policy.from}. Drafting model: ${policy.cloudModel}.`
+                        : 'Policy: loading. Approval waits for it.'}
                   </p>
                   {violations.length > 0 && (
                     <ul className="stops">
@@ -1597,6 +1770,17 @@ export function App() {
                       ))}
                     </ul>
                   )}
+                  {replay ? (
+                    <div className="actions">
+                      <button className="primary" onClick={nextInReplay}>
+                        Next
+                      </button>
+                      <span className="hint">
+                        Recorded run: this is the text that was approved and sent on the day. Nothing is sent now.
+                      </span>
+                    </div>
+                  ) : (
+                    <>
                   <label className="read-it">
                     <input type="checkbox" checked={readIt} onChange={(e) => setReadKey(e.target.checked ? approval : null)} />
                     {guardWhere === 'RULES_ONLY'
@@ -1637,6 +1821,8 @@ export function App() {
                       {policyReady ? `${outgoing.length.toLocaleString()} characters` : 'Loading school policy…'}
                     </span>
                   </div>
+                    </>
+                  )}
                 </article>
               )}
 
