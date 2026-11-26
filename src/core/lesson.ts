@@ -77,6 +77,12 @@ export function lessonIssues(f: LessonFields, entities: Entity[], classList: rea
   return out;
 }
 
+/** The outgoing text of a lesson: the redacted note and needs, the lesson lines under them, and what stops either. */
+export function withLessonGoing<T extends { text: string; violations: Violation[] }>(going: T, f: LessonFields | null, entities: Entity[], classList: readonly string[]): T {
+  if (!f) return going;
+  return { ...going, text: withLesson(going.text, f), violations: [...going.violations, ...lessonIssues(f, entities, classList)] };
+}
+
 // ---------------------------------------------------------------- the check: a step for the class against each child
 
 /** One step of the lesson that does not suit one child, by rule. */

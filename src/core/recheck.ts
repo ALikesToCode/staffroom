@@ -94,9 +94,11 @@ export function recheckItems(
   told: ReadonlyMap<string, string>,
   model: readonly (ItemCheck | undefined)[],
   rewritten: readonly boolean[],
+  /** True for a lesson: every stage is for the whole class, whoever it names. */
+  wholeClass = false,
 ): ItemCheck[] {
   return items.map((item, i) => {
-    const rule = ruleCheckItem(item, constraints, entities, allowed, note, told);
+    const rule = ruleCheckItem(item, constraints, entities, allowed, note, told, wholeClass);
     const uncompared: ItemCheck = { verdict: 'not checked', reason: UNCOMPARED, by: 'none', rules: 0 };
     if (!rewritten[i]) return combineChecks(rule, model[i], uncompared);
     if (rule.hit) return combineChecks(rule, undefined, uncompared);

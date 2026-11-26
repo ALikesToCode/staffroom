@@ -26,7 +26,7 @@ export function Hero({
           <span>Your device knows why.</span> <span>The cloud only knows what.</span>
         </h2>
         <p className="hero-sub">
-          Turn private class notes into a plan or messages home. The cloud writes without the secrets; your device checks what comes back.
+          Plan tomorrow's lesson for the whole class. Your device fits it to each child, using what only you know.
         </p>
         <div className="actions">
           <button className="primary big" onClick={onTry}>
@@ -52,11 +52,11 @@ export function Hero({
         <div className="mini device">
           <span className="mini-title">On this device</span>
           <p className="mini-note">
-            <mark className="k-student held">Meenal</mark> walks home and <mark className="k-private held">has to leave school at the last bell</mark>.
+            <mark className="k-student held">Tanvi</mark>'s family <mark className="k-private held">does not have a smartphone or an internet connection</mark>.
           </p>
           <p className="mini-catch">
-            <s>Attend the after-school writing club.</s>
-            <b>Goes against a constraint you confirmed</b>
+            <b>Homework needs fitting for 1 child</b>
+            <span>Tanvi: gets two printed pictures to write from.</span>
           </p>
         </div>
         <div className="mini-door" aria-hidden="true">
@@ -65,11 +65,9 @@ export function Hero({
         <div className="mini cloud">
           <span className="mini-title">The cloud</span>
           <p className="mini-wire">
-            <span className="bar">[Student 2]</span> walks home and <span className="bar">[withheld]</span>.
+            <span className="bar">[Student 5]</span>'s family <span className="bar">[withheld]</span>. Lesson: English, describing a place.
           </p>
-          <p className="mini-wire reply">
-            <span className="bar">[Student 2]</span> could attend the after-school writing club.
-          </p>
+          <p className="mini-wire reply">Homework: find two pictures of a place online and write three sentences.</p>
         </div>
         <figcaption>An example. All data in the sample is invented.</figcaption>
       </figure>

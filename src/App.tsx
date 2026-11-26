@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Constraint, ConstraintKind, DraftItem, Entity, ItemCheck, Kind, LabelWhere, Receipt, TaskId, Where } from './core/types';
-import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './core/samples';
+import { SAMPLE_CLASS_LIST, SAMPLE_LESSON, SAMPLE_NOTE, TASKS } from './core/samples';
 import {
   addByTeacher,
   applyLocks,
@@ -45,6 +45,7 @@ import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } 
 import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, replayBanner, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyAfterRewrite, familyFor } from './core/family';
 import { REPEATS_NOTE, repeatsPrivate } from './core/repeats';
+import { FIELD_MAX, LAST_TIME_MAX, lessonMinutes, lessonReady, NO_LESSON, withLessonGoing, type LessonFields } from './core/lesson';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
@@ -97,6 +98,8 @@ const NOTE_KEY = 'staffroom.note';
 const CLASS_LIST_KEY = 'staffroom.classList';
 // The constraints live with the note: in this tab only, and only for the note they were made for.
 const CONSTRAINTS_KEY = 'staffroom.constraints';
+// The lines about the lesson. Nothing in them is private, and they are kept with the note.
+const LESSON_KEY = 'staffroom.lesson';
 
 // Earlier versions kept the raw note and the class list in local storage. Remove what they left.
 try {
@@ -128,7 +131,9 @@ export function App() {
   const [stage, setStage] = useState<Stage>('write');
   const [note, setNote] = useState(() => read(session, NOTE_KEY, ''));
   const [classList, setClassList] = useState<string[]>(() => read(session, CLASS_LIST_KEY, []));
-  const [task, setTask] = useState<TaskId>('parents');
+  const [task, setTask] = useState<TaskId>('lesson');
+  /** The lines about the lesson: the class, the subject, the topic, the length, and what was done last time. Sent as written. */
+  const [lesson, setLesson] = useState<LessonFields>(() => ({ ...NO_LESSON, ...read(session, LESSON_KEY, NO_LESSON) }));
   /** False on the first screen: no form is shown until the teacher chooses to write, or a note is already kept in this tab. */
   const [composing, setComposing] = useState(() => read(session, NOTE_KEY, '') !== '');
   const [inspecting, setInspecting] = useState(false);
@@ -249,7 +254,7 @@ export function App() {
   /** Set while a recorded run is replayed. Nothing is sent, no model is asked and no receipt is written. */
   const [replay, setReplay] = useState<RecordedRun | null>(null);
   /** The teacher's own note and settings, put aside while a recorded run is on screen. */
-  const stash = useRef<{ note: string; classList: string[]; constraints: Constraint[]; task: TaskId } | null>(null);
+  const stash = useRef<{ note: string; classList: string[]; constraints: Constraint[]; task: TaskId; lesson: LessonFields } | null>(null);
   /** ?capture=1: a developer switch that offers the finished run as a file in the form of a recorded run. */
   const capture = useMemo(() => new URLSearchParams(globalThis.location?.search ?? '').get('capture') === '1', []);
   const noteRef = useRef<HTMLDivElement>(null);
@@ -295,6 +300,9 @@ export function App() {
   }, [classList, replay]);
   useEffect(() => write(local, 'staffroom.keepCopies', keepCopies, false), [keepCopies]);
   useEffect(() => {
+    if (!replay) write(session, LESSON_KEY, lesson, false);
+  }, [lesson, replay]);
+  useEffect(() => {
     if (!replay) write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints }, constraints.length === 0);
   }, [constraints, replay]);
 
@@ -325,7 +333,10 @@ export function App() {
     [replay, sent, rawEntities, policy.lockedKinds, constraints],
   );
   // The redacted note, with the needs the teacher chose to tell under it. The gate runs on both.
-  const going = useMemo(() => outgoingOf(note, entities, sent?.constraints ?? constraints), [note, entities, sent, constraints]);
+  const going = useMemo(
+    () => withLessonGoing(outgoingOf(note, entities, sent?.constraints ?? constraints), task === 'lesson' ? lesson : null, entities, classList),
+    [note, entities, sent, constraints, task, lesson, classList],
+  );
   // In a replay the text shown is the text that was sent on the day, as recorded.
   const outgoing = replay ? replay.outgoing : going.text;
   /** True when not one stand-in was written: the outgoing text is the note as the teacher wrote it. */
@@ -582,7 +593,7 @@ export function App() {
     if (!policyReadyRef.current || sendingRef.current || replay) return;
     const sentPolicy = policyRef.current;
     const current = lockConstraints(applyLocks(rawEntities, sentPolicy.lockedKinds), constraints);
-    const approved = outgoingOf(note, current, constraints);
+    const approved = withLessonGoing(outgoingOf(note, current, constraints), task === 'lesson' ? lesson : null, current, classList);
     const { text, tokens } = approved;
     const stopped = approved.violations;
     // The tick was for one text, one set of locks and one drafting model. Any of them changed: no send.
@@ -662,7 +673,8 @@ export function App() {
       // Layer A: each step against each confirmed constraint, by rule. No model, so it runs in every browser.
       // Every confirmed constraint is compared, whether or not the cloud was told its need: the cloud can ignore a need.
       const told = new Map(approved.needs.map((n) => [n.id, n.line]));
-      const byRule = items.map((item) => ruleCheckItem(item, constraints, entities, tokens, note, told));
+      // A stage of a lesson is for the whole class, whoever it names: it is compared with every confirmed constraint.
+      const byRule = items.map((item) => ruleCheckItem(item, constraints, entities, tokens, note, told, task === 'lesson'));
       const ruleRan = byRule.some((r) => r.compared > 0);
       const unchecked = (reason: string): ItemCheck => ({ verdict: 'not checked', reason });
       // Layer B: the on-device model, against every withheld private detail. Its "no" is a doubt, never a conflict.
@@ -717,7 +729,8 @@ export function App() {
     setCopyOn([]);
     setFitWhere('NOT_RUN');
     // An item in conflict starts struck. Every other item starts undecided: nothing is kept until the teacher keeps it.
-    setKept(startsKept(itemChecks));
+    // A lesson is kept whole: a stage that does not suit one child is right for the class, and is fitted, not struck.
+    setKept(task === 'lesson' ? itemChecks.map(() => true) : startsKept(itemChecks));
     setCheckWhere(where);
     // The result is shown at once. The receipt has a plain title, made from the task and the day, until the
     // naming call answers; it keeps that title if the call fails or the teacher signs off first.
@@ -823,8 +836,8 @@ export function App() {
     const items = came.map((item, i) => (i in nextEdits ? { ...item, text: nextEdits[i] } : item));
     const live = sent.constraints.map((c) => (nextOff.includes(c.id) ? { ...c, confirmed: false } : c));
     const told = new Map(sent.needs.filter((n) => !nextOff.includes(n.id)).map((n) => [n.id, n.line]));
-    const after = recheckItems(items, live, sent.entities, sent.tokens, note, told, modelChecks, items.map((_, i) => i in nextEdits));
-    setKept((k) => keptAfterRecheck(k, checks, after));
+    const after = recheckItems(items, live, sent.entities, sent.tokens, note, told, modelChecks, items.map((_, i) => i in nextEdits), task === 'lesson');
+    if (task !== 'lesson') setKept((k) => keptAfterRecheck(k, checks, after));
     setChecks(after);
     setEdits(nextEdits);
     setOffIds(nextOff);
@@ -1030,13 +1043,14 @@ export function App() {
   /** Show the recorded run in place of the teacher's note, which is put aside and brought back on leaving. */
   const startReplay = () => {
     if (!recorded || replay) return;
-    stash.current = { note, classList, constraints, task };
+    stash.current = { note, classList, constraints, task, lesson };
     clearRun();
     setReplay(recorded);
     setNote(recorded.note);
     setClassList(recorded.classList);
     setConstraints(recorded.constraints);
     setTask(recorded.task);
+    setLesson(recorded.lesson ?? NO_LESSON);
     setView('desk');
   };
 
@@ -1048,7 +1062,8 @@ export function App() {
     setNote(back?.note ?? '');
     setClassList(back?.classList ?? []);
     setConstraints(back?.constraints ?? []);
-    setTask(back?.task ?? 'parents');
+    setTask(back?.task ?? 'lesson');
+    setLesson(back?.lesson ?? NO_LESSON);
   };
 
   /** The next screen of the replay. Everything shown comes from the file: no model is asked and nothing is sent. */
@@ -1134,8 +1149,9 @@ export function App() {
   const loadSample = () => {
     setNote(SAMPLE_NOTE);
     setClassList(SAMPLE_CLASS_LIST);
-    // Messages home show the family rules and the constraints best.
-    setTask('parents');
+    // The invented class is planned a lesson: the main job of the app.
+    setTask('lesson');
+    setLesson(SAMPLE_LESSON);
     setComposing(true);
   };
 
@@ -1726,7 +1742,7 @@ export function App() {
 
       {view === 'desk' && !landing && (
         <main className="desk">
-          <Stepper step={STEP[stage]} />
+          <Stepper step={STEP[stage]} lesson={task === 'lesson'} />
           {error && (
             <p className="alert" role="alert">
               {error}
@@ -1926,6 +1942,68 @@ export function App() {
                 </article>
               )}
 
+              {/* ---- the task, and for a lesson the lines that say what it is */}
+              {editing && (
+                <article className="card">
+                  <fieldset className="tasks">
+                    <legend>What do you want help with?</legend>
+                    {TASKS.map((t) => (
+                      <label key={t.id} className={task === t.id ? 'task on' : 'task'}>
+                        <input type="radio" name="task" checked={task === t.id} disabled={Boolean(replay)} onChange={() => setTask(t.id)} />
+                        <strong>{t.label}</strong>
+                        <span>{t.blurb}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                  {task === 'lesson' && (
+                    <div className="lesson-lines">
+                      {(
+                        [
+                          ['klass', 'Class', 'Class 6'],
+                          ['subject', 'Subject', 'English'],
+                          ['topic', 'Topic', 'Writing a short description of a place'],
+                        ] as const
+                      ).map(([key, label, example]) => (
+                        <label key={key} className={`field f-${key}`}>
+                          {label}
+                          <input
+                            type="text"
+                            value={lesson[key]}
+                            readOnly={Boolean(replay)}
+                            maxLength={FIELD_MAX}
+                            placeholder={example}
+                            onChange={(e) => setLesson((l) => ({ ...l, [key]: e.target.value }))}
+                          />
+                        </label>
+                      ))}
+                      <label className="field f-minutes">
+                        Minutes
+                        <input
+                          type="number"
+                          min={5}
+                          max={240}
+                          value={lesson.minutes}
+                          readOnly={Boolean(replay)}
+                          onChange={(e) => setLesson((l) => ({ ...l, minutes: Number(e.target.value) }))}
+                          onBlur={() => setLesson((l) => ({ ...l, minutes: lessonMinutes(l.minutes) }))}
+                        />
+                      </label>
+                      <label className="field f-last">
+                        What we did last time <small>optional</small>
+                        <textarea
+                          rows={2}
+                          value={lesson.lastTime}
+                          readOnly={Boolean(replay)}
+                          maxLength={LAST_TIME_MAX}
+                          onChange={(e) => setLesson((l) => ({ ...l, lastTime: e.target.value }))}
+                        />
+                      </label>
+                      <p className="hint">These lines are not private. They are sent as written, under “Lesson”.</p>
+                    </div>
+                  )}
+                </article>
+              )}
+
               {/* ---- the note */}
               {editing && (
                 <article className="card">
@@ -1973,16 +2051,6 @@ export function App() {
                       aria-label="Class list"
                     />
                   </details>
-                  <fieldset className="tasks">
-                    <legend>What do you want help with?</legend>
-                    {TASKS.map((t) => (
-                      <label key={t.id} className={task === t.id ? 'task on' : 'task'}>
-                        <input type="radio" name="task" checked={task === t.id} disabled={Boolean(replay)} onChange={() => setTask(t.id)} />
-                        <strong>{t.label}</strong>
-                        <span>{t.blurb}</span>
-                      </label>
-                    ))}
-                  </fieldset>
                   {noModel && !replay && (
                     <p className="notice">
                       No on-device model in this browser, so the guard runs by rule: your class list, patterns, a short list of sensitive
@@ -2001,7 +2069,11 @@ export function App() {
                     </div>
                   ) : (
                     <div className="actions">
-                      <button className="primary" disabled={note.trim().length < 20 || note.length > NOTE_MAX} onClick={() => runGuard()}>
+                      <button
+                        className="primary"
+                        disabled={note.trim().length < 20 || note.length > NOTE_MAX || (task === 'lesson' && !lessonReady(lesson))}
+                        onClick={() => runGuard()}
+                      >
                         Run the guard
                       </button>
                       <span className="hint">Nothing is sent. The guard runs here.</span>

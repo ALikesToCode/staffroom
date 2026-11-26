@@ -69,6 +69,39 @@ describe('a recorded run with rewrites and suggestions', () => {
   });
 });
 
+describe('a recorded lesson', () => {
+  const lesson = { klass: 'Class 6', subject: 'English', topic: 'Describing a place', minutes: 40, lastTime: '' };
+  const adjustment = { itemIndex: 0, constraintId: held.constraints[0].id, text: 'Uses chart paper from the class set.', source: 'starter' as const };
+  const base = () => ({ ...(JSON.parse(JSON.stringify(run)) as Record<string, unknown>), task: 'lesson', lesson });
+
+  it('holds the lines that were sent and the adjustments as they stood, and reads them back', () => {
+    const saved = captureRun({ ...run, task: 'lesson', lesson, adjustments: [adjustment] }, new Date(run.recordedAt), 'Chrome/142.0.7444.60');
+    const back = asRecordedRun(JSON.parse(JSON.stringify(saved)))!;
+    expect(back.task).toBe('lesson');
+    expect(back.lesson).toEqual(lesson);
+    expect(back.adjustments).toEqual([adjustment]);
+    expect(captureRun({ ...run, task: 'lesson', lesson, adjustments: [] }, new Date(run.recordedAt), 'x')).not.toHaveProperty('adjustments');
+    // The same child may have more than one adjustment in a stage, for different constraints.
+    expect(asRecordedRun({ ...base(), adjustments: [adjustment, { ...adjustment, constraintId: held.constraints[1].id }] })!.adjustments).toHaveLength(2);
+  });
+
+  it('is refused when the lines or an adjustment are not in form', () => {
+    expect(asRecordedRun({ ...base(), lesson: undefined })).toBeUndefined();
+    expect(asRecordedRun({ ...(JSON.parse(JSON.stringify(run)) as object), lesson })).toBeUndefined();
+    for (const bad of [{ ...lesson, minutes: 2 }, { ...lesson, minutes: '40' }, { ...lesson, topic: 'x'.repeat(121) }, { klass: 'x' }, 'English']) {
+      expect(asRecordedRun({ ...base(), lesson: bad }), JSON.stringify(bad).slice(0, 50)).toBeUndefined();
+    }
+    for (const bad of [
+      { ...adjustment, itemIndex: 4 },
+      { ...adjustment, constraintId: 'nobody' },
+      { ...adjustment, text: ' ' },
+      { ...adjustment, text: 'x'.repeat(301) },
+      { ...adjustment, source: 'cloud' },
+    ]) expect(asRecordedRun({ ...base(), adjustments: [bad] }), JSON.stringify(bad).slice(0, 60)).toBeUndefined();
+    expect(asRecordedRun({ ...(JSON.parse(JSON.stringify(run)) as object), adjustments: [adjustment] })).toBeUndefined();
+  });
+});
+
 describe('a recorded run', () => {
   it('is captured in the form of the file and read back whole', () => {
     expect(run.recordedAt).toBe('2026-11-26T10:15:30.000Z');
@@ -85,7 +118,7 @@ describe('a recorded run', () => {
     expect(asRecordedRun(null)).toBeUndefined();
     expect(asRecordedRun('<!doctype html>')).toBeUndefined();
     expect(asRecordedRun({})).toBeUndefined();
-    for (const key of Object.keys(run).filter((k) => k !== 'rewrites' && k !== 'fits')) {
+    for (const key of Object.keys(run).filter((k) => !['rewrites', 'fits', 'lesson', 'adjustments'].includes(k))) {
       const broken = copy();
       delete broken[key];
       expect(asRecordedRun(broken), key).toBeUndefined();

@@ -3,6 +3,7 @@ import type { Policy } from './policy';
 import { KINDS } from './policy';
 import { CONSTRAINT_KINDS } from './constraints';
 import { SUGGESTION_MAX } from './recheck';
+import { ADJUSTMENT_MAX, FIELD_MAX, LAST_TIME_MAX, type AdjustmentSource, type LessonFields } from './lesson';
 
 // A recorded run: one real run on the sample class, captured in Chrome with the on-device model, kept as a
 // file beside the app. A browser without the on-device model can replay it, read-only. Nothing in a replay
@@ -23,6 +24,14 @@ export interface RecordedFit {
 export interface RecordedRewrite {
   itemIndex: number;
   text: string;
+}
+
+/** What one child does instead of a step of the lesson, as it stood when the run was saved. Names are written out: it never left the device. */
+export interface RecordedAdjustment {
+  itemIndex: number;
+  constraintId: string;
+  text: string;
+  source: AdjustmentSource;
 }
 
 /** The most characters of a rewritten item that a recorded run holds. */
@@ -52,6 +61,10 @@ export interface RecordedRun {
   rewrites?: RecordedRewrite[];
   /** The suggestions the on-device model made before the run was saved. Shown read-only in a replay. Absent: none. */
   fits?: RecordedFit[];
+  /** For a lesson: the lines about it that were sent. Absent for the other tasks. */
+  lesson?: LessonFields;
+  /** For a lesson: the adjustments that were accepted when the run was saved. Shown read-only in a replay. Absent: none. */
+  adjustments?: RecordedAdjustment[];
 }
 
 const WHERES: Where[] = ['ON_DEVICE', 'IN_CLOUD', 'RULES_ONLY', 'NOT_RUN', 'SKIPPED'];
@@ -146,6 +159,29 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
   ) {
     return undefined;
   }
+  const lesson = d.lesson;
+  const short = (v: unknown, max: number) => str(v) && v.length <= max;
+  if (
+    lesson !== undefined &&
+    !(obj(lesson) && short(lesson.klass, FIELD_MAX) && short(lesson.subject, FIELD_MAX) && short(lesson.topic, FIELD_MAX) && short(lesson.lastTime, LAST_TIME_MAX) && num(lesson.minutes) && lesson.minutes >= 5 && lesson.minutes <= 240)
+  ) {
+    return undefined;
+  }
+  // The lines belong to a lesson and to nothing else; a lesson has them.
+  if ((d.task === 'lesson') !== (lesson !== undefined)) return undefined;
+  const adjustments = d.adjustments;
+  if (adjustments !== undefined) {
+    const ids = new Set(d.constraints.map((c) => c.id));
+    const fine =
+      d.task === 'lesson' &&
+      Array.isArray(adjustments) &&
+      adjustments.every(
+        (a) =>
+          obj(a) && num(a.itemIndex) && a.itemIndex < count && str(a.constraintId) && ids.has(a.constraintId) &&
+          str(a.text) && a.text.trim().length > 0 && a.text.length <= ADJUSTMENT_MAX && ['model', 'starter', 'teacher'].includes(a.source as string),
+      );
+    if (!fine) return undefined;
+  }
   return {
     recordedAt: d.recordedAt,
     chrome: d.chrome,
@@ -162,6 +198,14 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
     draftModel: d.draftModel,
     ...(rewrites ? { rewrites: rewrites.map((r) => ({ itemIndex: r.itemIndex, text: r.text })) } : {}),
     ...(fits ? { fits: fits.map((f) => ({ itemIndex: f.itemIndex, stepIndex: f.stepIndex, suggestion: f.suggestion })) } : {}),
+    ...(obj(lesson)
+      ? { lesson: { klass: lesson.klass as string, subject: lesson.subject as string, topic: lesson.topic as string, minutes: lesson.minutes as number, lastTime: lesson.lastTime as string } }
+      : {}),
+    ...(adjustments
+      ? {
+          adjustments: (adjustments as RecordedAdjustment[]).map((a) => ({ itemIndex: a.itemIndex, constraintId: a.constraintId, text: a.text, source: a.source })),
+        }
+      : {}),
   };
 }
 
@@ -178,13 +222,14 @@ export function browserName(userAgent: string): string {
  * An empty list of either is left out.
  */
 export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now: Date, userAgent: string): RecordedRun {
-  const { rewrites, fits, ...rest } = run;
+  const { rewrites, fits, adjustments, ...rest } = run;
   return {
     recordedAt: now.toISOString(),
     chrome: browserName(userAgent),
     ...rest,
     ...(rewrites && rewrites.length > 0 ? { rewrites } : {}),
     ...(fits && fits.length > 0 ? { fits } : {}),
+    ...(adjustments && adjustments.length > 0 ? { adjustments } : {}),
   };
 }
 
