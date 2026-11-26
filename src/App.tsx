@@ -80,6 +80,7 @@ import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptC
 import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
 import { constraintsOnDevice, mergeProposals, type ConstraintReport } from './ai/constraints';
+import { learningOnDevice, mergeLearning } from './ai/learning';
 import { NOTE_MAX } from './core/text';
 import {
   DRAFT_FORMAT,
@@ -542,6 +543,17 @@ export function App() {
     setConstraintGaps(fellShort);
     // For a lesson: what the note says about how a child learns, proposed by rule. None is confirmed and none is told.
     if (forLesson) proposed = [...proposed, ...proposeLearning(note, vault)].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
+    if (forLesson && where === 'ON_DEVICE') {
+      // The on-device model looks for learning needs too. A failure here blocks nothing: what the rules found stands.
+      try {
+        setProgress('The on-device model is looking for what each child needs in a lesson');
+        const report = await learningOnDevice(note, vault);
+        if (gone()) return;
+        proposed = mergeLearning(proposed, report.needs);
+      } catch {
+        if (gone()) return;
+      }
+    }
     const held = restoreConstraints(note, vault, constraintsNote.current === note ? constraints : [], proposed);
     constraintsNote.current = note;
     setEntities(held.entities);
