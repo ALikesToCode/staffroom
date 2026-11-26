@@ -2,10 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // The teacher's own record of each receipt, written by the teacher's browser. It holds counts, times,
-    // where each step ran and a digest of the approved text: no text. A user can add and read their own;
+    // where each step ran and the length of the approved text: no text. A user can add and read their own;
     // nobody can edit or delete one. These rules fix the form of a record. They cannot tell whether what a
     // record says is true: whoever is signed in to the account can write one.
-    // The id has the form the app generates: the time in base 36, a hyphen, six characters.
+    // The id has the form the app generates: the time in base 36, a hyphen, six characters. It is the same
+    // id as the receipt kept in the teacher's browser, which is how the two are paired.
     match /users/{uid}/receipts/{receiptId} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid
@@ -50,21 +51,21 @@ service cloud.firestore {
         && m.replyFlagged is bool && isCount(m.unreadParagraphs) && isCount(m.droppedDetails);
     }
 
-    // The model that wrote the draft: a Gemini cloud model by name, the on-device model under the one
-    // name the app gives it, or "other". Nothing else, so this field cannot carry text.
+    // The model that wrote the draft, from an exact list: the on-device model under the one name the app
+    // gives it, the cloud models the app can name, or "other". Nothing else, so this field cannot carry text.
     function isModel(v) {
-      return v is string && v.size() <= 47
-        && (v.matches('^gemini-[a-z0-9.-]{1,40}$') || v == 'Gemini Nano (Chrome built-in)' || v == 'other');
+      return v in ['Gemini Nano (Chrome built-in)', 'other', 'gemini-3.5-flash-lite', 'gemini-3.5-flash',
+        'gemini-3.5-pro', 'gemini-3-flash', 'gemini-3-flash-lite'];
     }
 
     // Exactly these keys, each with its type and a bound on its size. There is no free string:
-    // the two times are ISO-8601, the digest is 64 hex characters and the model name is from a short list.
+    // the two times are ISO-8601 and the model name is from an exact list.
     function validRecord(d, receiptId) {
       return d.keys().hasOnly(['id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars',
-          'approvedSha256', 'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
+          'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
           'kept', 'struck', 'flags'])
         && d.keys().hasAll(['id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars',
-          'approvedSha256', 'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
+          'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
           'kept', 'struck', 'flags'])
         && d.id is string && d.id == receiptId
         && isTime(d.createdAt) && isTime(d.approvedAt)
@@ -72,7 +73,6 @@ service cloud.firestore {
         && validWithheld(d.withheld)
         && isCount(d.released)
         && isCount(d.approvedChars)
-        && d.approvedSha256 is string && d.approvedSha256.matches('^[0-9a-f]{64}$')
         && d.guardWhere in ['ON_DEVICE', 'RULES_ONLY']
         && d.draftWhere in ['ON_DEVICE', 'IN_CLOUD']
         && isModel(d.draftModel)

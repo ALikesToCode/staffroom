@@ -23,16 +23,24 @@ export function storeReceipts(receipts: Receipt[]): boolean {
 /** The name the app gives the on-device model. */
 export const ON_DEVICE_MODEL = 'Gemini Nano (Chrome built-in)';
 
-/** The model names a record may carry: a Gemini cloud model, the on-device model, or "other". */
-const RECORD_MODEL = /^gemini-[a-z0-9.-]{1,40}$/;
+/** The model names a record may carry, exactly as the Firestore rules list them. Anything else is written as "other". */
+export const RECORD_MODELS = [
+  ON_DEVICE_MODEL,
+  'other',
+  'gemini-3.5-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-3.5-pro',
+  'gemini-3-flash',
+  'gemini-3-flash-lite',
+] as const;
 
 /**
- * A model name in the form the cloud record accepts. The Firestore rules
- * take a Gemini model name, the on-device model's fixed name, or the word
- * "other", and nothing else, so the field cannot be used to carry text.
+ * A model name in the form the cloud record accepts: one from the exact
+ * list the Firestore rules hold, or the word "other". The field cannot be
+ * used to carry text.
  */
 export function recordModelName(name: string): string {
-  return RECORD_MODEL.test(name) || name === ON_DEVICE_MODEL ? name : 'other';
+  return (RECORD_MODELS as readonly string[]).includes(name) ? name : 'other';
 }
 
 /** The form of a receipt id: the time in base 36, a hyphen, six characters. The Firestore rules accept only this form. */
@@ -43,9 +51,13 @@ export function newReceiptId(now = Date.now(), random = Math.random()): string {
   return `${now.toString(36)}-${random.toString(36).slice(2, 8).padEnd(6, '0')}`;
 }
 
-/** The first eight characters of a digest: enough to match a receipt here to its record in the account. */
-export function digestPrefix(sha256: string | undefined): string {
-  return sha256 ? sha256.slice(0, 8) : '';
+/**
+ * The last six characters of a receipt's id, shown as its "record id". A
+ * receipt in this browser and its record in the account have the same id,
+ * and that is the whole of how they are paired.
+ */
+export function recordIdTail(id: string): string {
+  return id.slice(-6);
 }
 
 interface Run {
@@ -57,8 +69,6 @@ interface Run {
   unreadParagraphs: number;
   droppedDetails: number;
   sentText: string;
-  /** SHA-256 of the approved text, in hex. */
-  sentSha256: string;
   approvedAt: string;
   draftWhere: Where;
   draftModel: string;
@@ -98,7 +108,7 @@ export function makeReceipt(run: Run): Receipt {
       unreadParagraphs: run.unreadParagraphs,
       droppedDetails: run.droppedDetails,
     },
-    sent: { text: run.sentText, chars: run.sentText.length, sha256: run.sentSha256, approvedAt: run.approvedAt, gate: 'passed' },
+    sent: { text: run.sentText, chars: run.sentText.length, approvedAt: run.approvedAt, gate: 'passed' },
     draft: {
       where: run.draftWhere,
       model: run.draftModel,
@@ -129,9 +139,10 @@ export function draftLine(draft: Receipt['draft']): string {
  * The copy of a receipt that may be kept in the teacher's account in the
  * cloud. It is a record written by this browser: the teacher's own note of
  * a run, not evidence of it to anyone else, since whoever holds the account
- * can write one. It is the record only: counts, times, where each step ran, and a
- * digest of the approved text. It holds no text at all: not the approved
- * text, not the model-written label, no name.
+ * can write one. It is the record only: counts, times and where each step ran.
+ * It holds no text at all, and nothing worked out from the text but its
+ * length: not the approved text, not the model-written label, no name. It is
+ * paired with the receipt in this browser by the id the two share.
  */
 export interface ReceiptRecord {
   id: string;
@@ -143,8 +154,6 @@ export interface ReceiptRecord {
   released: number;
   approvedAt: string;
   approvedChars: number;
-  /** SHA-256 of the approved text, in hex. A value for matching this record to the local receipt, and no more than that. */
-  approvedSha256: string;
   guardWhere: Where;
   draftWhere: Where;
   draftModel: string;
@@ -156,14 +165,8 @@ export interface ReceiptRecord {
   flags: { replyFlagged: boolean; unreadParagraphs: number; droppedDetails: number };
 }
 
-/** SHA-256 of a text, as 64 hex characters. */
-export async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 /** Reduce a receipt to the record that may leave the device. Every field is listed here by hand, so nothing else can ride along. */
-export async function receiptRecord(r: Receipt): Promise<ReceiptRecord> {
+export function receiptRecord(r: Receipt): ReceiptRecord {
   const f = r.guard.found;
   return {
     id: r.id,
@@ -173,7 +176,6 @@ export async function receiptRecord(r: Receipt): Promise<ReceiptRecord> {
     released: r.guard.allowedByTeacher,
     approvedAt: r.sent.approvedAt,
     approvedChars: r.sent.text.length,
-    approvedSha256: r.sent.sha256 && /^[0-9a-f]{64}$/.test(r.sent.sha256) ? r.sent.sha256 : await sha256Hex(r.sent.text),
     guardWhere: r.guard.where,
     draftWhere: r.draft.where,
     // A model name from the app's settings, never model output. Reduced to the form the rules accept all the same.
@@ -220,13 +222,13 @@ export function asReceiptRecord(data: unknown): ReceiptRecord | undefined {
   const withheld = counts(d.withheld, KIND_KEYS);
   const verdicts = counts(d.verdicts, VERDICT_KEYS);
   const flags = d.flags as Record<string, unknown> | null | undefined;
-  const strings = [d.id, d.createdAt, d.task, d.approvedAt, d.approvedSha256, d.guardWhere, d.draftWhere, d.draftModel, d.checkWhere, d.labelWhere];
+  const strings = [d.id, d.createdAt, d.task, d.approvedAt, d.guardWhere, d.draftWhere, d.draftModel, d.checkWhere, d.labelWhere];
   if (!withheld || !verdicts || !flags || typeof flags !== 'object' || !strings.every(str)) return undefined;
   if (![d.released, d.approvedChars, d.kept, d.struck, flags.unreadParagraphs, flags.droppedDetails].every(count)) return undefined;
   // The same forms the Firestore rules insist on.
   const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
   if (!iso.test(d.createdAt as string) || !iso.test(d.approvedAt as string)) return undefined;
-  if (!/^[0-9a-f]{64}$/.test(d.approvedSha256 as string) || recordModelName(d.draftModel as string) !== d.draftModel) return undefined;
+  if (recordModelName(d.draftModel as string) !== d.draftModel) return undefined;
   if (!RECEIPT_ID.test(d.id as string)) return undefined;
   if (typeof flags.replyFlagged !== 'boolean' || !['plan', 'parents', 'handover'].includes(d.task as string)) return undefined;
   return {
@@ -237,7 +239,6 @@ export function asReceiptRecord(data: unknown): ReceiptRecord | undefined {
     released: d.released as number,
     approvedAt: d.approvedAt as string,
     approvedChars: d.approvedChars as number,
-    approvedSha256: d.approvedSha256 as string,
     guardWhere: d.guardWhere as Where,
     draftWhere: d.draftWhere as Where,
     draftModel: d.draftModel as string,

@@ -18,7 +18,7 @@ import {
   widenToWords,
   PRIVATE_TOKEN,
 } from './vault';
-import { checkOutgoing, checkReply } from './gate';
+import { checkOutgoing, checkReply, safeTitle } from './gate';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './samples';
 import { DRAFT_FORMAT, DRAFT_NOTES_HEADING, draftPrompt, LABEL_CHARS, labelPrompt } from '../ai/draft';
 import { NOTE_MAX, plainText } from './text';
@@ -592,7 +592,7 @@ describe('vault', () => {
 
 import { anchor, anchorQuote, guardOutcome, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
 import { allStepsFit, anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, factSets, keepNoConflict, NOT_ANSWERED, readVerdict, startsKept, steps, studentsNamed, UNCLEAR, worse } from '../ai/check';
-import { asReceiptRecord, digestPrefix, draftLine, makeReceipt, newReceiptId, receiptRecord, RECEIPT_ID, recordModelName, sha256Hex } from './receipts';
+import { asReceiptRecord, draftLine, makeReceipt, newReceiptId, receiptRecord, RECEIPT_ID, RECORD_MODELS, recordIdTail, recordModelName } from './receipts';
 import { approvalKey, DEFAULT_POLICY, fallbackPolicy, readSaved, toSave, withTimeout } from './policy';
 import { familyFor, ownersOf } from './family';
 import { CASES, prepare, totals } from '../eval/cases';
@@ -1045,7 +1045,6 @@ describe('check and receipt', () => {
     unreadParagraphs: 1,
     droppedDetails: 0,
     sentText,
-    sentSha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
     approvedAt: new Date().toISOString(),
     draftWhere: 'IN_CLOUD',
     draftModel: 'gemini-3.5-flash-lite',
@@ -1078,7 +1077,6 @@ describe('check and receipt', () => {
       unreadParagraphs: 0,
       droppedDetails: 0,
       sentText,
-      sentSha256: '',
       approvedAt: new Date().toISOString(),
       draftWhere: 'IN_CLOUD',
       draftModel: 'gemini-3.5-flash-lite',
@@ -1092,15 +1090,11 @@ describe('check and receipt', () => {
     expect([failed.check.where, failed.check.requests, failed.check.failedRequests, failed.check.notChecked]).toEqual(['NOT_RUN', 4, 4, 1]);
   });
 
-  it('computes a SHA-256 digest in hex', async () => {
-    expect(await sha256Hex('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
-  });
-
   it('reduces a receipt to a record with no text for the cloud copy', async () => {
     const record = await receiptRecord(receipt);
     expect(Object.keys(record).sort()).toEqual(
       [
-        'id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars', 'approvedSha256', 'guardWhere',
+        'id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars', 'guardWhere',
         'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts', 'kept', 'struck', 'flags',
       ].sort(),
     );
@@ -1111,9 +1105,15 @@ describe('check and receipt', () => {
     expect(json).not.toContain(receipt.label);
     expect(json).not.toContain('Meenal');
     expect(record.approvedChars).toBe(sentText.length);
-    expect(record.approvedSha256).toBe(receipt.sent.sha256);
-    expect((await receiptRecord({ ...receipt, sent: { ...receipt.sent, sha256: undefined } })).approvedSha256).toBe(await sha256Hex(sentText));
-    expect(record.approvedSha256).toMatch(/^[0-9a-f]{64}$/);
+    // Nothing worked out from the text goes with the record: no digest, on a new receipt or an old one that has one.
+    expect(json).not.toMatch(/sha256|digest/i);
+    const old = { ...receipt, sent: { ...receipt.sent, sha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' } };
+    expect(JSON.stringify(receiptRecord(old))).not.toContain('ba7816bf');
+    expect(JSON.stringify(receipt)).not.toMatch(/sha256/);
+    // The receipt here and its record there are paired by the id they share.
+    expect(record.id).toBe(receipt.id);
+    expect(recordIdTail(record.id)).toBe(receipt.id.slice(-6));
+    expect(recordIdTail(record.id)).toHaveLength(6);
     expect(record.withheld).toEqual({ student: 2, adult: 0, place: 0, contact: 0, id: 0, private: 1 });
     expect(record.verdicts.conflict).toBe(1);
     expect(record.flags).toEqual({ replyFlagged: true, unreadParagraphs: 1, droppedDetails: 0 });
@@ -1129,30 +1129,30 @@ describe('check and receipt', () => {
     const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
     expect(record.createdAt).toMatch(iso);
     expect(record.approvedAt).toMatch(iso);
-    expect(record.approvedSha256).toMatch(/^[0-9a-f]{64}$/);
-    // A model name is a Gemini cloud model, the on-device model's one name, or "other": never free text.
+    // A model name is one from an exact list, or "other": never free text.
     expect(record.draftModel).toBe('other');
     expect(recordModelName('Gemini Nano (Chrome built-in)')).toBe('Gemini Nano (Chrome built-in)');
     expect(recordModelName('gemini-3.5-flash-lite')).toBe('gemini-3.5-flash-lite');
-    for (const name of ['<>', '', 'Gemini Nano', 'gemini-', 'gemini-3.5 flash', 'Gemini-3.5-Flash', 'my-model', `gemini-${'x'.repeat(41)}`]) {
+    for (const name of ['gemini-3.5-flash', 'gemini-3.5-pro', 'gemini-3-flash', 'gemini-3-flash-lite', 'other']) {
+      expect(recordModelName(name), name).toBe(name);
+    }
+    for (const name of ['<>', '', 'Gemini Nano', 'gemini-', 'gemini-3.5 flash', 'Gemini-3.5-Flash', 'my-model', 'gemini-9-ultra', 'gemini-3.5-flash-lite-extra']) {
       expect(recordModelName(name), name).toBe('other');
     }
+    // The rules file holds the very same list.
+    expect(firestoreRules).toContain(`return v in [${RECORD_MODELS.map((m) => `'${m}'`).join(', ')}];`.replace("'gemini-3.5-flash', ", "'gemini-3.5-flash',\n        "));
+    expect(firestoreRules).not.toMatch(/approvedSha256|digest/);
     expect(record.id).toMatch(RECEIPT_ID);
     expect(newReceiptId(1795000000000, 0)).toBe('mwm0nk74-000000');
     expect(newReceiptId(1795000000000, 0.5)).toMatch(RECEIPT_ID);
     for (let i = 0; i < 50; i++) expect(newReceiptId()).toMatch(RECEIPT_ID);
     // The rules file states the same two forms.
     expect(firestoreRules).toContain("receiptId.matches('^[0-9a-z]{8,9}-[0-9a-z]{6}$')");
-    expect(firestoreRules).toContain("v.matches('^gemini-[a-z0-9.-]{1,40}$') || v == 'Gemini Nano (Chrome built-in)' || v == 'other'");
     expect(firestoreRules).toContain('&& isModel(d.draftModel)');
     expect(['ON_DEVICE', 'RULES_ONLY']).toContain(record.guardWhere);
     expect(['ON_DEVICE', 'IN_CLOUD']).toContain(record.draftWhere);
     expect(['ON_DEVICE', 'NOT_RUN', 'SKIPPED']).toContain(record.checkWhere);
     expect(['ON_DEVICE', 'IN_CLOUD', 'FALLBACK']).toContain(record.labelWhere);
-    // The same eight characters are shown on the receipt here and on the record in the account.
-    expect(digestPrefix(record.approvedSha256)).toBe(digestPrefix(receipt.sent.sha256));
-    expect(digestPrefix(record.approvedSha256)).toBe('ba7816bf');
-    expect(digestPrefix(undefined)).toBe('');
   });
 
   it('reads a stored record back, and refuses anything in another form', async () => {
@@ -1169,7 +1169,8 @@ describe('check and receipt', () => {
     expect(asReceiptRecord({ ...record, id: 'a-note-about-meenal' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, draftModel: 'gemini<script>' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, createdAt: 'yesterday' })).toBeUndefined();
-    expect(asReceiptRecord({ ...record, approvedSha256: 'abc' })).toBeUndefined();
+    // A record written before the digest was dropped is still listed, without it.
+    expect(asReceiptRecord({ ...record, approvedSha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' })).toEqual(record);
     expect(asReceiptRecord(null)).toBeUndefined();
   });
 });
@@ -1539,7 +1540,6 @@ describe('a guard run in which every request failed', () => {
       unreadParagraphs: 3,
       droppedDetails: 0,
       sentText: 'x',
-      sentSha256: '',
       approvedAt: new Date().toISOString(),
       draftWhere: 'ON_DEVICE',
       draftModel: 'Gemini Nano (Chrome built-in)',
@@ -2089,5 +2089,39 @@ describe('a reply that repeats the withheld marker', () => {
       'Copy is off: this message includes a person or a place that your note does not tie to Meenal Joshi.',
     );
     expect(family('[Student 1]', '[Student 1] could visit [Place 1].').why).toMatch(/a person or a place that your note does not tie to Meenal Joshi/);
+  });
+});
+
+describe('the title a model writes for a receipt', () => {
+  const note = 'Meenal reads well. She has epilepsy. Ring 98765 43210. Her aunt Sunita helps.';
+  const v = buildVault(note, [
+    ...deterministicCandidates(note, ['Meenal Joshi']),
+    { kind: 'adult', text: 'Sunita', source: 'on-device model' },
+  ]);
+  const released = v.map((e) => (e.kind === 'adult' ? { ...e, withheld: false } : e));
+  const fallback = 'Support plan for next week';
+
+  it('is kept when it passes every check', () => {
+    expect(safeTitle('Reading help and a shy reader', v, fallback)).toBe('Reading help and a shy reader');
+  });
+
+  it('is replaced by the task title when it has a name, a withheld item, a pattern, a sensitive word or a stand-in', () => {
+    for (const title of [
+      'Plan for Meenal',
+      'Plan for meenal joshi',
+      'Help from Sunita',
+      'She has epilepsy',
+      'Ring 98765 43210',
+      'Mail a.b@example.org',
+      'Managing seizures in class',
+      'Notes on medication',
+      'Plan for [Student 1]',
+      'Plan for Student 1',
+      'About [withheld]',
+    ]) {
+      expect(safeTitle(title, v, fallback), title).toBe(fallback);
+    }
+    // A name the teacher released for the draft still does not belong in a title.
+    expect(safeTitle('Help from Sunita', released, fallback)).toBe(fallback);
   });
 });

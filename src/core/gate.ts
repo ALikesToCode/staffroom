@@ -135,6 +135,24 @@ export function checkReply(text: string, entities: Entity[], sentTokens: readonl
   return violations;
 }
 
+/**
+ * The title a model wrote for a receipt, or the task's own title when the
+ * model's fails any check the exit gate makes. A title is shown in the list
+ * of receipts and kept in the browser, so it must not carry a name, a
+ * withheld item, a number that fits a pattern, a sensitive word or a
+ * stand-in.
+ */
+export function safeTitle(title: string, entities: Entity[], fallback: string): string {
+  const named = entities.filter((e) => e.kind !== 'private' || e.withheld).flatMap((e) => e.surfaces);
+  const failed =
+    checkOutgoing(title, entities).length > 0 ||
+    (wholeWordMatcher(named)?.test(title) ?? false) ||
+    sensitiveWords(title).length > 0 ||
+    [...title.matchAll(LOOKALIKE_RE)].length > 0 ||
+    bareNotSent(title, []).length > 0;
+  return failed ? fallback : title;
+}
+
 function label(e: Entity): string {
   switch (e.kind) {
     case 'student':

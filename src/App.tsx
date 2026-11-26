@@ -15,8 +15,8 @@ import {
   restore,
   segment,
 } from './core/vault';
-import { checkOutgoing, checkReply, type Violation } from './core/gate';
-import { digestPrefix, draftLine, loadReceipts, makeReceipt, sha256Hex, storeReceipts, type ReceiptRecord } from './core/receipts';
+import { checkOutgoing, checkReply, safeTitle, type Violation } from './core/gate';
+import { draftLine, loadReceipts, makeReceipt, recordIdTail, storeReceipts, type ReceiptRecord } from './core/receipts';
 import { approvalKey } from './core/policy';
 import { familyFor } from './core/family';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
@@ -509,7 +509,9 @@ export function App() {
     setProgress('Naming the receipt');
     const named = await labelReceipt(text, currentTask.label, cloudModel);
     if (gone()) return;
-    setLabel(named);
+    // The title is model-written and is kept with the receipt, so it passes the same checks as outgoing text
+    // (names, withheld items, patterns, sensitive words) or the task's own title is used.
+    setLabel({ ...named, title: safeTitle(named.title, entities, currentTask.label) });
     sendingRef.current = false;
     setStage('result');
   };
@@ -526,13 +528,6 @@ export function App() {
     setSigning(true);
     const run = runRef.current;
     const signed = [...kept];
-    let sentSha256 = '';
-    try {
-      sentSha256 = await sha256Hex(sent.text);
-    } catch {
-      // No digest in this browser. The receipt is still written; the record works one out if it can.
-    }
-    if (runRef.current !== run) return;
     const receipt = makeReceipt({
       task,
       label: label?.title || currentTask.label,
@@ -542,7 +537,6 @@ export function App() {
       unreadParagraphs: guardGaps.unread.length,
       droppedDetails: guardGaps.dropped + guardGaps.partial,
       sentText: sent.text,
-      sentSha256,
       approvedAt: sent.at,
       draftWhere: result.where,
       draftModel: result.model,
@@ -1383,6 +1377,12 @@ export function App() {
                       Nothing has been withheld. I am sending my note as written.
                     </label>
                   )}
+                  {nothingWithheld && (
+                    <p className="hint">
+                      A receipt holds the text you approved. Here that is your whole note, so the receipt kept in this browser will
+                      hold your note as written.
+                    </p>
+                  )}
                   <div className="actions">
                     <button className="primary send" disabled={!readIt || (nothingWithheld && !asWritten) || violations.length > 0 || !policyReady}
                       onClick={approveAndSend}
@@ -1626,8 +1626,9 @@ function Receipts({
     <main className="page">
       <h2>Receipts</h2>
       <p className="lede">
-        A receipt holds the exact text you approved, counts of what was withheld, which model ran where, and how many items you kept and
-        how many you struck. It does not hold the draft, your raw note or anything you withheld.
+        A receipt holds the text you approved. If you approved your note as written, that is your note. It also holds counts of what
+        was withheld, which model ran where, and how many items you kept and how many you struck. It does not hold the draft or
+        anything you withheld.
       </p>
       <label className="read-it">
         <input type="checkbox" checked={keepCopies} disabled={!signedIn} onChange={(e) => setKeepCopies(e.target.checked)} />
@@ -1635,9 +1636,8 @@ function Receipts({
         {!signedIn && <em>{configured ? ' Sign-in is not available right now.' : ' Not available: no Firebase project is connected.'}</em>}
       </label>
       <p className="hint">
-        A record is written by this browser. It is your own note of a run, not proof of it to anyone else. Its matching value is
-        the start of a digest of the approved text: the same on a receipt here and on its record in your account, so you can pair
-        the two.
+        A record is written by this browser. It is your own note of a run, not proof of it to anyone else. A receipt here and
+        its record in your account have the same record id, so you can pair the two.
       </p>
       {signedIn && records.state === 'loading' && <p className="hint">Looking up the records kept in your account.</p>}
       {signedIn && records.state === 'failed' && <p className="caution">The records kept in your account could not be read just now.</p>}
@@ -1662,7 +1662,7 @@ function Receipts({
                     <span>
                       Guard {RECORD_WHERE[r.guardWhere]} · draft {RECORD_WHERE[r.draftWhere]} ({r.draftModel}) · check{' '}
                       {RECORD_WHERE[r.checkWhere]}
-                      {r.flags.replyFlagged ? ' · reply flagged' : ''} · matching value {digestPrefix(r.approvedSha256)}
+                      {r.flags.replyFlagged ? ' · reply flagged' : ''} · record id {recordIdTail(r.id)}
                     </span>
                   </li>
                 );
@@ -1706,7 +1706,7 @@ function Receipts({
                       <dt>Approved</dt>
                       <dd>
                         {new Date(r.sent.approvedAt).toLocaleString()} · {r.sent.chars.toLocaleString()} characters · exit gate {r.sent.gate}
-                        {r.sent.sha256 ? ` · matching value ${digestPrefix(r.sent.sha256)}` : ''}
+                        {' '}· record id {recordIdTail(r.id)}
                       </dd>
                       <dt>Draft</dt>
                       <dd>

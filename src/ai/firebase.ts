@@ -149,12 +149,12 @@ export function watchUser(onUser: (user: User | null) => void): () => void {
 
 /**
  * Save the record of a receipt to Firestore under the signed-in user. Only
- * the record goes: counts, times, where each step ran and a digest of the
+ * the record goes: counts, times, where each step ran and the length of the
  * approved text. No text of any kind is sent, and the Firestore rules
  * refuse a document with any other field.
  */
 export async function saveReceiptCopy(uid: string, receipt: Receipt): Promise<void> {
-  const record: ReceiptRecord = await receiptRecord(receipt);
+  const record: ReceiptRecord = receiptRecord(receipt);
   await setDoc(doc(getFirestore(app), 'users', uid, 'receipts', record.id), record);
 }
 

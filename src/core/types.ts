@@ -95,7 +95,7 @@ export interface Receipt {
   sent: {
     text: string;
     chars: number;
-    /** SHA-256 of the text, in hex. Receipts made before this was recorded do not have it. */
+    /** Older receipts carry a digest of the text here. It is no longer made or shown. */
     sha256?: string;
     approvedAt: string;
     gate: 'passed';
