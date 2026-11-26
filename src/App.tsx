@@ -86,6 +86,7 @@ import { constraintsOnDevice, mergeProposals, type ConstraintReport } from './ai
 import { learningOnDevice, mergeLearning } from './ai/learning';
 import { classView, currentTicketKind, withoutClass, withTicketNeeds } from './core/ticket';
 import { materialsReply, materialsText, unnumbered, type Materials } from './core/materials';
+import { recordNetwork, STEPS_MAX, type StepId, type StepMark, type StepWhere } from './core/network';
 import { stageName } from './core/lesson';
 import { MaterialsCard, MaterialsPages, MaterialsWire } from './ui/Materials';
 import { ReadAloud } from './ui/ReadAloud';
@@ -155,6 +156,9 @@ interface KeptClass {
 }
 /** What the tab keeps comes first; with none, the class kept on this device, when the teacher chose to keep one. */
 const keptClass = (): KeptClass | null => (read<boolean | null>(local, KEEP_CLASS_KEY, null) === true ? read<KeptClass | null>(local, CLASS_KEY, null) : null);
+
+/** The browser's own record of the requests this page makes, kept from the moment the app loads. Inspect reads it. */
+const network = typeof window !== 'undefined' ? recordNetwork() : null;
 
 // Earlier versions kept the raw note and the class list in local storage. Remove what they left.
 try {
@@ -316,6 +320,21 @@ export function App() {
   const [variationsDropped, setVariationsDropped] = useState(0);
   /** For a lesson: the section "For each need" as the cloud returned it, the needs it says the lesson suits, the needs with no entry, and the text of the second request if one was made. */
   const [needsReply, setNeedsReply] = useState<{ section: string; none: string[]; missing: string[]; second: string | null } | null>(null);
+  /** When each model step of this tab started and ended, on the clock of the browser's record of requests. Shown under Inspect. */
+  const [steps, setSteps] = useState<StepMark[]>([]);
+  const addStep = (m: StepMark) => setSteps((s) => [...s, m].slice(-STEPS_MAX));
+  /** Run one model step and keep when it started and ended. What it returns or throws is passed on as it is. */
+  const timed = async <T,>(step: StepId, run: () => Promise<T>, whereOf?: (v: T) => StepWhere): Promise<T> => {
+    const start = performance.now();
+    try {
+      const v = await run();
+      addStep({ step, start, end: performance.now(), ...(whereOf ? { where: whereOf(v) } : {}) });
+      return v;
+    } catch (e) {
+      addStep({ step, start, end: performance.now() });
+      throw e;
+    }
+  };
   /** For a signed lesson: the materials the cloud wrote from the signed plan and the needs by letter, and what the return gate found in them. */
   const [materials, setMaterials] = useState<(MaterialsResult & { text: string; issues: Violation[] }) | null>(null);
   const [materialsBusy, setMaterialsBusy] = useState(false);
@@ -513,6 +532,7 @@ export function App() {
     setError(null);
     setDraftFail(null);
     setStage('guarding');
+    const guardStart = performance.now();
     setSelection('');
     setReadKey(null);
     setAsWrittenKey(null);
@@ -594,6 +614,7 @@ export function App() {
     setConstraints(held.constraints);
     setGuardWhere(where);
     setGuardGaps(gaps);
+    addStep({ step: 'guard', start: guardStart, end: performance.now(), where: where === 'ON_DEVICE' ? 'ON_DEVICE' : 'RULES_ONLY' });
     setStage('review');
   };
 
@@ -780,7 +801,7 @@ export function App() {
     setStage('drafting');
     let drafted: DraftResult;
     try {
-      drafted = await writeDraft(text, currentTask, cloudModel);
+      drafted = await timed('draft', () => writeDraft(text, currentTask, cloudModel), (d) => (d.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'));
     } catch (e) {
       if (gone()) return;
       sendingRef.current = false;
@@ -806,10 +827,11 @@ export function App() {
     if (askAgain(split.missing, letters)) {
       // Over a third of the needs have no entry: the cloud is asked once more, for those letters only. The text is the one
       // the teacher approved and one more line, so there is no new tick; Inspect shows that it was sent, word for word.
-      second = secondAsk(text, split.missing);
+      const again = secondAsk(text, split.missing);
+      second = again;
       setProgress('Asking the cloud once more for the needs it left out');
       try {
-        const more = await writeDraft(second, currentTask, cloudModel);
+        const more = await timed('draft', () => writeDraft(again, currentTask, cloudModel), (d) => (d.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'));
         if (gone()) return;
         split = withSecondReading(split, more.draft);
         // The return gate reads the second reply too.
@@ -859,9 +881,11 @@ export function App() {
         const present = (await deviceStatus()) === 'available';
         if (gone()) return;
         if (!present) throw NO_MODEL;
-        const checked = await checkOnDevice(note, items, facts, tokens, (done, total) => {
-          if (!gone()) setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`);
-        });
+        const checked = await timed('check', () =>
+          checkOnDevice(note, items, facts, tokens, (done, total) => {
+            if (!gone()) setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`);
+          }),
+        );
         if (gone()) return;
         requests = { asked: checked.asked, failed: checked.failed };
         if (checkDidNotRun(checked)) {
@@ -930,7 +954,7 @@ export function App() {
     setLabel({ title: plain, where: 'FALLBACK' });
     sendingRef.current = false;
     setStage('result');
-    void labelReceipt(text, plain, cloudModel).then((named) => {
+    void timed('label', () => labelReceipt(text, plain, cloudModel), (named) => (named.where === 'FALLBACK' ? 'NONE' : named.where)).then((named) => {
       if (gone() || signingRef.current) return;
       // The title is model-written and is kept with the receipt, so it passes the same checks as outgoing text
       // (names, withheld items, patterns, sensitive words) or the plain title stays.
@@ -1092,7 +1116,7 @@ export function App() {
     setFitting(i);
     setFitSaid(({ [i]: _old, ...rest }) => rest);
     try {
-      const got = await fitStep(input);
+      const got = await timed('fit', () => fitStep(input));
       if (runRef.current !== run) return;
       // fitStep reads an answer only when it came from the device, so an answer read is one that ran here.
       setFitWhere('ON_DEVICE');
@@ -1180,12 +1204,14 @@ export function App() {
     fitBusy.current = true;
     setAdjBusy(hit.key);
     try {
-      const got = await fitForChild({
-        step: hit.step,
-        constraint: c,
-        constraints: liveConstraints.filter((x) => x.confirmed && (x.id === c.id || !x.about || x.about === c.about)),
-        afterBell: afterBellActivities(note),
-      });
+      const got = await timed('fit', () =>
+        fitForChild({
+          step: hit.step,
+          constraint: c,
+          constraints: liveConstraints.filter((x) => x.confirmed && (x.id === c.id || !x.about || x.about === c.about)),
+          afterBell: afterBellActivities(note),
+        }),
+      );
       if (runRef.current !== run) return;
       setFitWhere('ON_DEVICE');
       if (got.ok) setAdj((a) => ({ ...a, [hit.key]: { text: got.suggestion, source: 'model', state: 'offered' } }));
@@ -1217,8 +1243,10 @@ export function App() {
       setChildSaid(({ [n.id]: _old, ...rest }) => rest);
       fitBusy.current = true;
       try {
-        const got = await fitLessonForChild({ childName: n.child, childNote: n.text, stages: stageList }, (p) =>
-          pointHits(p.text, n.id, p.itemIndex, items, liveRef.current.liveConstraints, note).map((h) => h.matched),
+        const got = await timed('fit', () =>
+          fitLessonForChild({ childName: n.child, childNote: n.text, stages: stageList }, (p) =>
+            pointHits(p.text, n.id, p.itemIndex, items, liveRef.current.liveConstraints, note).map((h) => h.matched),
+          ),
         );
         if (runRef.current !== run) return;
         setFitWhere('ON_DEVICE');
@@ -1412,7 +1440,7 @@ export function App() {
     setMaterialsBusy(true);
     setMaterialsFail(null);
     try {
-      const got = await writeMaterials(text, sent.lessonNeeds.map((n) => n.letter), sent.policy.cloudModel);
+      const got = await timed('materials', () => writeMaterials(text, sent.lessonNeeds.map((n) => n.letter), sent.policy.cloudModel), (g) => (g.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'));
       if (runRef.current !== run) return;
       setMaterials({ ...got, text, issues: checkReply(materialsReply(got.materials), sent.entities, sent.tokens, text) });
       // Counted on the receipt in this browser. Nothing of it is in the record that may leave the device.
@@ -3264,6 +3292,8 @@ export function App() {
           labelSystem={LABEL_SYSTEM}
           labelChars={LABEL_CHARS}
           secondRequest={needsReply?.second ?? undefined}
+          network={network}
+          steps={steps}
           policyLine={
             replay
               ? `Policy on the day: ${replay.policy.from}. Drafting model: ${replay.policy.cloudModel}.`

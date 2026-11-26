@@ -3414,3 +3414,20 @@ mark.hit {
   max-height: 320px;
   overflow: auto;
 }
+
+/* Inspect: the network as the browser records it. Long paths wrap. */
+.inspect-network {
+  margin: 6px 0 10px;
+  padding-left: 1.2em;
+  font-size: 0.9rem;
+}
+
+.inspect-network li {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.inspect-network.all {
+  font-family: var(--mono, monospace);
+  font-size: 0.8rem;
+}

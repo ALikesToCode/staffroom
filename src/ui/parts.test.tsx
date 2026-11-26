@@ -6,6 +6,8 @@ import { Caught, ConstraintsPanel } from './Constraints';
 import type { Constraint } from '../core/types';
 import { App } from '../App';
 import { MaterialsPages } from './Materials';
+import { NetworkSection } from './pages';
+import { addRequests } from '../core/network';
 import type { Materials } from '../core/materials';
 
 describe('CloudText', () => {
@@ -192,5 +194,31 @@ describe('MaterialsPages', () => {
     expect(named[1]).toContain('<p class="print-names">Ishaan Verma</p>');
     expect(named[0]).not.toContain('Ishaan');
     expect(pages(false).join('')).not.toContain('Ishaan');
+  });
+});
+
+describe('NetworkSection', () => {
+  it('lists each model step with what the browser recorded during it, by host and path only', () => {
+    const requests = addRequests([], [
+      { name: 'https://content-firebaseappcheck.googleapis.com/v1/projects/p/apps/a:exchangeToken?key=SECRET', startTime: 1500, initiatorType: 'fetch' },
+      { name: 'https://firebasevertexai.googleapis.com/v1beta/m:generateContent?key=SECRET', startTime: 6000, initiatorType: 'fetch' },
+    ]);
+    const record = { list: () => requests, subscribe: () => () => {} };
+    const html = renderToStaticMarkup(
+      <NetworkSection
+        network={record}
+        steps={[
+          { step: 'guard', start: 1000, end: 3000, where: 'ON_DEVICE' },
+          { step: 'draft', start: 5000, end: 8000, where: 'IN_CLOUD' },
+        ]}
+      />,
+    );
+    const text = html.replace(/<[^>]+>/g, ' ');
+    expect(text).toContain('Network, as the browser records it');
+    expect(text).toContain('Guard (on this device): 0 requests to the model host, 1 other request');
+    expect(text).toContain('content-firebaseappcheck.googleapis.com: App Check');
+    expect(text).toContain('Draft (in the cloud): 1 request to the model host');
+    expect(html).not.toMatch(/SECRET|\?key/);
+    expect(renderToStaticMarkup(<NetworkSection network={record} steps={[]} />)).toContain('No model step has run in this tab yet.');
   });
 });

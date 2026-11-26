@@ -1,8 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import type { ConstraintKind, LabelWhere, Receipt, Where } from '../core/types';
 import { TASKS } from '../core/samples';
 import { draftLine, recordIdTail, type ReceiptRecord } from '../core/receipts';
 import { CONSTRAINT_LABEL } from '../core/constraints';
+import { requestLine, stepReports, type NetworkRecord, type StepMark } from '../core/network';
 import { configured, type Policy } from '../ai/firebase';
 import { ROUTES, type DeviceStatus, type RouteId } from '../ai/routes';
 import { CloudText, KIND_LABEL } from './parts';
@@ -163,6 +164,8 @@ export function Inspect({
   policyLine,
   ran,
   secondRequest,
+  network,
+  steps,
 }: {
   onClose: () => void;
   taskInstruction: string;
@@ -176,6 +179,10 @@ export function Inspect({
   ran: Partial<Record<RouteId, string>>;
   /** For a lesson: the exact text of the second request, when one was made for needs with no entry. */
   secondRequest?: string;
+  /** The browser's record of the requests this page made. Null where there is none. */
+  network: NetworkRecord | null;
+  /** The model steps of this tab, with when each started and ended. */
+  steps: readonly StepMark[];
 }) {
   return (
     <Drawer title="Inspect" onClose={onClose}>
@@ -194,6 +201,8 @@ export function Inspect({
         ))}
       </ul>
       <p className="hint">{policyLine}</p>
+
+      {network && <NetworkSection network={network} steps={steps} />}
 
       {secondRequest && (
         <>
@@ -227,6 +236,51 @@ export function Inspect({
 }
 
 export { WHERE_RAN };
+
+/**
+ * The requests this page made, as the browser records them, set against
+ * the model steps of this tab. Host and path only: no query string, no
+ * header, no token. It reads the record while it is open.
+ */
+export function NetworkSection({ network, steps }: { network: NetworkRecord; steps: readonly StepMark[] }) {
+  const requests = useSyncExternalStore(network.subscribe, network.list, network.list);
+  const reports = stepReports(steps, requests);
+  return (
+    <>
+      <h3>Network, as the browser records it</h3>
+      <p className="hint">
+        Every request this page has made, from the browser's own record of them (Resource Timing), set against the time each model step ran. It holds
+        what this page fetches, not what the browser fetches for itself, such as the on-device model's download. Only the host and the path are shown.
+      </p>
+      {reports.length === 0 ? (
+        <p className="hint">No model step has run in this tab yet.</p>
+      ) : (
+        <ul className="inspect-network">
+          {reports.map((r, i) => (
+            <li key={i}>
+              <b>{r.summary}</b> <span className="hint">{r.when}</span>
+              {r.requests.length > 0 && (
+                <ul>
+                  {r.requests.map((l, j) => (
+                    <li key={j}>{l}</li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <details>
+        <summary>Every request this page has made · {requests.length}</summary>
+        <ul className="inspect-network all">
+          {requests.map((r, i) => (
+            <li key={i}>{requestLine(r)}</li>
+          ))}
+        </ul>
+      </details>
+    </>
+  );
+}
 
 // ------------------------------------------------------------------ how it works
 
