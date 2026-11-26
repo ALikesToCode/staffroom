@@ -28,16 +28,55 @@ describe('the rule layer, kind by kind', () => {
       'Ask her to stay back and finish the page.',
       'Hold an after-school catch-up.',
       'Give her a detention.',
-      'Ring home in the evening.',
       'Go through it with her after class.',
     ]) expect(verdict(step, k), step).toBe('conflict');
     for (const step of [
+      'Ring home in the evening.',
       'Go through it with her after the lesson.',
       'Stop when the school bell rings.',
       'Seat her near the door.',
       'Ask her after she has read the page.',
       'Give her extra time in the written test.',
     ]) expect(verdict(step, k), step).toBe('none');
+  });
+
+  it('time-after: an evening counts only with a school-side word in the same clause', () => {
+    const k = c('time-after');
+    for (const step of [
+      'Ask her to stay for the evening study hour until half past six.',
+      'Enrol her in the evening class.',
+      'Send her to the evening club on Tuesdays.',
+      'Offer an evening session with the reading teacher.',
+      'Arrange evening tuition for her.',
+      'Put her down for evening practice at school.',
+      'She can finish it at school in the evenings.',
+    ]) expect(verdict(step, k), step).toBe('conflict');
+    for (const step of [
+      'Ask her to write a few sentences about her day every evening.',
+      'Her mother can read with her in the evenings.',
+      'Ask her to write a few sentences every evening, and praise her in class the next day.',
+      'An evening session of reading at home with her brother.',
+      'She does not need to stay for the evening.',
+    ]) expect(verdict(step, k), step).toBe('none');
+    expect(ruleConflicts('Put her down for evening practice at school.', k, { name: 'Meenal' })).toMatchObject({ matched: 'evening' });
+  });
+
+  it('time-after and time-before: a step done at home or from home is no conflict', () => {
+    for (const step of [
+      'Ask her to read for ten minutes at home after school.',
+      'She can send the page from home after the last bell.',
+      'After school at home, she copies five words.',
+      'Ask her to practise the remedial writing club exercises at home.',
+    ]) expect(verdict(step, c('time-after'), ['remedial writing club']), step).toBe('none');
+    for (const step of [
+      'Ask him to read the page at home before school.',
+      'He can look over the list from home in the early morning.',
+    ]) expect(verdict(step, c('time-before')), step).toBe('none');
+    // "At home" in another clause does not reach the words.
+    expect(verdict('Give her the sheet to finish at home, and keep her after school on Friday.', c('time-after'))).toBe('conflict');
+    expect(verdict('He reads at home; meet him before school to hear him.', c('time-before'))).toBe('conflict');
+    expect(verdict('Keep her after school for ten minutes.', c('time-after'))).toBe('conflict');
+    expect(verdict('Meet him before school.', c('time-before'))).toBe('conflict');
   });
 
   it('time-after: an activity the note itself says meets after the last bell', () => {
@@ -197,6 +236,18 @@ describe('the rule layer on an item of a draft', () => {
     const aarav = check(tok('Aarav'), `Meet ${tok('Aarav')} before school to go over his homework.`);
     expect(aarav.hit).toMatchObject({ verdict: 'conflict', matched: 'before school' });
     expect(check(tok('Meenal'), `Meet ${tok('Meenal')} before school.`).hit).toBeUndefined();
+  });
+
+  it('keeps an item that names a student to that student, though it speaks of classmates or peers', () => {
+    const forTanvi = check(`Note for ${tok('Tanvi')}`, `Ask ${tok('Tanvi')} to stay after school and read with her classmates. Her peers can meet before school.`);
+    expect(forTanvi).toEqual({ compared: 0 });
+    const forMeenal = check(`Note for ${tok('Meenal')}`, `Ask ${tok('Meenal')} to stay after school and read with her classmates.`);
+    expect(forMeenal.compared).toBe(2);
+    expect(forMeenal.hit).toMatchObject({ verdict: 'conflict', matched: 'after school' });
+    // Two students named: the constraints of both, and of nobody else.
+    const two = check(`${tok('Tanvi')} and ${tok('Aarav')}`, `Everyone in the group meets before school.`);
+    expect(two.hit).toMatchObject({ verdict: 'conflict', matched: 'before school' });
+    expect(two.hit!.reason).toContain('Aarav');
   });
 
   it('compares an item for the whole class, or one that names nobody, with every confirmed constraint', () => {

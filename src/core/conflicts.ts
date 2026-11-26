@@ -1,6 +1,6 @@
 import type { Constraint, DraftItem, Entity, ItemCheck } from './types';
 import { escapeRe, sentences } from './rules';
-import { speaksToClass, steps, studentsNamed } from './items';
+import { steps, studentsNamed } from './items';
 import { redactRange, restore } from './vault';
 
 // The first layer of the check: plain rules, on the device, no model. A step of the draft is compared
@@ -81,6 +81,33 @@ function firstMatch(step: string, alternatives: string[]): RegExpMatchArray | un
   return undefined;
 }
 
+/** The clause the words at `index` stand in: from the last clause break before them to the next one after. */
+function clauseAt(step: string, index: number, length: number): string {
+  let from = 0;
+  for (const m of step.slice(0, index).matchAll(CLAUSE_BREAK)) from = m.index + m[0].length;
+  const rest = step.slice(index + length);
+  const next = [...rest.matchAll(CLAUSE_BREAK)][0];
+  return step.slice(from, next ? index + length + next.index : step.length);
+}
+
+const has = (re: RegExp, text: string) => {
+  re.lastIndex = 0;
+  return re.test(text);
+};
+
+/** As `firstMatch`, for a time of day: a clause that says "at home" or "from home" is passed over. */
+function firstAtSchool(step: string, alternatives: string[], needs?: RegExp): RegExpMatchArray | undefined {
+  if (alternatives.length === 0) return undefined;
+  for (const m of step.matchAll(words(alternatives))) {
+    if (negated(step, m.index)) continue;
+    const clause = clauseAt(step, m.index, m[0].length);
+    if (has(AT_HOME, clause)) continue;
+    if (needs && !has(needs, clause)) continue;
+    return m;
+  }
+  return undefined;
+}
+
 const TIME_AFTER = [
   'after[- ]school',
   'afterschool',
@@ -88,12 +115,21 @@ const TIME_AFTER = [
   'after (?:the )?class(?:es)?',
   'after lessons',
   'stay(?:s|ing|ed)? (?:back|late|behind|on)',
-  'evenings?',
   'detentions?',
   'after hours',
   'after dismissal',
   '(?:once|when) school (?:is over|ends|finishes)',
 ];
+
+/**
+ * An evening is after the last bell only when the same clause puts it at school: "evening class",
+ * "evening club", "stay for the evening study hour". "Write a few sentences every evening" is at home.
+ */
+const EVENING = ['evenings?'];
+const SCHOOL_SIDE = words(['class(?:es)?', 'clubs?', 'sessions?', 'tuitions?', 'practices?', 'stay(?:s|ing|ed)?', '(?:at|in) school']);
+
+/** A step done at home is not at school, before the first bell or after the last. */
+const AT_HOME = words(['at home', 'from home']);
 
 const TIME_BEFORE = [
   'before[- ]school',
@@ -211,17 +247,17 @@ export function ruleConflicts(step: string, c: Constraint, context: RuleContext 
   });
   switch (c.kind) {
     case 'time-after': {
-      const m = firstMatch(step, TIME_AFTER);
+      const m = firstAtSchool(step, TIME_AFTER) ?? firstAtSchool(step, EVENING, SCHOOL_SIDE);
       if (m) {
         const said = m[0].toLowerCase();
         return hit(m[0], said.startsWith('after ') ? `This step keeps ${name} ${said}.` : `This step keeps ${name} at school after the last bell (${quote(m[0])}).`);
       }
-      const club = firstMatch(step, activityForms(context.afterBell ?? []));
+      const club = firstAtSchool(step, activityForms(context.afterBell ?? []));
       if (club) return hit(club[0], `This step sends ${name} to the ${club[0].toLowerCase()}, which your note says meets after the last bell.`);
       return undefined;
     }
     case 'time-before': {
-      const m = firstMatch(step, TIME_BEFORE);
+      const m = firstAtSchool(step, TIME_BEFORE);
       return m ? hit(m[0], `This step needs ${name} at school before the first bell (${quote(m[0])}).`) : undefined;
     }
     case 'days-away': {
@@ -280,8 +316,8 @@ export function cloudSawAround(note: string, entities: Entity[], c: Constraint):
 /**
  * Layer A for one item of the draft. Its heading and each of its steps are
  * compared with every confirmed constraint that applies to it: one about a
- * student the item names, any constraint when the item speaks to the whole
- * class or names nobody, and any constraint about the class. A conflict
+ * student the item names, any constraint when the item names nobody (so
+ * whole-class wording counts only then), and any constraint about the class. A conflict
  * wins over a query; otherwise the first found is kept.
  */
 export function ruleCheckItem(
@@ -294,7 +330,8 @@ export function ruleCheckItem(
   told: ReadonlyMap<string, string> = new Map(),
 ): RuleCheck {
   const named = studentsNamed(item, entities).map((e) => e.id);
-  const everyone = named.length === 0 || speaksToClass(`${item.heading} ${item.text}`);
+  // An item that names a student is about that student, though it speaks of classmates or peers.
+  const everyone = named.length === 0;
   const applies = constraints.filter((c) => c.confirmed && (!c.about || everyone || named.includes(c.about)));
   if (applies.length === 0) return { compared: 0 };
   const afterBell = afterBellActivities(note);
