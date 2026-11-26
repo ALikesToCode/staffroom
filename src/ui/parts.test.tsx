@@ -138,3 +138,17 @@ describe('the words a rule matched', () => {
     expect(renderToStaticMarkup(<DeviceText text="Seat her near the door." entities={vault} mark="after school" />)).toBe('Seat her near the door.');
   });
 });
+
+describe('the lesson as the first job', () => {
+  it('says so on the first screen, and names the steps of a lesson', async () => {
+    const { Hero } = await import('./Hero');
+    const { LESSON_STEPS, STEPS, Stepper } = await import('./parts');
+    const html = renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} noModel={false} />);
+    expect(html).toContain('Your device knows why.');
+    expect(html).toContain('Plan tomorrow&#x27;s lesson for the whole class. Your device fits it to each child, using what only you know.');
+    expect(html).toContain('Homework needs fitting for 1 child');
+    expect(LESSON_STEPS).toEqual(['Write', 'What leaves', 'Lesson', 'Fit to each child', 'Sign off']);
+    expect(renderToStaticMarkup(<Stepper step={3} lesson />)).toContain('Fit to each child');
+    expect(renderToStaticMarkup(<Stepper step={3} />)).toContain(STEPS[3]);
+  });
+});
