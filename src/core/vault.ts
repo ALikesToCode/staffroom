@@ -214,6 +214,15 @@ export function redact(note: string, entities: Entity[]): string {
   return out.join('');
 }
 
+/**
+ * Apply the school's locks to the vault: an item of a locked kind is
+ * withheld, whatever the teacher chose and whenever the policy arrived.
+ * The outgoing text is always computed from the result of this.
+ */
+export function applyLocks(entities: Entity[], lockedKinds: Kind[]): Entity[] {
+  return entities.map((e) => (lockedKinds.includes(e.kind) && !e.withheld ? { ...e, withheld: true } : e));
+}
+
 /** Put real names back into text that came from the cloud. Runs on the device. */
 export function restore(text: string, entities: Entity[]): string {
   const byToken = new Map(entities.filter((e) => e.kind !== 'private').map((e) => [e.token, e]));

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Entity, ItemCheck, Kind, Receipt, TaskId, Where } from './core/types';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './core/samples';
-import { addByTeacher, appearsIn, buildVault, deterministicCandidates, redact, restore, segment } from './core/vault';
+import { addByTeacher, appearsIn, applyLocks, buildVault, deterministicCandidates, redact, restore, segment } from './core/vault';
 import { checkOutgoing, checkReply, type Violation } from './core/gate';
 import { loadReceipts, makeReceipt, storeReceipts } from './core/receipts';
 import { configured, DEFAULT_POLICY, loadPolicy, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
@@ -44,13 +44,16 @@ export function App() {
   const [uid, setUid] = useState<string | null>(null);
   const [keepCopies, setKeepCopies] = useState(() => stored('staffroom.keepCopies', false));
 
-  const [entities, setEntities] = useState<Entity[]>([]);
+  /** The vault as the guard and the teacher left it. Read `entities` below, which has the school's locks applied. */
+  const [rawEntities, setEntities] = useState<Entity[]>([]);
   const [guardWhere, setGuardWhere] = useState<Where>('NOT_RUN');
   const [guardGaps, setGuardGaps] = useState<{ unread: number[]; dropped: number }>(NO_GAPS);
   const [progress, setProgress] = useState('');
   const [selection, setSelection] = useState('');
-  const [readIt, setReadIt] = useState(false);
-  const [sent, setSent] = useState<{ text: string; at: string } | null>(null);
+  /** The exact outgoing text the teacher ticked as read. The tick holds only while this is still the outgoing text. */
+  const [readText, setReadText] = useState<string | null>(null);
+  /** What was approved: the text, when, and the vault as it stood at that moment. */
+  const [sent, setSent] = useState<{ text: string; at: string; entities: Entity[] } | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
   const [replyIssues, setReplyIssues] = useState<Violation[]>([]);
   const [replyRead, setReplyRead] = useState(false);
@@ -63,12 +66,17 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const noteRef = useRef<HTMLDivElement>(null);
+  /** The policy as last loaded, readable at the moment of sending even before a re-render. */
+  const policyRef = useRef<Policy>(DEFAULT_POLICY);
 
   // ---------------------------------------------------------------- start-up
 
   useEffect(() => {
     deviceStatus().then(setDevice);
-    loadPolicy().then(setPolicy);
+    loadPolicy().then((p) => {
+      policyRef.current = p;
+      setPolicy(p);
+    });
     const stop = watchUser((u) => setUid(u?.uid ?? null));
     const on = () => setOnline(true);
     const off = () => setOnline(false);
@@ -86,8 +94,19 @@ export function App() {
   useEffect(() => localStorage.setItem('staffroom.keepCopies', JSON.stringify(keepCopies)), [keepCopies]);
 
   const currentTask = TASKS.find((t) => t.id === task)!;
+  // The school's locks are part of how the outgoing text is computed, not only a disabled switch:
+  // an item of a locked kind is withheld even if the vault says released (the policy can arrive late).
+  // After approval the vault is the one that was approved, so the record matches what was sent.
+  const entities = useMemo(
+    () => sent?.entities ?? applyLocks(rawEntities, policy.lockedKinds),
+    [sent, rawEntities, policy.lockedKinds],
+  );
   const outgoing = useMemo(() => redact(note, entities), [note, entities]);
   const violations = useMemo(() => checkOutgoing(outgoing, entities), [outgoing, entities]);
+  const readIt = readText !== null && readText === outgoing;
+
+  // The tick is for one exact text under one policy. If either changes, it is cleared.
+  useEffect(() => setReadText(null), [outgoing, policy]);
   const deviceCanRun = device === 'available' || device === 'downloadable' || device === 'downloading';
 
   // ---------------------------------------------------------------- the on-device model
@@ -116,7 +135,7 @@ export function App() {
     setError(null);
     setStage('guarding');
     setSelection('');
-    setReadIt(false);
+    setReadText(null);
     setSent(null);
     setResult(null);
     const candidates = deterministicCandidates(note, classList);
@@ -142,7 +161,9 @@ export function App() {
   };
 
   const toggle = (id: string) =>
-    setEntities((list) => list.map((e) => (e.id === id ? { ...e, withheld: !e.withheld } : e)));
+    setEntities((list) =>
+      list.map((e) => (e.id === id && !policyRef.current.lockedKinds.includes(e.kind) ? { ...e, withheld: !e.withheld } : e)),
+    );
 
   const onSelectText = () => {
     const text = window.getSelection()?.toString().trim() ?? '';
@@ -158,16 +179,29 @@ export function App() {
   // ---------------------------------------------------------------- steps 3 to 5: approve, draft, check
 
   const approveAndSend = async () => {
-    // The gate is checked again at the moment of sending, on the exact text that goes.
-    const text = redact(note, entities);
-    if (checkOutgoing(text, entities).length > 0) return;
+    // Everything is worked out again at the moment of sending: the current locks, the text they give,
+    // and the gate on exactly that text. It is sent only if it is the text the teacher ticked as read.
+    const current = applyLocks(rawEntities, policyRef.current.lockedKinds);
+    const text = redact(note, current);
+    const stopped = checkOutgoing(text, current);
+    if (stage !== 'review' || readText === null || text !== readText || stopped.length > 0) {
+      setReadText(null);
+      setError(
+        stopped.length > 0
+          ? 'The exit gate stopped the text. Nothing was sent.'
+          : 'The outgoing text is not the text you ticked as read. Nothing was sent. Read it again, then approve.',
+      );
+      return;
+    }
+    const entities = current;
+    const cloudModel = policyRef.current.cloudModel;
     setError(null);
     const approvedAt = new Date().toISOString();
-    setSent({ text, at: approvedAt });
+    setSent({ text, at: approvedAt, entities });
     setStage('drafting');
     let drafted: DraftResult;
     try {
-      drafted = await writeDraft(text, currentTask, policy.cloudModel);
+      drafted = await writeDraft(text, currentTask, cloudModel);
     } catch (e) {
       setSent(null);
       setStage('review');
@@ -379,7 +413,10 @@ export function App() {
                       <summary>
                         Class list <small>{classList.length > 0 ? `${classList.length} names, kept in this browser` : 'optional, kept in this browser'}</small>
                       </summary>
-                      <p>One name per line. A name on this list is always withheld, with or without a model.</p>
+                      <p>
+                        One name per line. A name on this list is{' '}
+                        {policy.lockedKinds.includes('student') ? 'always withheld' : 'withheld by default'}, with or without a model.
+                      </p>
                       <textarea
                         value={classList.join('\n')}
                         onChange={(e) => setClassList(e.target.value.split('\n').map((s) => s.trimStart()))}
@@ -667,8 +704,8 @@ export function App() {
                     </p>
                   )}
                   <label className="read-it">
-                    <input type="checkbox" checked={readIt} onChange={(e) => setReadIt(e.target.checked)} />I have read this text
-                    and I am content to send it.
+                    <input type="checkbox" checked={readIt} onChange={(e) => setReadText(e.target.checked ? outgoing : null)} />
+                    I have read this text and I am content to send it.
                   </label>
                   <div className="actions">
                     <button className="primary send" disabled={!readIt || violations.length > 0} onClick={approveAndSend}>

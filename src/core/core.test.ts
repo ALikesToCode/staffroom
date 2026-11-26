@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findByRule, nameParts } from './rules';
-import { addByTeacher, buildVault, deterministicCandidates, redact, restore, segment, PRIVATE_TOKEN } from './vault';
+import { addByTeacher, applyLocks, buildVault, deterministicCandidates, redact, restore, segment, PRIVATE_TOKEN } from './vault';
 import { checkOutgoing, checkReply } from './gate';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from './samples';
 import { plainText } from './text';
@@ -143,6 +143,18 @@ describe('vault', () => {
     const oneReleased = v.map((e, i) => (i === 0 ? { ...e, withheld: false } : e));
     expect(redact(note, oneReleased)).toBe('His father [withheld] last month.');
     expect(checkOutgoing(redact(note, oneReleased), oneReleased)).toEqual([]);
+  });
+
+  it('withholds a locked kind even when the vault says it was released', () => {
+    const note = 'Ring Sunita on 98765 43210.';
+    const v = buildVault(note, [...deterministicCandidates(note, []), { kind: 'adult', text: 'Sunita', source: 'teacher' }]);
+    const allReleased = v.map((e) => ({ ...e, withheld: false }));
+    expect(redact(note, allReleased)).toBe(note);
+    const locked = applyLocks(allReleased, ['contact', 'id']);
+    expect(redact(note, locked)).toBe('Ring Sunita on [Contact 1].');
+    expect(checkOutgoing(redact(note, locked), locked)).toEqual([]);
+    expect(locked.find((e) => e.kind === 'adult')?.withheld).toBe(false);
+    expect(applyLocks(allReleased, [])).toEqual(allReleased);
   });
 
   describe('exit gate', () => {
