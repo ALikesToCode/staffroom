@@ -16,7 +16,7 @@ export const ROUTES = [
     id: 'draft',
     job: 'Write the draft from the redacted text',
     mode: InferenceMode.PREFER_IN_CLOUD,
-    why: 'The larger cloud model writes better. The text is already redacted and approved by you. With no signal, the on-device model writes it instead.',
+    why: 'The larger cloud model writes better. The text is already redacted and approved by you. When the cloud model cannot be reached or does not answer, the on-device model writes it instead.',
   },
   {
     id: 'check',
@@ -28,7 +28,7 @@ export const ROUTES = [
     id: 'label',
     job: 'Name the receipt',
     mode: InferenceMode.PREFER_ON_DEVICE,
-    why: 'A small job on redacted text: free and offline on the device when it can, in the cloud when it cannot.',
+    why: 'A small job on redacted text: free, and needing no network, on the device when it can; in the cloud when it cannot.',
   },
 ] as const;
 

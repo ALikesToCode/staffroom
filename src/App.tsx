@@ -478,7 +478,7 @@ export function App() {
           <span className="logo" aria-hidden="true" />
           <div>
             <h1>Staffroom</h1>
-            <p>What you write about a child stays on this device.</p>
+            <p>Your raw note stays on this device. What you approve is the only note text sent.</p>
           </div>
         </div>
         <nav aria-label="Sections">
@@ -537,7 +537,7 @@ export function App() {
             <section className="lane device" aria-label="On this device">
               <h2 className="lane-title">
                 <span>On this device</span>
-                <small>Your note, the real names and the private details never leave this side.</small>
+                <small>Your raw note, the real names and the private details stay on this side. What you approve is the only note text sent.</small>
               </h2>
 
               <article className="card">

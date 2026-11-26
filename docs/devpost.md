@@ -2,7 +2,7 @@
 
 ## Tagline
 
-What a teacher writes about a child stays on the teacher's device. The cloud only ever sees what the teacher approved.
+A teacher's raw note about a child stays on the teacher's device. What the teacher approves is the only note text sent to the cloud.
 
 **Live app:** https://staffroom-hybrid-8a71.web.app
 
@@ -31,7 +31,7 @@ Every model call goes through the Firebase AI Logic web SDK (`firebase/ai`), and
 | Guard | The raw note | `ONLY_ON_DEVICE` | The raw note must not be able to reach a server |
 | Draft | Redacted, approved text | `PREFER_IN_CLOUD` | The heavy writing; falls back to the device when the cloud cannot be reached |
 | Check | The draft and the withheld details | `ONLY_ON_DEVICE` | The withheld details are in the prompt |
-| Receipt label | Redacted text | `PREFER_ON_DEVICE` | A small job that is free and works offline on the device |
+| Receipt label | Redacted text | `PREFER_ON_DEVICE` | A small job that is free and needs no network when it runs on the device |
 
 The app reads `inferenceSource` on every response, and the screen shows where each step ran. For the guard and the check, the app refuses to start a guard or check request unless the on-device model is present, and stops if a response did not come from the device.
 
@@ -66,7 +66,10 @@ Hybrid inference is more than a cost or latency choice. Routing by the sensitivi
 
 - The on-device model needs Chrome on a desktop that supports the built-in model, and English.
 - The guard and the check are a small model's judgement. They can miss a detail or doubt good advice. The teacher's read and the gates are the safeguard.
-- All sample data is invented.
+- The exit gate cannot find a private detail nobody marked. It catches redaction mistakes.
+- The demo uses invented data only. Before use with real pupils a school would need its own data agreement and the paid Gemini backend, because the free Gemini Developer API tier is not meant for personal data.
+- "Offline" means the guard, the check and the fallback draft keep working once the page and the on-device model have loaded. The page itself is not installed for an offline start.
+- Sign-off is by the person using the browser. Anonymous sign-in gives the browser an account; it does not prove who that person is.
 
 ## Built with
 
