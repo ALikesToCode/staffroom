@@ -589,7 +589,7 @@ describe('vault', () => {
 import { anchor, anchorQuote, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
 import { anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, NOT_ANSWERED, readVerdict, startsKept, studentsNamed, UNCLEAR, worse } from '../ai/check';
 import { asReceiptRecord, digestPrefix, makeReceipt, receiptRecord, recordModelName, sha256Hex } from './receipts';
-import { approvalKey, withTimeout } from './policy';
+import { approvalKey, DEFAULT_POLICY, fallbackPolicy, readSaved, toSave, withTimeout } from './policy';
 import { familyFor, ownersOf } from './family';
 
 describe('guard helpers', () => {
@@ -1388,5 +1388,48 @@ describe('a message home is for one family', () => {
     expect(family('[Student 1]', 'Pair with Student 9.').why).toMatch(/stand-in that was not in the text/);
     // A stand-in the vault holds but the cloud was never sent does not count as a name.
     expect(family('[Student 2]', 'A note.', ['[Student 1]']).why).toMatch(/names no student|stand-in that was not/);
+  });
+});
+
+describe('school policy that does not load in time', () => {
+  const school = { cloudModel: 'gemini-3.5-flash', lockedKinds: ['contact', 'id', 'student'] as const };
+
+  it('uses the last school policy this browser fetched, and says from when', () => {
+    const raw = toSave({ cloudModel: school.cloudModel, lockedKinds: [...school.lockedKinds], origin: 'remote', from: 'school policy (Remote Config)' }, new Date('2026-11-20T09:30:00Z'));
+    const policy = fallbackPolicy(readSaved(raw));
+    expect(policy).toEqual({
+      cloudModel: 'gemini-3.5-flash',
+      lockedKinds: ['contact', 'id', 'student'],
+      origin: 'saved',
+      from: 'school policy, last loaded 20 Nov 2026',
+    });
+  });
+
+  it('uses the built-in defaults when none was kept, and says the policy could not be loaded', () => {
+    expect(fallbackPolicy(undefined)).toBe(DEFAULT_POLICY);
+    expect(DEFAULT_POLICY.origin).toBe('defaults');
+    expect(DEFAULT_POLICY.from).toBe('built-in defaults, school policy could not be loaded');
+    expect(DEFAULT_POLICY.lockedKinds).toEqual(['contact', 'id']);
+  });
+
+  it('ignores a kept policy that is not in the present form', () => {
+    const good = { cloudModel: 'gemini-3.5-flash', lockedKinds: ['contact'], loadedAt: '2026-11-20T09:30:00.000Z' };
+    expect(readSaved(JSON.stringify(good))).toEqual(good);
+    for (const raw of [
+      null,
+      '',
+      'not json',
+      'null',
+      '[]',
+      JSON.stringify({ ...good, cloudModel: '' }),
+      JSON.stringify({ ...good, cloudModel: 'a model; rm -rf' }),
+      JSON.stringify({ ...good, cloudModel: 7 }),
+      JSON.stringify({ ...good, lockedKinds: 'contact' }),
+      JSON.stringify({ ...good, lockedKinds: ['contact', 'everything'] }),
+      JSON.stringify({ ...good, loadedAt: 'last week' }),
+      JSON.stringify({ cloudModel: good.cloudModel, lockedKinds: [] }),
+    ]) {
+      expect(readSaved(raw), String(raw)).toBeUndefined();
+    }
   });
 });

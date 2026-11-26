@@ -113,6 +113,8 @@ export function App() {
   const [guardWhere, setGuardWhere] = useState<Where>('NOT_RUN');
   const [guardGaps, setGuardGaps] = useState<Gaps>(NO_GAPS);
   const [progress, setProgress] = useState('');
+  /** The item the teacher asked to release while only the built-in defaults are in force: asked about before it is released. */
+  const [releaseAsk, setReleaseAsk] = useState<string | null>(null);
   const [selection, setSelection] = useState('');
   /** Where in the note the selection was made, so the words meant are marked and not the same letters elsewhere. */
   const selectionSpan = useRef<{ start: number; end: number } | null>(null);
@@ -290,10 +292,22 @@ export function App() {
     setStage('review');
   };
 
-  const toggle = (id: string) =>
+  const flip = (id: string) =>
     setEntities((list) =>
       list.map((e) => (e.id === id && !policyRef.current.lockedKinds.includes(e.kind) ? { ...e, withheld: !e.withheld } : e)),
     );
+
+  /**
+   * Withhold or release one item. Under the built-in defaults the app does not know what the school
+   * allows, so releasing is asked about first: see the question under the item.
+   */
+  const toggle = (e: Entity) => {
+    if (e.withheld && policyRef.current.origin === 'defaults') setReleaseAsk(e.id);
+    else {
+      setReleaseAsk(null);
+      flip(e.id);
+    }
+  };
 
   /** Take the current selection as something to mark, if it is a usable piece of the note. */
   const readSelection = useCallback(
@@ -554,6 +568,7 @@ export function App() {
     setGuardGaps(NO_GAPS);
     setSelection('');
     setSelectionNote('');
+    setReleaseAsk(null);
     setReadKey(null);
     setSent(null);
     setResult(null);
@@ -679,12 +694,35 @@ export function App() {
                     type="checkbox"
                     checked={e.withheld}
                     disabled={locked || stage !== 'review'}
-                    onChange={() => toggle(e.id)}
+                    onChange={() => toggle(e)}
                     aria-label={`Withhold ${e.surfaces[0]}`}
                   />
                   <span />
                   {locked && <em>locked</em>}
                 </label>
+                {releaseAsk === e.id && e.withheld && !locked && stage === 'review' && (
+                  <div className="confirm release-ask" role="group" aria-label={`Release ${e.surfaces[0]}`}>
+                    <p>
+                      Your school's policy is not in force: the app is using its built-in defaults, so it cannot tell whether your
+                      school allows this to be sent. Release “{e.surfaces[0].length > 60 ? `${e.surfaces[0].slice(0, 60)}…` : e.surfaces[0]}”
+                      anyway?
+                    </p>
+                    <div className="actions">
+                      <button
+                        className="secondary"
+                        onClick={() => {
+                          setReleaseAsk(null);
+                          flip(e.id);
+                        }}
+                      >
+                        Release it
+                      </button>
+                      <button className="link" onClick={() => setReleaseAsk(null)}>
+                        Keep it withheld
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             );
           })}

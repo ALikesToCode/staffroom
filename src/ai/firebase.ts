@@ -5,7 +5,18 @@ import { getAuth, onAuthStateChanged, signInAnonymously, type User } from 'fireb
 import { collection, doc, getDocs, getFirestore, orderBy, query, setDoc } from 'firebase/firestore';
 import { fetchAndActivate, getRemoteConfig, getValue } from 'firebase/remote-config';
 import type { Kind, Receipt } from '../core/types';
-import { withTimeout } from '../core/policy';
+import {
+  DEFAULT_POLICY,
+  fallbackPolicy,
+  FROM_DEFAULTS_UNPUBLISHED,
+  FROM_REMOTE,
+  KINDS,
+  POLICY_KEY,
+  readSaved,
+  toSave,
+  withTimeout,
+  type Policy,
+} from '../core/policy';
 import { asReceiptRecord, receiptRecord, type ReceiptRecord } from '../core/receipts';
 
 const env = import.meta.env;
@@ -47,67 +58,60 @@ export const ai = getAI(app, { backend: new GoogleAIBackend() });
 
 // ---------------------------------------------------------------- policy
 
-/**
- * A setting the school publishes through Remote Config. It is enforced in
- * the app, on the teacher's device: it is a default the school chooses, not
- * a security control.
- */
-export interface Policy {
-  /** The cloud model that drafts. */
-  cloudModel: string;
-  /** Kinds of item the app will not let a teacher release to the cloud. */
-  lockedKinds: Kind[];
-  /** Where these values came from. */
-  from: 'school policy (Remote Config)' | 'built-in defaults';
-}
+export { DEFAULT_POLICY, type Policy } from '../core/policy';
 
-export const DEFAULT_POLICY: Policy = {
-  cloudModel: 'gemini-3.5-flash-lite',
-  lockedKinds: ['contact', 'id'],
-  from: 'built-in defaults',
-};
-
-const KINDS: Kind[] = ['student', 'adult', 'place', 'contact', 'id', 'private'];
-
-/** How long the app waits for the school's policy before it goes on with the built-in defaults. */
+/** How long the app waits for the school's policy before it goes on without it. */
 export const POLICY_TIMEOUT_MS = 4000;
 
+const savedPolicy = () => {
+  try {
+    return readSaved(localStorage.getItem(POLICY_KEY));
+  } catch {
+    return undefined;
+  }
+};
+
 /**
- * The policy in force: the school's, or the built-in defaults when there is
- * no project, the fetch fails, or it has not answered within the timeout.
- * Approval is not offered until this has settled.
+ * The policy in force. The school's, when it loads within the timeout. If
+ * it does not (no project, no network, a slow or failed fetch), the last
+ * school policy this browser fetched is used, and the page says from when.
+ * Only when there is none are the built-in defaults used, and then the page
+ * says the school's policy could not be loaded. Approval is not offered
+ * until this has settled.
  */
-export function loadPolicy(timeoutMs = POLICY_TIMEOUT_MS): Promise<Policy> {
-  if (!configured) return Promise.resolve(DEFAULT_POLICY);
-  return withTimeout(fetchPolicy(), timeoutMs, DEFAULT_POLICY);
+export async function loadPolicy(timeoutMs = POLICY_TIMEOUT_MS): Promise<Policy> {
+  if (!configured) return DEFAULT_POLICY;
+  const fetched = await withTimeout<Policy | undefined>(fetchPolicy(), timeoutMs, undefined);
+  return fetched ?? fallbackPolicy(savedPolicy());
 }
 
+/** Fetch the policy. Rejects when it cannot be fetched, so the caller can fall back to the one kept from before. */
 async function fetchPolicy(): Promise<Policy> {
+  const rc = getRemoteConfig(app);
+  rc.settings.minimumFetchIntervalMillis = import.meta.env.DEV ? 0 : 60 * 60 * 1000;
+  rc.defaultConfig = {
+    cloud_model: DEFAULT_POLICY.cloudModel,
+    locked_kinds: DEFAULT_POLICY.lockedKinds.join(','),
+  };
+  await fetchAndActivate(rc);
+  const locked = getValue(rc, 'locked_kinds');
+  const model = getValue(rc, 'cloud_model');
+  const lockedKinds = locked
+    .asString()
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s): s is Kind => (KINDS as string[]).includes(s));
+  // The policy counts as the school's when either value was published, not only the locks.
+  const published = locked.getSource() === 'remote' || model.getSource() === 'remote';
+  if (!published) return { ...DEFAULT_POLICY, from: FROM_DEFAULTS_UNPUBLISHED };
+  const policy: Policy = { cloudModel: model.asString() || DEFAULT_POLICY.cloudModel, lockedKinds, origin: 'remote', from: FROM_REMOTE };
   try {
-    const rc = getRemoteConfig(app);
-    rc.settings.minimumFetchIntervalMillis = import.meta.env.DEV ? 0 : 60 * 60 * 1000;
-    rc.defaultConfig = {
-      cloud_model: DEFAULT_POLICY.cloudModel,
-      locked_kinds: DEFAULT_POLICY.lockedKinds.join(','),
-    };
-    await fetchAndActivate(rc);
-    const locked = getValue(rc, 'locked_kinds');
-    const model = getValue(rc, 'cloud_model');
-    const lockedKinds = locked
-      .asString()
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s): s is Kind => (KINDS as string[]).includes(s));
-    // The policy counts as the school's when either value was published, not only the locks.
-    const published = locked.getSource() === 'remote' || model.getSource() === 'remote';
-    return {
-      cloudModel: model.asString() || DEFAULT_POLICY.cloudModel,
-      lockedKinds,
-      from: published ? 'school policy (Remote Config)' : 'built-in defaults',
-    };
+    // Kept so that a slow network next time does not quietly swap the school's locks for the defaults.
+    localStorage.setItem(POLICY_KEY, toSave(policy, new Date()));
   } catch {
-    return DEFAULT_POLICY;
+    // Storage is switched off. The policy is still in force for this page.
   }
+  return policy;
 }
 
 // ---------------------------------------------------------------- the teacher's own record

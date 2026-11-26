@@ -1449,3 +1449,8 @@ footer {
 .copy-one .copy-off {
   margin: 0;
 }
+
+/* The question asked before an item is released while only the built-in defaults are in force. */
+.vault li .release-ask {
+  grid-column: 1 / -1;
+}
