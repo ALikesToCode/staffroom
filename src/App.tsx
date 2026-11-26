@@ -173,12 +173,15 @@ export function App() {
 
   useEffect(() => {
     deviceStatus().then(setDevice);
-    loadPolicy().then((p) => {
+    const usePolicy = (p: Policy) => {
       policyRef.current = p;
       policyReadyRef.current = true;
       setPolicyReady(true);
       setPolicy(p);
-    });
+    };
+    // The second argument takes a school policy that arrives after the wait. The approval is bound
+    // to the policy, so a tick made under the fallback does not carry over.
+    loadPolicy(undefined, usePolicy).then(usePolicy);
     const stop = watchUser((u) => setUid(u?.uid ?? null));
     const on = () => setOnline(true);
     const off = () => setOnline(false);

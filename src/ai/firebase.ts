@@ -77,11 +77,22 @@ const savedPolicy = () => {
  * school policy this browser fetched is used, and the page says from when.
  * Only when there is none are the built-in defaults used, and then the page
  * says the school's policy could not be loaded. Approval is not offered
- * until this has settled.
+ * until this has settled. If the school's policy arrives after the wait, it
+ * replaces the fallback from then on.
  */
-export async function loadPolicy(timeoutMs = POLICY_TIMEOUT_MS): Promise<Policy> {
+export async function loadPolicy(timeoutMs = POLICY_TIMEOUT_MS, onLate?: (policy: Policy) => void): Promise<Policy> {
   if (!configured) return DEFAULT_POLICY;
-  const fetched = await withTimeout<Policy | undefined>(fetchPolicy(), timeoutMs, undefined);
+  const fetching = fetchPolicy();
+  let settled = false;
+  // A fetch that finishes after the wait is still the school's policy: hand it over when it arrives.
+  fetching.then(
+    (p) => {
+      if (settled) onLate?.(p);
+    },
+    () => {},
+  );
+  const fetched = await withTimeout<Policy | undefined>(fetching, timeoutMs, undefined);
+  settled = true;
   return fetched ?? fallbackPolicy(savedPolicy());
 }
 
