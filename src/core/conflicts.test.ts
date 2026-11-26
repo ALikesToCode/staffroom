@@ -327,6 +327,12 @@ describe('the rule layer, kind by kind', () => {
     for (const step of ['Make the model without buying anything.', 'Use scrap card instead of a kit.', 'Pupils do not need to buy a kit.', 'Avoid any cost to families.', 'She has not paid.']) expect(verdict(step, c('money')), step).toBe('none');
     expect(verdict('The trip is free of cost.', c('money'))).toBe('none');
     expect(verdict('No fee is asked for.', c('money'))).toBe('none');
+    // A negation before a list governs every item of it; a comma that ends a clause still stops it.
+    expect(verdict('Write one sentence in the exercise book. This requires no phone, internet, or purchased items.', c('money'))).toBe('none');
+    expect(verdict('This requires no phone, internet, or purchased items.', c('no-phone-internet'))).toBe('none');
+    expect(verdict('It needs no glue, scissors or money.', c('money'))).toBe('none');
+    expect(verdict('If you have no pen, buy one.', c('money'))).toBe('conflict');
+    expect(verdict('There is no test today, so buy the workbook tonight.', c('money'))).toBe('conflict');
   });
 
   it('gives the matched words and a reason that names the student and quotes the constraint', () => {

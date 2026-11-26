@@ -85,14 +85,40 @@ const PERFECT = /(?:^|\s)(?:(?:has|have|had)\s+not|hasn't|haven't|hadn't)$/iu;
  */
 export function negated(step: string, index: number): boolean {
   const before = step.slice(0, index);
-  let from = 0;
-  for (const m of before.matchAll(CLAUSE_BREAK)) from = m.index + m[0].length;
-  const clause = before.slice(from);
+  const breaks = [...before.matchAll(CLAUSE_BREAK)];
+  const start = (k: number) => (k >= 0 ? breaks[k].index + breaks[k][0].length : 0);
+  if (governs(before.slice(start(breaks.length - 1)))) return true;
+  // A list after a negation: "no phone, internet, or purchased items". The negation before the first item governs
+  // every later item, each one or two words after a comma (perhaps after "or", "and" or "nor"). The words matched must
+  // stand in such a list: after "or"/"and"/"nor", or with a comma just after them. "If you have no pen, buy one" is no list.
+  const last = before.slice(start(breaks.length - 1));
+  if (!LIST_JOIN.test(last) && !/^\S+(?:\s+\S+)?\s*,/u.test(step.slice(index))) return false;
+  let end = before.length;
+  for (let k = breaks.length - 1, items = 0; k >= 0 && items < LIST_ITEMS; k--, items++) {
+    if (breaks[k][0] !== ',') return false;
+    const item = before.slice(start(k), end).replace(LIST_JOIN, '').trim().split(/\s+/).filter((w) => w && !SMALL.test(w));
+    if (item.length > 2) return false;
+    end = breaks[k].index;
+    if (governs(before.slice(start(k - 1), end), true)) return true;
+  }
+  return false;
+}
+
+const LIST_JOIN = /^\s*(?:or|and|nor)\s+/iu;
+const LIST_NEGATION = /^(?:no|without|free of|instead of|rather than|in place of)$/iu;
+
+/** The most items of a list one negation reaches across commas. */
+const LIST_ITEMS = 4;
+
+/** True when a negation in `clause` governs the words at its end (or, for a list item, the item that ends it). */
+function governs(clause: string, item = false): boolean {
   for (const n of clause.matchAll(NEGATION)) {
     const end = n.index + n[0].length;
     const between = clause.slice(end).trim().split(/\s+/).filter(Boolean);
     const counted = between.filter((w) => !SMALL.test(w)).length;
-    if (counted > NEGATION_REACH) continue;
+    if (counted > (item ? 2 : NEGATION_REACH)) continue;
+    // Across a list only a negation that stands before things reaches: "no phone, internet, or …", not "do not rush her, and …".
+    if (item && !LIST_NEGATION.test(n[0])) continue;
     if (BEFORE_A_THING.test(n[0]) && between.length > 0 && VERB_NEXT.test(between[0])) continue;
     if (PERFECT.test(clause.slice(0, end)) && counted > 1) continue;
     return true;
