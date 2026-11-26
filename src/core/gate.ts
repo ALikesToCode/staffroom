@@ -10,7 +10,7 @@ export interface Violation {
 const flat = (s: string) => s.toLowerCase().replace(/\s+/g, ' ');
 const isWordChar = (c: string | undefined) => !!c && /[\p{L}\p{N}]/u.test(c);
 
-/** Whole-word search without regular expressions, so it shares no code with the redactor. */
+/** Whole-word search over the text as it will be sent. */
 function containsWord(haystack: string, needle: string): boolean {
   const h = flat(haystack);
   const n = flat(needle).trim();
@@ -26,8 +26,9 @@ function containsWord(haystack: string, needle: string): boolean {
 
 /**
  * The exit gate. Text may leave the device only when this returns no
- * violations. It is deliberately a second, independent check: it does not
- * trust that the redactor did its job.
+ * violations. It re-checks the outgoing text for every withheld item and
+ * for the phone, email and ID patterns, so it catches a redaction mistake.
+ * It cannot find a private detail that nobody marked.
  */
 export function checkOutgoing(text: string, entities: Entity[]): Violation[] {
   const violations: Violation[] = [];

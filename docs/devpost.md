@@ -16,11 +16,11 @@ Teachers keep the most useful notes about a class in their heads or in a noteboo
 
 A teacher writes a note about their class in plain words and picks a task: a support plan for next week, messages to parents, or a handover note.
 
-1. **Guard (on the device).** Chrome's built-in model reads the raw note and finds names, places, contact details, identity numbers and private details. A class list and pattern rules run beside it. Each item is replaced by a stand-in such as `[Student 1]`, and private details by `[withheld]`.
-2. **Approve.** The teacher sees the exact text that would leave, can withhold more by selecting it, and can release an item unless school policy locks that kind. An exit gate searches the outgoing text again for every withheld item and blocks sending if one is found. Nothing is sent until the teacher ticks "I have read this text".
+1. **Guard (on the device).** Chrome's built-in model reads the raw note and finds names, places, contact details, identity numbers and private details. A class list, pattern rules and a short list of sensitive words run beside it and need no model. Each item is replaced by a stand-in such as `[Student 1]`, and private details by `[withheld]`.
+2. **Approve.** The teacher sees the exact text that would leave, can withhold more by selecting it, and can release an item unless school policy locks that kind. An exit gate re-checks the outgoing text for every withheld item and for the phone, email and ID patterns; it catches redaction mistakes, it cannot find a private detail nobody marked. If it finds anything, sending is blocked. Nothing is sent until the teacher ticks "I have read this text", and the tick holds only for that exact text.
 3. **Draft (in the cloud).** A Gemini model writes from the redacted text only.
-4. **Check (on the device).** The reply comes back with stand-ins. The device puts the names back and the on-device model compares each piece of advice with the private details the cloud never saw, and marks it as fitting, in conflict, or worth a second thought. A return gate rejects replies that contain a stand-in the device did not issue.
-5. **Sign off.** The teacher keeps or strikes each item. A receipt records what kinds of item were withheld, the exact text that was approved, which model ran where, and what was signed off. A receipt holds no name and no private detail.
+4. **Check (on the device).** The reply comes back with stand-ins. The device puts the names back and the on-device model compares each piece of advice with the private details the cloud never saw, and marks it as fitting, in conflict, or worth a second thought. A return gate flags a reply that uses a stand-in that was not in the approved text, and blocks sign-off until the teacher has read a flagged reply.
+5. **Sign off.** The teacher keeps or strikes each item. A receipt holds the exact text the teacher approved, counts of what was withheld, which model ran where, and what was signed off. It never holds the raw note or anything that was withheld.
 
 ## How Firebase AI Logic is used
 
@@ -33,14 +33,14 @@ Every model call goes through the Firebase AI Logic web SDK (`firebase/ai`), and
 | Check | The draft and the withheld details | `ONLY_ON_DEVICE` | The withheld details are in the prompt |
 | Receipt label | Redacted text | `PREFER_ON_DEVICE` | A small job that is free and works offline on the device |
 
-The app reads `inferenceSource` on every response. The guard and the check stop if a response did not come from the device, and the screen shows where each step ran.
+The app reads `inferenceSource` on every response, and the screen shows where each step ran. For the guard and the check, the app refuses to start a guard or check request unless the on-device model is present, and stops if a response did not come from the device.
 
 Other Firebase products:
 
 - **App Check** protects the Gemini API. Enforcement is on: a request without a valid token is refused.
-- **Remote Config** holds the school's policy: which cloud model drafts, and which kinds of item a teacher may never release.
+- **Remote Config** holds a setting the school publishes; enforced in the app: which cloud model drafts, and which kinds of item the app keeps withheld. It is the school's default, not a security control.
 - **Authentication** (anonymous) gives each browser an account without asking for personal details.
-- **Cloud Firestore** keeps an optional audit copy of each receipt. Rules allow the owner to create and read a receipt, and nobody to edit or delete one.
+- **Cloud Firestore** keeps the teacher's own record of each receipt, if the teacher turns it on. The copy in Firestore holds the record only, no text: counts, where each step ran, and a digest of the approved text. Rules allow the owner to create and read a record with exactly those fields, and nobody to edit or delete one.
 
 ## How it was built
 
@@ -49,8 +49,8 @@ React, TypeScript and Vite. The redaction vault, the two gates and the receipts 
 ## Challenges
 
 - The on-device model is small. It reads the note one paragraph at a time with a strict JSON schema, and its findings are merged with the class list and the rules.
-- A guard that misses something must fail safe. That is why the exit gate is a separate, deterministic search, and why the teacher reads the outgoing text before it leaves.
-- When no on-device model is available, the app says so plainly: only the class list and rules are applied, and the teacher is told to select private details by hand.
+- A guard that misses something must fail safe. The exit gate catches redaction mistakes, and it cannot find a private detail nobody marked, which is why the teacher reads the outgoing text before it leaves. A paragraph the on-device model could not read is named on screen, not passed over.
+- When no on-device model is available, the app says so plainly: only the class list, the pattern rules and the list of sensitive words are applied, and the teacher is told to select private details by hand.
 
 ## What I learned
 

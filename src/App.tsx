@@ -591,7 +591,7 @@ export function App() {
                               </small>
                             </div>
                             <code className="token">{e.withheld ? e.token : 'released'}</code>
-                            <label className="switch" title={locked ? 'School policy: this kind is always withheld' : ''}>
+                            <label className="switch" title={locked ? 'A setting the school publishes: the app keeps this kind withheld' : ''}>
                               <input
                                 type="checkbox"
                                 checked={e.withheld}
@@ -941,11 +941,12 @@ function How({ policy, device }: { policy: Policy; device: DeviceStatus }) {
       <h3>Three checks that are not a model</h3>
       <ul className="plain">
         <li>
-          <b>The exit gate.</b> Plain code searches the outgoing text for every withheld item and for anything shaped like a phone number,
-          an email or an identity number. If it finds one, the send button is disabled.
+          <b>The exit gate.</b> Plain code re-checks the outgoing text for every withheld item and for the phone, email and ID patterns.
+          If it finds one, the send button is disabled. It catches redaction mistakes; it cannot find a private detail nobody marked.
         </li>
         <li>
-          <b>You.</b> Nothing is sent until you have read the exact text and pressed Approve.
+          <b>You.</b> Nothing is sent until you have read the exact text and pressed Approve. If the text changes after you tick, the
+          tick is cleared.
         </li>
         <li>
           <b>The return gate.</b> Plain code checks that the reply uses only the stand-ins that were in the text you approved and
@@ -958,10 +959,10 @@ function How({ policy, device }: { policy: Policy; device: DeviceStatus }) {
         <dd>{device === 'available' ? 'Gemini Nano, built into Chrome, ready' : `not ready (${device})`}</dd>
         <dt>Drafting model</dt>
         <dd>{policy.cloudModel}</dd>
-        <dt>Always withheld</dt>
+        <dt>Kept withheld by the app</dt>
         <dd>{policy.lockedKinds.map((k) => KIND_LABEL[k].toLowerCase()).join(', ') || 'nothing is locked'}</dd>
         <dt>Set by</dt>
-        <dd>{policy.from}</dd>
+        <dd>{policy.from}. A setting the school publishes; enforced in the app.</dd>
         <dt>Firebase</dt>
         <dd>{configured ? 'AI Logic, App Check, Remote Config, Authentication, Firestore' : 'no project connected in this build'}</dd>
       </dl>
