@@ -211,11 +211,11 @@ export interface SavedLesson {
   adjustments: SavedAdjustment[];
   constraintIds: string[];
   /** The needs the cloud was told for this lesson, by letter, and whose each is. On this device only. */
-  needs?: { letter: string; line: string; children: string[] }[];
+  needs?: { letter: string; line: string; children: string[]; others?: string[] }[];
   /** The lines the cloud wrote for needs. `itemIndex` counts the kept stages. */
   variations?: { itemIndex: number; need: string; text: string }[];
   /** How it went, said after teaching. */
-  after?: { stages: (StageDone | null)[]; line: string; at: string };
+  after?: { stages: (StageDone | null)[]; line: string; at: string; ticket?: Record<string, 'got' | 'partly' | 'not' | 'absent'> };
 }
 
 const KEY = 'staffroom.lessons.v1';

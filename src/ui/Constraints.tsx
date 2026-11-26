@@ -85,7 +85,7 @@ export function ConstraintsPanel({
       ) : (
         <ul className="constraint-list">
           {constraints.map((c) => (
-            <ConstraintRow key={c.id} c={c} who={nameOf(c.about) ?? 'the class'} need={needOf(c)} editable={editable} actions={actions} lesson={lesson} />
+            <ConstraintRow key={c.id} c={c} who={nameOf(c.about) ?? c.childName ?? 'the class'} need={needOf(c)} editable={editable} actions={actions} lesson={lesson} />
           ))}
         </ul>
       )}

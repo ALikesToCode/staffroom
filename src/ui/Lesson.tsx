@@ -1,3 +1,4 @@
+import { allGotIt, SAMPLE_TICKET, TICKET_MARK, TICKET_MARKS, type ClassRow, type Ticket } from '../core/ticket';
 import { useEffect, useRef, useState } from 'react';
 import type { DraftItem } from '../core/types';
 import {
@@ -427,13 +428,40 @@ export function ForTheseChildren({ stages, adjustments }: { stages: readonly Dra
 const DONE: StageDone[] = ['done', 'partly', 'not'];
 
 /** One saved lesson: the plan, the adjustments, how it went, and the way to the next lesson. */
-function LessonCard({ lesson, onAfter, onNext, onDelete }: { lesson: SavedLesson; onAfter: (after: SavedLesson['after']) => void; onNext: () => void; onDelete: () => void }) {
+function LessonCard({
+  lesson,
+  classList,
+  sample,
+  open,
+  onAfter,
+  onNext,
+  onDelete,
+}: {
+  lesson: SavedLesson;
+  /** The children the exit ticket is marked for. */
+  classList: readonly string[];
+  /** True for the invented class: an invented result can be filled in. */
+  sample: boolean;
+  open: boolean;
+  onAfter: (after: SavedLesson['after']) => void;
+  onNext: () => void;
+  onDelete: () => void;
+}) {
   const [stages, setStages] = useState<(StageDone | null)[]>(() => lesson.stages.map((_, i) => lesson.after?.stages[i] ?? null));
   const [line, setLine] = useState(lesson.after?.line ?? '');
+  const [ticket, setTicket] = useState<Ticket>(() => lesson.after?.ticket ?? {});
   const said = lesson.after !== undefined;
+  const marked = Object.keys(ticket).length;
+  const after = (t: Ticket, s = stages) => ({ stages: s, line: line.trim(), at: new Date().toISOString(), ...(Object.keys(t).length > 0 ? { ticket: t } : {}) });
+  const fillSample = () => {
+    const done = lesson.stages.map(() => 'done' as const);
+    setTicket(SAMPLE_TICKET);
+    setStages(done);
+    onAfter(after(SAMPLE_TICKET, done));
+  };
   return (
     <li>
-      <details>
+      <details open={open || undefined}>
         <summary>
           <b>{lesson.fields.topic}</b>
           <span>
@@ -463,12 +491,50 @@ function LessonCard({ lesson, onAfter, onNext, onDelete }: { lesson: SavedLesson
             </li>
           ))}
         </ul>
+        <h4>Exit ticket, child by child</h4>
+        {classList.length === 0 ? (
+          <p className="hint">Add a class list on the Write screen to mark each child here.</p>
+        ) : (
+          <>
+            <ul className="how-went ticket">
+              {classList.map((child) => (
+                <li key={child} role="group" aria-label={child}>
+                  <span>{child}</span>
+                  {TICKET_MARKS.map((m) => (
+                    <button
+                      key={m}
+                      className={ticket[child] === m ? 'choice on' : 'choice'}
+                      aria-pressed={ticket[child] === m}
+                      onClick={() => setTicket(({ [child]: was, ...rest }) => (was === m ? rest : { ...rest, [child]: m }))}
+                    >
+                      {TICKET_MARK[m]}
+                    </button>
+                  ))}
+                </li>
+              ))}
+            </ul>
+            <div className="actions">
+              <button className="secondary small" onClick={() => setTicket(allGotIt(classList))}>
+                All got it
+              </button>
+              {sample && (
+                <button className="secondary small" onClick={fillSample}>
+                  Fill an invented result
+                </button>
+              )}
+              <span className="hint">
+                {marked === 0 ? 'One tap for each child. ' : ''}Kept in this browser with the lesson. Who got it is never sent: the next lesson is told only needs,
+                with no name and no count.
+              </span>
+            </div>
+          </>
+        )}
         <label className="lesson-field">
           One line about the lesson <small>optional, no names</small>
           <input type="text" value={line} maxLength={240} onChange={(e) => setLine(e.target.value)} />
         </label>
         <div className="actions">
-          <button className="secondary small" onClick={() => onAfter({ stages, line: line.trim(), at: new Date().toISOString() })}>
+          <button className="secondary small" onClick={() => onAfter(after(ticket))}>
             {said ? 'Save again' : 'Save how it went'}
           </button>
           <button className="primary small" onClick={onNext}>
@@ -478,7 +544,7 @@ function LessonCard({ lesson, onAfter, onNext, onDelete }: { lesson: SavedLesson
             Delete
           </button>
         </div>
-        <p className="hint">The next lesson is told the stages and whether each was done, and your line. No adjustment is told.</p>
+        <p className="hint">The next lesson is told the stages and whether each was done, your line, and the needs the exit ticket gives, by letter. No name, no count and no adjustment is told.</p>
       </details>
     </li>
   );
@@ -487,12 +553,19 @@ function LessonCard({ lesson, onAfter, onNext, onDelete }: { lesson: SavedLesson
 /** The lessons signed off on this device. They hold names, so they are kept here and nowhere else. */
 export function Lessons({
   lessons,
+  classList,
+  sample,
+  view,
   onAfter,
   onNext,
   onDelete,
   onDeleteAll,
 }: {
   lessons: SavedLesson[];
+  classList: readonly string[];
+  sample: boolean;
+  /** The class at a glance: each child across the last lessons, and the needs that stand. */
+  view: { lessons: SavedLesson[]; rows: ClassRow[] };
   onAfter: (id: string, after: SavedLesson['after']) => void;
   onNext: (lesson: SavedLesson) => void;
   onDelete: (id: string) => void;
@@ -508,7 +581,7 @@ export function Lessons({
         <>
           <ul className="lesson-list">
             {lessons.map((l) => (
-              <LessonCard key={`${l.id}:${l.after?.at ?? ''}`} lesson={l} onAfter={(after) => onAfter(l.id, after)} onNext={() => onNext(l)} onDelete={() => onDelete(l.id)} />
+              <LessonCard key={l.id} lesson={l} classList={classList} sample={sample} open={l === lessons[0]} onAfter={(after) => onAfter(l.id, after)} onNext={() => onNext(l)} onDelete={() => onDelete(l.id)} />
             ))}
           </ul>
           <div className="actions">
@@ -518,6 +591,43 @@ export function Lessons({
             <span className="hint">Thirty at most are kept. Nothing here is in your account.</span>
           </div>
         </>
+      )}
+      {classList.length > 0 && (view.lessons.length > 0 || view.rows.some((r) => r.needs.length > 0)) && (
+        <section className="class-view" aria-label="The class">
+          <h3>The class</h3>
+          <p className="hint">
+            Each child across the last lessons with an exit ticket, and the needs that stand. Built and kept on this device only. “Forget this
+            class” on the Desk wipes it.
+          </p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Child</th>
+                  {view.lessons.map((l) => (
+                    <th scope="col" key={l.id} title={l.fields.topic}>
+                      {l.fields.topic.length > 18 ? `${l.fields.topic.slice(0, 17)}…` : l.fields.topic}
+                    </th>
+                  ))}
+                  <th scope="col">Needs that stand</th>
+                </tr>
+              </thead>
+              <tbody>
+                {view.rows.map((r) => (
+                  <tr key={r.child}>
+                    <th scope="row">{r.child}</th>
+                    {r.marks.map((m, i) => (
+                      <td key={i} className={m ? `mark m-${m}` : 'mark'}>
+                        {m ? TICKET_MARK[m] : '–'}
+                      </td>
+                    ))}
+                    <td>{r.needs.join('; ') || '–'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
     </main>
   );

@@ -34,14 +34,14 @@ export const NEEDS_CASES: NeedsCase[] = [
   {
     id: 'english',
     stages: [
-      stage('Starter (5 minutes)', 'Pupils call out five things they can see in a picture of a busy market. For Need J: tells a partner first, and the partner shares it.'),
+      stage('Starter (5 minutes)', 'Pupils call out five things they can see in a picture of a busy market. For Need N: tells a partner first, and the partner shares it.'),
       stage('Teach (10 minutes)', 'Model a four-sentence description of the school gate on the board.'),
       stage('Practise (15 minutes)', 'Pupils describe a place they know, in pairs. For Need G: adds a second paragraph from another point of view. For Need I: is paired with a different classmate.'),
       stage('Check (10 minutes)', 'A short written test of five questions. For Need F: answers the five questions aloud to the teacher.'),
       stage('Homework', 'Pupils find two pictures of a place online and write three sentences. For Need B: writes from two printed pictures given out in class. For Need M: hands in one sentence the next morning.'),
     ],
     placed: [
-      [0, 'J', 'Tanvi'],
+      [0, 'N', 'Tanvi'],
       [2, 'G', 'Ishaan'],
       [2, 'I', 'Kabir'],
       [2, 'I', 'Ishaan'],
@@ -78,13 +78,13 @@ export const NEEDS_CASES: NeedsCase[] = [
     id: 'science',
     stages: [
       stage('Starter (5 minutes)', 'Ask where a shadow comes from. Pupils point to shadows in the room.'),
-      stage('Teach (10 minutes)', 'Show how a shadow grows as the torch moves closer. For Need K: reads the extension card about eclipses.'),
+      stage('Teach (10 minutes)', 'Show how a shadow grows as the torch moves closer. For Need O: reads the extension card about eclipses.'),
       stage('Practise (15 minutes)', 'In groups, pupils move a torch and measure the shadow of a pencil. For Need C: buys only the black paper. For Need I: works in a different group. For Need G: measures two more objects.'),
       stage('Check (10 minutes)', 'Each group draws one diagram of the torch, the pencil and the shadow.'),
       stage('Homework', 'Pupils trace a shadow at noon. For Need E: does it on Friday.'),
     ],
     placed: [
-      [1, 'K', 'Tanvi'],
+      [1, 'O', 'Tanvi'],
       [2, 'C', 'Aarav'],
       [2, 'I', 'Kabir'],
       [2, 'I', 'Ishaan'],
@@ -99,13 +99,13 @@ export const NEEDS_CASES: NeedsCase[] = [
       stage('Starter (5 minutes)', 'Pupils name three places everyone in the village knows.'),
       stage('Teach (10 minutes)', 'Draw a simple map of the school and the road outside it, with a key.'),
       stage('Practise (15 minutes)', 'Pupils find the nearest town on a map of the district. For Need H: comes before the first bell to catch up on the key.'),
-      stage('Check (10 minutes)', 'A short quiz on the key, answered in front of the class. For Need F: says the answers to a partner, who writes them. For Need J: answers in writing instead.'),
+      stage('Check (10 minutes)', 'A short quiz on the key, answered in front of the class. For Need F: says the answers to a partner, who writes them. For Need N: answers in writing instead.'),
       stage('Homework', 'Pupils sketch a map of their own street. For Need M: finishes the sketch in class the next day. for need a: nothing to change.'),
     ],
     placed: [
       [2, 'H', 'Aarav'],
       [3, 'F', 'Meenal'],
-      [3, 'J', 'Tanvi'],
+      [3, 'N', 'Tanvi'],
       [4, 'M', 'Aarav'],
       [4, 'A', 'Meenal'],
     ],

@@ -81,6 +81,7 @@ import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
 import { constraintsOnDevice, mergeProposals, type ConstraintReport } from './ai/constraints';
 import { learningOnDevice, mergeLearning } from './ai/learning';
+import { classView, withoutClass, withTicketNeeds } from './core/ticket';
 import { NOTE_MAX } from './core/text';
 import {
   DRAFT_FORMAT,
@@ -1290,6 +1291,9 @@ export function App() {
     clearRun();
     setTask('lesson');
     setLesson(nextLessonFields(from));
+    // What the exit ticket said becomes needs for this lesson: told by letter, with the names kept here.
+    setConstraints(withTicketNeeds(constraints, from));
+    constraintsNote.current = note;
     setComposing(true);
     setView('desk');
   };
@@ -1416,6 +1420,8 @@ export function App() {
       setReceipts([]);
       storeReceipts([]);
     }
+    // The marks and needs of each child go with the class. The class plans stay.
+    changeLessons(lessons.map(withoutClass));
     setNote('');
     setClassList([]);
     setConstraints([]);
@@ -1486,7 +1492,7 @@ export function App() {
         policy: replay.policy,
         constraints: replay.constraints,
         needs: recordedNeeds ? outgoingOf(replay.note, replay.entities, replay.constraints, true).needs : sharedNeeds(replay.constraints, replay.entities),
-        lessonNeeds: (recordedNeeds ?? []).map((n) => ({ ...n, constraintIds: [], children: replay.needChildren?.[n.letter] ?? [], issues: [], sensitive: [] })),
+        lessonNeeds: (recordedNeeds ?? []).map((n) => ({ ...n, constraintIds: [], children: replay.needChildren?.[n.letter] ?? [], others: [], issues: [], sensitive: [] })),
       });
       setVariations(replay.variations ?? []);
       setResult({ draft: replay.draft, where: replay.where.draft, model: replay.draftModel });
@@ -2205,6 +2211,9 @@ export function App() {
       {view === 'lessons' && (
         <Lessons
           lessons={lessons}
+          classList={classList}
+          sample={note === SAMPLE_NOTE}
+          view={classView(lessons, classList, constraints, lessonNeedLine)}
           onAfter={(id, after) => changeLessons(lessons.map((l) => (l.id === id ? { ...l, after } : l)))}
           onNext={planNext}
           onDelete={(id) => changeLessons(lessons.filter((l) => l.id !== id))}

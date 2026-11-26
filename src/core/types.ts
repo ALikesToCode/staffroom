@@ -169,7 +169,7 @@ export type ConstraintKind =
   | 'learning';
 
 /** The learning needs a rule can propose from the words of a note. */
-export type LearningKind = 'tests' | 'early' | 'missed' | 'group' | 'shy' | 'reads-above' | 'reads-below' | 'homework';
+export type LearningKind = 'tests' | 'early' | 'missed' | 'group' | 'shy' | 'reads-above' | 'reads-below' | 'homework' | 'ticket-not' | 'ticket-quick' | 'ticket-absent';
 
 /**
  * A private fact that rules something out for one student, or for the
@@ -216,4 +216,6 @@ export interface Constraint {
   learn?: LearningKind;
   /** For a lesson: the teacher ticked "send this need as worded" for a line with a word from the sensitive list. Cleared when the line changes. */
   needAck?: boolean;
+  /** A need from an exit ticket: the child's name as the class list has it. The child may not be in the note at all. Never sent. */
+  childName?: string;
 }

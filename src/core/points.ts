@@ -241,7 +241,7 @@ export function placeVariations(
 /** The names beside each line for a need, for the device's side of the lesson: who has that need. Never sent. */
 export function namesForNeed(need: string, needs: readonly LessonNeed[], notes: readonly ChildNote[], entities: Entity[]): string[] {
   const n = needs.find((x) => x.letter === need);
-  return (n?.children ?? []).map((id) => notes.find((x) => x.id === id)?.name ?? entities.find((e) => e.id === id)?.surfaces[0]).filter((x): x is string => x !== undefined);
+  return [...(n?.children ?? []).map((id) => notes.find((x) => x.id === id)?.name ?? entities.find((e) => e.id === id)?.surfaces[0]).filter((x): x is string => x !== undefined), ...(n?.others ?? [])];
 }
 
 /** The accepted points as a saved lesson and a recorded run keep them. */

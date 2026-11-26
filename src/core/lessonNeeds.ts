@@ -19,6 +19,10 @@ export const LEARNING_LINE: Record<LearningKind, string> = {
   'reads-above': 'reads above the level of the class',
   'reads-below': 'reads below the level of the class',
   homework: 'has not handed in recent homework',
+  // From an exit ticket. The line in use names the topic: see ticket.ts.
+  'ticket-not': 'has not yet got the last topic; needs it taught again another way',
+  'ticket-quick': 'got the last topic quickly; needs a harder task',
+  'ticket-absent': 'was absent for the last topic',
 };
 
 const TEST = '(?:tests?|exams?|examinations?)';
@@ -107,13 +111,16 @@ const LETTER_OF: Partial<Record<Constraint['kind'] | LearningKind, string>> = {
   early: 'G',
   missed: 'H',
   group: 'I',
-  shy: 'J',
-  'reads-above': 'K',
-  'reads-below': 'L',
+  'ticket-not': 'J',
+  'ticket-quick': 'K',
+  'ticket-absent': 'L',
   homework: 'M',
+  shy: 'N',
+  'reads-above': 'O',
+  'reads-below': 'P',
 };
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-const FIRST_FREE = 'N';
+const FIRST_FREE = 'Q';
 
 /** One need as the cloud is told it, and (on the device only) whose it is. */
 export interface LessonNeed {
@@ -124,13 +131,16 @@ export interface LessonNeed {
   constraintIds: string[];
   /** The students who have it, by id in the vault. Never sent. */
   children: string[];
+  /** Children who have it and are not in the note, by their name on the class list (from an exit ticket). Never sent. */
+  others: string[];
   /** What the exit gate stops in the line. Empty: it may be sent. */
   issues: Violation[];
   /** Words from the sensitive list in the line. They stop it until the teacher ticks "send this need as worded". */
   sensitive: string[];
 }
 
-const preferred = (c: Constraint) => (c.kind === 'learning' ? (c.learn && flat(c.need ?? '') === LEARNING_LINE[c.learn] ? LETTER_OF[c.learn] : undefined) : LETTER_OF[c.kind]);
+const preferred = (c: Constraint) =>
+  c.kind === 'learning' ? (c.learn && (c.learn.startsWith('ticket-') || flat(c.need ?? '') === LEARNING_LINE[c.learn]) ? LETTER_OF[c.learn] : undefined) : LETTER_OF[c.kind];
 
 /**
  * The exit gate for one need line of a lesson: what the gate for any need
@@ -168,11 +178,12 @@ export function lessonNeeds(constraints: readonly Constraint[], entities: Entity
         while (free < LETTERS.length && (taken.has(LETTERS[free]) || out.some((n) => n.letter === LETTERS[free]))) free++;
         letter = LETTERS[free++] ?? `Z${out.length}`;
       }
-      need = { letter, line, constraintIds: [], children: [], issues: [], sensitive: [] };
+      need = { letter, line, constraintIds: [], children: [], others: [], issues: [], sensitive: [] };
       out.push(need);
     }
     need.constraintIds.push(c.id);
     if (c.about && !need.children.includes(c.about)) need.children.push(c.about);
+    if (!c.about && c.childName && !need.others.includes(c.childName)) need.others.push(c.childName);
     const checked = checkLessonNeed(line, entities, Boolean(c.needAck));
     for (const v of checked.issues) if (!need.issues.some((x) => x.what === v.what && x.why === v.why)) need.issues.push(v);
     need.sensitive = [...new Set([...need.sensitive, ...checked.sensitive])];

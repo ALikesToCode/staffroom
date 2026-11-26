@@ -263,7 +263,7 @@ describe('the needs set: the parser and the placing, no model', () => {
   it('places every labelled line beside the right child and nowhere else', async () => {
     const { runNeedsSet, NEEDS_CASES, sampleNeeds } = await import('./needs');
     expect(NEEDS_CASES).toHaveLength(5);
-    expect(sampleNeeds().needs.map((n) => n.letter).join('')).toBe('ABCDFGHIJKM');
+    expect(sampleNeeds().needs.map((n) => n.letter).join('')).toBe('ABCDFGHIMNO');
     const { totals } = runNeedsSet();
     // Frozen as first measured.
     expect(totals).toEqual({ replies: 5, lines: 26, right: 26, missing: 0, wrongChild: 0, droppedExpected: 4, droppedFound: 4, hitsExpected: 5, hitsFound: 5, hitsMissed: 0, hitsFalse: 0 });
