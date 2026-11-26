@@ -2691,6 +2691,15 @@ mark.hit {
     background: #fff;
   }
 
+  /* A heading stays on the page with the text under it. */
+  .print-sheet h1,
+  .print-sheet h2,
+  .print-sheet h3,
+  .print-sheet dt {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
   .app > *:not(.print-sheet) {
     display: none !important;
   }

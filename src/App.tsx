@@ -1751,7 +1751,11 @@ export function App() {
   const offers = acceptable(hits, shownAdj);
   const pointOffers = acceptablePoints(shownPoints);
   const offered = hits.filter((h) => shownAdj[h.key]?.state === 'offered').length + waitingPoints.length;
-  const acceptedNow = inNoteOrder([...acceptedAdjustments(hits, shownAdj), ...acceptedPoints(shownPoints)], notesByChild);
+  // Each child by the same name as their section, whichever way the note first wrote it ("Meenal" or "Meenal Joshi").
+  const acceptedNow = inNoteOrder([...acceptedAdjustments(hits, shownAdj), ...acceptedPoints(shownPoints)], notesByChild).map((a) => {
+    const named = a.childId ? notesByChild.find((n) => n.id === a.childId)?.child : undefined;
+    return named && named !== a.child ? { ...a, child: named } : a;
+  });
   /** Something the device can still write: a child it has not answered for, or a hit with nothing offered. */
   const toFit = hits.some((h) => !adj[h.key]);
   // A lesson is read in its own order. The other tasks show what was caught first.
