@@ -1,7 +1,8 @@
 import type { Constraint, Draft, Entity, ItemCheck, Kind, TaskId, Where } from './types';
 import type { Policy } from './policy';
 import { KINDS } from './policy';
-import { CONSTRAINT_KINDS } from './constraints';
+import { ALL_KINDS } from './constraints';
+import { NEED_LINE_MAX, type Variation } from './lessonNeeds';
 import { SUGGESTION_MAX } from './recheck';
 import { ADJUSTMENT_MAX, FIELD_MAX, LAST_TIME_MAX, type AdjustmentSource, type LessonFields } from './lesson';
 
@@ -35,15 +36,23 @@ export interface RecordedAdjustment {
   childId?: string;
   /** The constraint the step went against. Absent for a point that answers no rule. */
   constraintId?: string;
+  /** The letter of the need the cloud wrote it for. */
+  need?: string;
   text: string;
   source: RecordedSource;
 }
 
+/** A need of a lesson as it was sent: a letter and a line. */
+export interface RecordedNeed {
+  letter: string;
+  line: string;
+}
+
 /** Who wrote an adjustment, as the file says it. */
-export type RecordedSource = 'on-device model' | 'rule starter' | 'teacher';
-export const RECORDED_SOURCE: Record<AdjustmentSource, RecordedSource> = { model: 'on-device model', starter: 'rule starter', teacher: 'teacher' };
+export type RecordedSource = 'on-device model' | 'rule starter' | 'teacher' | 'cloud, for a need you approved';
+export const RECORDED_SOURCE: Record<AdjustmentSource, RecordedSource> = { model: 'on-device model', starter: 'rule starter', teacher: 'teacher', cloud: 'cloud, for a need you approved' };
 /** The same the other way, for a replay. */
-export const sourceOf = (s: RecordedSource): AdjustmentSource => (s === 'on-device model' ? 'model' : s === 'rule starter' ? 'starter' : 'teacher');
+export const sourceOf = (s: RecordedSource): AdjustmentSource => (s === 'on-device model' ? 'model' : s === 'rule starter' ? 'starter' : s === 'teacher' ? 'teacher' : 'cloud');
 
 /** The most characters of a rewritten item that a recorded run holds. */
 const REWRITE_MAX = 4000;
@@ -76,6 +85,12 @@ export interface RecordedRun {
   lesson?: LessonFields;
   /** For a lesson: the adjustments that were accepted when the run was saved. Shown read-only in a replay. Absent: none. */
   adjustments?: RecordedAdjustment[];
+  /** For a lesson: the needs the cloud was told, by letter. Absent: none. */
+  needs?: RecordedNeed[];
+  /** For a lesson: which students have each need, by letter. It was never sent: the file is of the invented class, and a replay shows the device's side. */
+  needChildren?: Record<string, string[]>;
+  /** For a lesson: the lines the cloud wrote for needs, taken out of the stages. Absent: none. */
+  variations?: Variation[];
 }
 
 const WHERES: Where[] = ['ON_DEVICE', 'IN_CLOUD', 'RULES_ONLY', 'NOT_RUN', 'SKIPPED'];
@@ -106,7 +121,7 @@ const isEntity = (v: unknown): v is Entity =>
 const isConstraint = (v: unknown): v is Constraint =>
   obj(v) &&
   str(v.id) &&
-  CONSTRAINT_KINDS.includes(v.kind as Constraint['kind']) &&
+  ALL_KINDS.includes(v.kind as Constraint['kind']) &&
   str(v.text) &&
   ['rule', 'on-device model', 'teacher'].includes(v.source as string) &&
   typeof v.confirmed === 'boolean' &&
@@ -118,6 +133,8 @@ const isConstraint = (v: unknown): v is Constraint =>
   optional(v.who, str) &&
   optional(v.guardian, str) &&
   optional(v.need, str) &&
+  optional(v.learn, str) &&
+  optional(v.needAck, (b) => typeof b === 'boolean') &&
   optional(v.share, (b) => typeof b === 'boolean');
 
 const isCheck = (v: unknown): v is ItemCheck =>
@@ -195,9 +212,28 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
           // It answers a constraint or is for a child: an entry that is neither belongs to nothing.
           (a.constraintId !== undefined || a.childId !== undefined) &&
           optional(a.stage, (x) => str(x) && x.length <= FIELD_MAX) &&
+          optional(a.need, (x) => str(x) && /^[A-Z]{1,2}\d*$/.test(x)) &&
           str(a.text) && a.text.trim().length > 0 && a.text.length <= ADJUSTMENT_MAX && Object.values(RECORDED_SOURCE).includes(a.source as RecordedSource),
       );
     if (!fine) return undefined;
+  }
+  // The needs, whose they are, and what the cloud wrote for them: all three belong to a lesson, and hang together.
+  const letter = (x: unknown): x is string => str(x) && /^[A-Z]{1,2}\d*$/.test(x);
+  const needs = d.needs;
+  if (needs !== undefined && !(d.task === 'lesson' && list(needs, (n): n is RecordedNeed => obj(n) && letter(n.letter) && str(n.line) && n.line.trim().length > 0 && n.line.length <= NEED_LINE_MAX))) return undefined;
+  const letters = new Set((needs as RecordedNeed[] | undefined)?.map((n) => n.letter) ?? []);
+  if (needs !== undefined && letters.size !== (needs as RecordedNeed[]).length) return undefined;
+  const needChildren = d.needChildren;
+  if (needChildren !== undefined) {
+    const students = new Set(d.entities.filter((e) => e.kind === 'student').map((e) => e.id));
+    if (!obj(needChildren) || !Object.entries(needChildren).every(([k, v]) => letters.has(k) && list(v, str) && v.every((id) => students.has(id)))) return undefined;
+  }
+  const variations = d.variations;
+  if (
+    variations !== undefined &&
+    !list(variations, (v): v is Variation => obj(v) && num(v.itemIndex) && v.itemIndex < count && letter(v.need) && letters.has(v.need) && str(v.text) && v.text.trim().length > 0 && v.text.length <= 1000)
+  ) {
+    return undefined;
   }
   return {
     recordedAt: d.recordedAt,
@@ -225,11 +261,15 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
             ...(a.stage !== undefined ? { stage: a.stage } : {}),
             ...(a.childId !== undefined ? { childId: a.childId } : {}),
             ...(a.constraintId !== undefined ? { constraintId: a.constraintId } : {}),
+            ...(a.need !== undefined ? { need: a.need } : {}),
             text: a.text,
             source: a.source,
           })),
         }
       : {}),
+    ...(needs ? { needs: (needs as RecordedNeed[]).map((n) => ({ letter: n.letter, line: n.line })) } : {}),
+    ...(needChildren ? { needChildren: Object.fromEntries(Object.entries(needChildren as Record<string, string[]>).map(([k, v]) => [k, [...v]])) } : {}),
+    ...(variations ? { variations: (variations as Variation[]).map((v) => ({ itemIndex: v.itemIndex, need: v.need, text: v.text })) } : {}),
   };
 }
 
@@ -246,7 +286,7 @@ export function browserName(userAgent: string): string {
  * An empty list of either is left out.
  */
 export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now: Date, userAgent: string): RecordedRun {
-  const { rewrites, fits, adjustments, ...rest } = run;
+  const { rewrites, fits, adjustments, needs, needChildren, variations, ...rest } = run;
   return {
     recordedAt: now.toISOString(),
     chrome: browserName(userAgent),
@@ -254,6 +294,8 @@ export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now:
     ...(rewrites && rewrites.length > 0 ? { rewrites } : {}),
     ...(fits && fits.length > 0 ? { fits } : {}),
     ...(adjustments && adjustments.length > 0 ? { adjustments } : {}),
+    ...(needs && needs.length > 0 ? { needs, ...(needChildren ? { needChildren } : {}) } : {}),
+    ...(variations && variations.length > 0 ? { variations } : {}),
   };
 }
 

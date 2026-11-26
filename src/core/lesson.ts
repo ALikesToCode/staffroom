@@ -145,7 +145,8 @@ export function needsFitting(hits: readonly LessonHit[]): string {
 
 // ---------------------------------------------------------------- the fit: an adjustment for one child
 
-export type AdjustmentSource = 'model' | 'starter' | 'teacher';
+/** Who wrote the words: the on-device model, a rule's starter, the teacher, or the cloud for a need the teacher approved. */
+export type AdjustmentSource = 'model' | 'starter' | 'teacher' | 'cloud';
 
 /** Said over a starter. */
 export const STARTER_LABEL = 'Starter wording, by rule';
@@ -195,6 +196,8 @@ export interface SavedAdjustment {
   child: string;
   text: string;
   source: AdjustmentSource;
+  /** The letter of the need the cloud wrote it for, when it did. */
+  need?: string;
 }
 
 /** A signed lesson. Kept in this browser only: it has names in it and is never sent. */
@@ -207,6 +210,10 @@ export interface SavedLesson {
   stages: DraftItem[];
   adjustments: SavedAdjustment[];
   constraintIds: string[];
+  /** The needs the cloud was told for this lesson, by letter, and whose each is. On this device only. */
+  needs?: { letter: string; line: string; children: string[] }[];
+  /** The lines the cloud wrote for needs. `itemIndex` counts the kept stages. */
+  variations?: { itemIndex: number; need: string; text: string }[];
   /** How it went, said after teaching. */
   after?: { stages: (StageDone | null)[]; line: string; at: string };
 }
@@ -347,8 +354,27 @@ export function acceptedAdjustments(hits: readonly LessonHit[], adj: Adjustments
 }
 
 /** A signed lesson in the form it is kept in. */
-export function savedLesson(id: string, at: string, fields: LessonFields, title: string, stages: DraftItem[], adjustments: SavedAdjustment[], constraints: readonly Constraint[]): SavedLesson {
-  return { id, savedAt: at, fields: { ...fields, minutes: lessonMinutes(fields.minutes) }, title, stages, adjustments, constraintIds: constraints.filter((c) => c.confirmed).map((c) => c.id) };
+export function savedLesson(
+  id: string,
+  at: string,
+  fields: LessonFields,
+  title: string,
+  stages: DraftItem[],
+  adjustments: SavedAdjustment[],
+  constraints: readonly Constraint[],
+  extra: Pick<SavedLesson, 'needs' | 'variations'> = {},
+): SavedLesson {
+  return {
+    id,
+    savedAt: at,
+    fields: { ...fields, minutes: lessonMinutes(fields.minutes) },
+    title,
+    stages,
+    adjustments,
+    constraintIds: constraints.filter((c) => c.confirmed).map((c) => c.id),
+    ...(extra.needs && extra.needs.length > 0 ? { needs: extra.needs } : {}),
+    ...(extra.variations && extra.variations.length > 0 ? { variations: extra.variations } : {}),
+  };
 }
 
 /** In a replay: the adjustments of the recorded run, set against the hits the rules find in its draft. Each stands as accepted. */

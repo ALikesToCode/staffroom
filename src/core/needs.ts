@@ -3,6 +3,7 @@ import type { Violation } from './gate';
 import { checkOutgoing } from './gate';
 import { findByRule, findPossibleNames, sensitiveWords, wholeWordMatcher } from './rules';
 import { LOOKALIKE_RE, redactWithTokens, RESERVED, TOKEN_RE } from './vault';
+import { lessonNeeds, needLabel, withLessonNeeds, type LessonNeed } from './lessonNeeds';
 
 // A confirmed constraint can be told to the cloud as a need, without its reason: "cannot stay after the
 // last bell", and not why. The teacher chooses, one constraint at a time. A need line is outgoing text:
@@ -61,6 +62,8 @@ export function needIsTyped(c: Constraint): boolean {
  * its stand-in. For the other kinds it is the fixed line.
  */
 export function needLine(c: Constraint, entities: Entity[]): string | undefined {
+  // A learning need is told for a lesson only, as a line with no child in it: see lessonNeeds.
+  if (c.kind === 'learning') return undefined;
   if (!needIsTyped(c)) return needTemplate(c, entities);
   const typed = (c.need ?? '').replace(/\s+/g, ' ').trim();
   if (typed.length === 0) return undefined;
@@ -131,6 +134,8 @@ export interface Outgoing {
   /** True when the redacted note has no stand-in in it at all: it is the note as written. */
   noteAsWritten: boolean;
   needs: Need[];
+  /** For a lesson: the needs by letter, with (on the device only) whose each is. Absent for the other tasks. */
+  lessonNeeds?: LessonNeed[];
   /** What the exit gate stops, in the note part and in the need lines. Empty: the text may be sent. */
   violations: Violation[];
 }
@@ -140,8 +145,21 @@ export interface Outgoing {
  * teacher chose to tell appended. This is the one place it is made, for
  * the screen and for the moment of sending.
  */
-export function outgoingOf(note: string, entities: Entity[], constraints: Constraint[]): Outgoing {
+export function outgoingOf(note: string, entities: Entity[], constraints: Constraint[], lesson = false): Outgoing {
   const redaction = redactWithTokens(note, entities);
+  if (lesson) {
+    // A lesson is told its needs by letter, with no child in any line. Whose each is stays here.
+    const byLetter = lessonNeeds(constraints, entities);
+    return {
+      text: withLessonNeeds(redaction.text, byLetter),
+      tokens: redaction.tokens,
+      noteAsWritten: redaction.tokens.length === 0,
+      // One entry for each constraint behind a need, so that a rule hit can say the cloud was told it.
+      needs: byLetter.flatMap((n) => n.constraintIds.map((id) => ({ id, line: needLabel(n), issues: n.issues }))),
+      lessonNeeds: byLetter,
+      violations: [...checkOutgoing(redaction.text, entities, note), ...byLetter.flatMap((n) => n.issues)],
+    };
+  }
   const needs = sharedNeeds(constraints, entities);
   const tokens = new Set(redaction.tokens);
   const known = new Set(entities.filter((e) => e.kind !== 'private' && e.withheld).map((e) => e.token));

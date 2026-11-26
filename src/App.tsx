@@ -29,6 +29,7 @@ import {
   removeConstraint,
   restoreConstraints,
   setNeed,
+  setNeedAck,
   setShare,
   setConstraintKind,
   setTriggers,
@@ -42,6 +43,7 @@ import { keptAfterRecheck, modelSaid, recheckItems, rewriteStep, stepIndexOf, st
 import { canFit, FIT_CHILD_FAILED, FIT_FAILED, FIT_LABEL, fitForChild, fitInputFor, fitLessonForChild, fitStep } from './ai/fit';
 import { useInstall, useUpdate } from './ui/pwa';
 import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
+import { lessonNeedIsTyped, lessonNeedLine, lessonNeeds, needLabel, planWithNeeds, proposeLearning, splitVariations, variationLine, type LessonNeed, type Variation } from './core/lessonNeeds';
 import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, RECORDED_SOURCE, replayBanner, sourceOf, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyAfterRewrite, familyFor } from './core/family';
 import { REPEATS_NOTE, repeatsForChild, repeatsPrivate } from './core/repeats';
@@ -73,7 +75,7 @@ import {
   type SavedLesson,
 } from './core/lesson';
 import { ChildSections, ForTheseChildren, Lessons, type PointActions } from './ui/Lesson';
-import { acceptablePoints, acceptedPoints, childFitSaid, childNotes, fitSummary, inNoteOrder, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
+import { acceptablePoints, acceptedPoints, childFitSaid, childNotes, fitSummary, inNoteOrder, namesForNeed, placeVariations, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
@@ -239,6 +241,8 @@ export function App() {
     constraints: Constraint[];
     /** The needs that were told to the cloud, as lines of the approved text. */
     needs: Need[];
+    /** For a lesson: the needs by letter, and whose each is. The letters and lines were sent; whose they are was not. */
+    lessonNeeds: LessonNeed[];
   } | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
   const [replyIssues, setReplyIssues] = useState<Violation[]>([]);
@@ -286,8 +290,9 @@ export function App() {
   /** The children the on-device model has answered for in this run. */
   const [fittedChildren, setFittedChildren] = useState<string[]>([]);
   const pointSeq = useRef(0);
-  /** The run the device began fitting by itself, so that it begins once. */
-  const autoFit = useRef(-1);
+  /** For a lesson: the lines the cloud wrote for needs, by stage and letter, and how many it wrote for a letter it was not sent. */
+  const [variations, setVariations] = useState<Variation[]>([]);
+  const [variationsDropped, setVariationsDropped] = useState(0);
   /** The lessons signed off on this device. */
   const [lessons, setLessons] = useState<SavedLesson[]>(loadLessons);
   /** Where the fit ran in this run. NOT_RUN until the on-device model has answered once. */
@@ -410,7 +415,7 @@ export function App() {
   );
   // The redacted note, with the needs the teacher chose to tell under it. The gate runs on both.
   const going = useMemo(
-    () => withLessonGoing(outgoingOf(note, entities, sent?.constraints ?? constraints), task === 'lesson' ? lesson : null, entities, classList),
+    () => withLessonGoing(outgoingOf(note, entities, sent?.constraints ?? constraints, task === 'lesson'), task === 'lesson' ? lesson : null, entities, classList),
     [note, entities, sent, constraints, task, lesson, classList],
   );
   // In a replay the text shown is the text that was sent on the day, as recorded.
@@ -464,7 +469,7 @@ export function App() {
 
   const noteNow = note;
   const classListNow = classList;
-  const runGuard = async (useNote?: string, useList?: string[]) => {
+  const runGuard = async (useNote?: string, useList?: string[], forLesson = task === 'lesson') => {
     // A run that is cleared or forgotten while it waits for the model must not write its findings afterwards.
     if (replay) return;
     const run = ++runRef.current;
@@ -535,6 +540,8 @@ export function App() {
       }
     }
     setConstraintGaps(fellShort);
+    // For a lesson: what the note says about how a child learns, proposed by rule. None is confirmed and none is told.
+    if (forLesson) proposed = [...proposed, ...proposeLearning(note, vault)].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
     const held = restoreConstraints(note, vault, constraintsNote.current === note ? constraints : [], proposed);
     constraintsNote.current = note;
     setEntities(held.entities);
@@ -639,8 +646,15 @@ export function App() {
     setConstraints(held.constraints);
   };
 
+  /** The invented class shows the whole design at once: a need with a line is told as soon as it is confirmed. A typed note starts with nothing told. */
+  const toldByDefault = (held: { entities: Entity[]; constraints: Constraint[] }, ids: string[]) =>
+    task === 'lesson' && note === SAMPLE_NOTE
+      ? { ...held, constraints: held.constraints.map((c) => (ids.includes(c.id) && c.confirmed && lessonNeedLine(c) !== undefined ? { ...c, share: true } : c)) }
+      : held;
+
   const constraintActions = {
-    onConfirm: (id: string) => hold(confirmConstraint(note, rawEntities, constraints, id)),
+    onConfirm: (id: string) => hold(toldByDefault(confirmConstraint(note, rawEntities, constraints, id), [id])),
+    onNeedAck: (id: string, on: boolean) => hold({ entities: rawEntities, constraints: setNeedAck(constraints, id, on) }),
     onUnconfirm: (id: string) => hold({ entities: rawEntities, constraints: unconfirmConstraint(constraints, id) }),
     onRemove: (id: string) => hold({ entities: rawEntities, constraints: removeConstraint(constraints, id) }),
     onKind: (id: string, kind: ConstraintKind) => hold({ entities: rawEntities, constraints: setConstraintKind(constraints, id, kind) }),
@@ -657,6 +671,12 @@ export function App() {
 
   /** The need line of a constraint as it would be sent, and what the exit gate stops in it. */
   const needOf = (c: Constraint) => {
+    if (task === 'lesson') {
+      // For a lesson the line has a letter and no child. One not yet told is shown as it would be told.
+      const all = c.confirmed && c.share ? (going.lessonNeeds ?? []) : lessonNeeds(constraints.map((x) => (x.id === c.id ? { ...x, confirmed: true, share: true } : x)), entities);
+      const need = all.find((n) => n.constraintIds.includes(c.id));
+      return { typed: lessonNeedIsTyped(c), line: need ? needLabel(need) : undefined, issues: need?.issues ?? [], sensitive: need?.sensitive ?? [] };
+    }
     const line = needLine(c, entities);
     return { typed: needIsTyped(c), line, issues: line ? checkNeed(line, entities) : [] };
   };
@@ -669,7 +689,7 @@ export function App() {
     if (!policyReadyRef.current || sendingRef.current || replay) return;
     const sentPolicy = policyRef.current;
     const current = lockConstraints(applyLocks(rawEntities, sentPolicy.lockedKinds), constraints);
-    const approved = withLessonGoing(outgoingOf(note, current, constraints), task === 'lesson' ? lesson : null, current, classList);
+    const approved = withLessonGoing(outgoingOf(note, current, constraints, task === 'lesson'), task === 'lesson' ? lesson : null, current, classList);
     const { text, tokens } = approved;
     const stopped = approved.violations;
     // The tick was for one text, one set of locks and one drafting model. Any of them changed: no send.
@@ -704,7 +724,7 @@ export function App() {
     setError(null);
     setDraftFail(null);
     const approvedAt = new Date().toISOString();
-    setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy, constraints, needs: approved.needs });
+    setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy, constraints, needs: approved.needs, lessonNeeds: approved.lessonNeeds ?? [] });
     setStage('drafting');
     let drafted: DraftResult;
     try {
@@ -724,11 +744,16 @@ export function App() {
     }
     // The note was forgotten, or the run cleared, while the draft was being written: nothing of it is kept.
     if (gone()) return;
+    // The return gate reads the reply as it came, the lines for needs included.
+    const replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
+    // For a lesson, the lines the cloud wrote for needs are taken out of the stages: the class plan is what is left.
+    const toldNeeds = approved.lessonNeeds ?? [];
+    const split = approved.lessonNeeds ? splitVariations(drafted.draft, toldNeeds.map((n) => n.letter)) : { draft: drafted.draft, variations: [], dropped: 0 };
+    drafted = { ...drafted, draft: split.draft };
     setResult(drafted);
     // A stand-in the model wrote without its brackets is read as that stand-in, if it was one that was sent.
     const items = bracketDraft(drafted.draft, tokens).items;
     setKept(items.map(() => null));
-    const replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
     setReplyIssues(checkReply(replyText, entities, tokens, text));
     setReplyRead(false);
 
@@ -807,7 +832,10 @@ export function App() {
     setAdjBusy(null);
     setFittingLesson(false);
     setAdjNotes({});
-    setPoints([]);
+    // What the cloud wrote for a need is put beside each child who has it. Only this device knows who that is.
+    setVariations(split.variations);
+    setVariationsDropped(split.dropped);
+    setPoints(placeVariations(split.variations, toldNeeds, entities, items, constraints, note));
     setPointsSuggested(0);
     setChildSaid({});
     setFitChild(null);
@@ -863,10 +891,10 @@ export function App() {
       replyFlagged: replyIssues.length > 0,
       checks,
       // The constraints in force at sign-off: one switched off on the result screen is not counted as confirmed.
-      constraints: { ...constraintCounts(liveConstraints), shared: sent.needs.length },
+      constraints: { ...constraintCounts(liveConstraints), shared: task === 'lesson' ? sent.lessonNeeds.length : sent.needs.length },
       rewritten: signed.filter((k, i) => k === true && i in edits).length,
       fittedOnDevice: signed.filter((k, i) => k === true && i in edits && fitted.includes(i)).length,
-      lesson: task === 'lesson' ? { ...lessonCounts(hits, adj), ...pointCounts(points, pointsSuggested) } : undefined,
+      lesson: task === 'lesson' ? { ...lessonCounts(hits, adj), ...pointCounts(points, pointsSuggested), needsTold: sent.lessonNeeds.length } : undefined,
       kept: signed.filter((k) => k === true).length,
       struck: signed.filter((k) => k === false).length,
     });
@@ -878,7 +906,11 @@ export function App() {
     if (task === 'lesson' && draft) {
       // The signed lesson is kept on this device only: it has the adjustments in it, with names.
       const stages = draft.items.filter((_, i) => signed[i] === true);
-      const saved = savedLesson(receipt.id, receipt.createdAt, lesson, draft.title, stages, inNoteOrder([...acceptedAdjustments(hits, adj), ...acceptedPoints(points)], notesByChild), liveConstraints);
+      const saved = savedLesson(receipt.id, receipt.createdAt, lesson, draft.title, stages, inNoteOrder([...acceptedAdjustments(hits, adj), ...acceptedPoints(points)], notesByChild), liveConstraints, {
+        needs: sent.lessonNeeds.map((n) => ({ letter: n.letter, line: n.line, children: n.children })),
+        // A saved lesson counts the kept stages, so a line for a struck stage is not kept.
+        variations: variations.filter((v) => signed[v.itemIndex] === true).map((v) => ({ ...v, itemIndex: signed.slice(0, v.itemIndex).filter((k) => k === true).length })),
+      });
       setLessons((l) => {
         const all = [saved, ...l];
         storeLessons(all);
@@ -941,7 +973,7 @@ export function App() {
     setOffIds(nextOff);
     setRechecked(true);
     // The return gate reads the draft as it now stands, the teacher's own words included.
-    const replyText = [result.draft.title, ...items.flatMap((i) => [i.heading, i.text])].join('\n');
+    const replyText = [result.draft.title, ...items.flatMap((i) => [i.heading, i.text]), ...variations.map(variationLine)].join('\n');
     const issues = checkReply(replyText, sent.entities, sent.tokens, sent.text);
     if (issues.map((v) => v.what + v.why).join('|') !== replyIssues.map((v) => v.what + v.why).join('|')) setReplyRead(false);
     setReplyIssues(issues);
@@ -1090,12 +1122,12 @@ export function App() {
    * after another, on the fit route. A point is read by rule against that child's constraints before it is
    * offered. Nothing lands: each point waits for the teacher.
    */
-  const fitChildren = async () => {
+  const fitChildren = async (only: string) => {
     const now = liveRef.current;
-    if (!sent || !now.draft || replay || device !== 'available') return;
+    if (!sent || !now.draft || replay || device !== 'available' || fitBusy.current) return;
     const run = runRef.current;
     const items = now.draft.items;
-    const todo = notesRef.current.filter((n) => !fittedRef.current.includes(n.id));
+    const todo = notesRef.current.filter((n) => n.id === only);
     let done = 0;
     for (const n of todo) {
       if (runRef.current !== run || liveRef.current.stage !== 'result' || signingRef.current) break;
@@ -1133,7 +1165,6 @@ export function App() {
     if (fitBusy.current || fittingLesson) return;
     const run = runRef.current;
     setFittingLesson(true);
-    await fitChildren();
     for (const hit of [...hitsRef.current]) {
       if (runRef.current !== run || liveRef.current.stage !== 'result') break;
       if (!adjRef.current[hit.key] && hitsRef.current.some((h) => h.key === hit.key)) await suggestFor(hit);
@@ -1177,7 +1208,8 @@ export function App() {
       setPoints((ps) =>
         ps.map((p) => {
           if (p.key !== key) return p;
-          const problem = pointProblem(p.text, p.childId, p.itemIndex, items, liveConstraints, note);
+          // A line the cloud wrote is left as long as it came.
+          const problem = pointProblem(p.text, p.childId, p.itemIndex, items, liveConstraints, note, p.source === 'cloud' ? 1000 : undefined);
           const { why: _why, ...rest } = p;
           return problem ? { ...rest, seen: true, why: problem } : { ...rest, state: 'accepted', seen: true };
         }),
@@ -1205,6 +1237,17 @@ export function App() {
     onReopen: (key) => fittingLive && setPoints((ps) => ps.map((p) => (p.key === key ? { ...p, state: 'offered', seen: true } : p))),
     onSeen: (key) => setPoints((ps) => (ps.some((p) => p.key === key && !p.seen) ? ps.map((p) => (p.key === key ? { ...p, seen: true } : p)) : ps)),
     repeats: (childId, text) => Boolean(sent && repeatsForChild(text, childId, sent.entities, liveConstraints).length > 0),
+    onStarter: (key) => {
+      if (!fittingLive) return;
+      setPoints((ps) =>
+        ps.map((p) => {
+          if (p.key !== key || !p.starter) return p;
+          const { why: _why, starter, ...rest } = p;
+          return { ...rest, text: starter, source: 'starter', state: 'offered', seen: true };
+        }),
+      );
+    },
+    onMore: (childId) => void fitChildren(childId),
   };
 
   /** Accept every offer that has been shown. One that has not been on screen yet stays waiting. */
@@ -1215,15 +1258,6 @@ export function App() {
     }
     for (const key of acceptablePoints(points).keys) pointActions.onAccept(key);
   };
-
-  // The device begins by itself, once for a run: it reads the note about each child as soon as the lesson is here.
-  useEffect(() => {
-    if (stage !== 'result' || task !== 'lesson' || replay || device !== 'available' || !draft || !sent || autoFit.current === runRef.current) return;
-    autoFit.current = runRef.current;
-    void fitLesson();
-    // Begun once for a run; what fitLesson reads it reads through refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, task, replay, device, draft, sent]);
 
   // A constraint switched on the result screen: an accepted point that a rule now fires on goes back to waiting.
   useEffect(() => {
@@ -1253,6 +1287,7 @@ export function App() {
     if (stage !== 'review' || replay) return;
     let held = { entities: rawEntities, constraints };
     for (const c of constraints) if (!c.confirmed) held = confirmConstraint(note, held.entities, held.constraints, c.id);
+    held = toldByDefault(held, constraints.filter((c) => !c.confirmed).map((c) => c.id));
     setEntities(held.entities);
     setConstraints(held.constraints);
   };
@@ -1264,7 +1299,21 @@ export function App() {
   }, [draft, kept, entities, sent]);
 
   /** The class plan of a lesson as it is copied: the kept stages with stand-ins as they came, so no name and no adjustment is in it. */
-  const classPlan = draft ? classPlanText({ title: draft.title, items: draft.items.filter((_, i) => kept[i] === true) }) : '';
+  const keptIndexes = draft ? draft.items.map((_, i) => i).filter((i) => kept[i] === true) : [];
+  const classPlan = draft
+    ? variations.length > 0
+      ? // With the lines for needs under each stage, by letter: no name is in them either.
+        planWithNeeds({ title: draft.title, items: keptIndexes.map((i) => draft.items[i]) }, variations, (i) => keptIndexes[i])
+      : classPlanText({ title: draft.title, items: keptIndexes.map((i) => draft.items[i]) })
+    : '';
+
+  /** The confirmed needs with a line for a lesson that are not told yet, and the button that tells them all. */
+  const untold = task === 'lesson' ? constraints.filter((c) => c.confirmed && !c.share && lessonNeedLine(c) !== undefined) : [];
+  const tellAll = () => {
+    if (stage !== 'review' || replay) return;
+    const ids = new Set(untold.map((c) => c.id));
+    setConstraints(constraints.map((c) => (ids.has(c.id) ? { ...c, share: true } : c)));
+  };
 
   /** Copy to the clipboard and say plainly whether it worked. The browser can refuse. */
   const copy = async (what: 'all' | number, text: string) => {
@@ -1322,6 +1371,8 @@ export function App() {
     setFittingLesson(false);
     setAdjNotes({});
     setPoints([]);
+    setVariations([]);
+    setVariationsDropped(0);
     setPointsSuggested(0);
     setChildSaid({});
     setFitChild(null);
@@ -1413,6 +1464,7 @@ export function App() {
     }
     if (to === 'result') {
       const tokens = [...new Set(replay.outgoing.match(TOKEN_RE) ?? [])];
+      const recordedNeeds = replay.task === 'lesson' ? replay.needs : undefined;
       setSent({
         text: replay.outgoing,
         at: replay.recordedAt,
@@ -1421,10 +1473,12 @@ export function App() {
         online: true,
         policy: replay.policy,
         constraints: replay.constraints,
-        needs: sharedNeeds(replay.constraints, replay.entities),
+        needs: recordedNeeds ? outgoingOf(replay.note, replay.entities, replay.constraints, true).needs : sharedNeeds(replay.constraints, replay.entities),
+        lessonNeeds: (recordedNeeds ?? []).map((n) => ({ ...n, constraintIds: [], children: replay.needChildren?.[n.letter] ?? [], issues: [], sensitive: [] })),
       });
+      setVariations(replay.variations ?? []);
       setResult({ draft: replay.draft, where: replay.where.draft, model: replay.draftModel });
-      const replyText = [replay.draft.title, ...replay.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
+      const replyText = [replay.draft.title, ...replay.draft.items.flatMap((i) => [i.heading, i.text]), ...(replay.variations ?? []).map(variationLine)].join('\n');
       // The return gate is plain code, so it is run again here on the recorded reply.
       setReplyIssues(checkReply(replyText, replay.entities, tokens, replay.outgoing));
       setReplyRead(false);
@@ -1481,7 +1535,11 @@ export function App() {
                 ...(a.constraintId ? { constraintId: a.constraintId } : {}),
                 text: a.text,
                 source: RECORDED_SOURCE[a.source],
+                ...(a.need ? { need: a.need } : {}),
               })),
+              needs: sent.lessonNeeds.map((n) => ({ letter: n.letter, line: n.line })),
+              needChildren: Object.fromEntries(sent.lessonNeeds.map((n) => [n.letter, n.children])),
+              variations,
             }
           : {}),
       },
@@ -1510,7 +1568,7 @@ export function App() {
   /** The first screen's main button: load the invented class and run the guard in one go. */
   const trySample = () => {
     loadSample();
-    void runGuard(SAMPLE_NOTE, SAMPLE_CLASS_LIST);
+    void runGuard(SAMPLE_NOTE, SAMPLE_CLASS_LIST, true);
   };
 
   // ---------------------------------------------------------------- render
@@ -1551,7 +1609,7 @@ export function App() {
   const offered = hits.filter((h) => shownAdj[h.key]?.state === 'offered').length + waitingPoints.length;
   const acceptedNow = inNoteOrder([...acceptedAdjustments(hits, shownAdj), ...acceptedPoints(shownPoints)], notesByChild);
   /** Something the device can still write: a child it has not answered for, or a hit with nothing offered. */
-  const toFit = (device === 'available' && notesByChild.some((n) => !fittedChildren.includes(n.id))) || hits.some((h) => !adj[h.key]);
+  const toFit = hits.some((h) => !adj[h.key]);
   // A lesson is read in its own order. The other tasks show what was caught first.
   const order = isLesson ? (draft?.items ?? []).map((_, i) => i) : resultOrder(checks, draft?.items.length ?? 0);
   const flagged = isLesson ? [] : order.filter((i) => checks[i]?.verdict === 'conflict' || checks[i]?.verdict === 'unsure');
@@ -1810,11 +1868,17 @@ export function App() {
       <div className="calm" role="status">
         <p>
           <b>Checked by rule only.</b> No on-device model ran here, so each step was compared with the constraints you confirmed and
-          nothing else. Read the items against your other private details yourself.
-          {isLesson
-            ? ' Where the on-device model is present, this device writes what each child needs in the lesson itself, from your note. Here you write it, and the rules read it.'
-            : ''}
+          nothing else.
         </p>
+        <details>
+          <summary>Details</summary>
+          <p>
+            Read the items against your other private details yourself.
+            {isLesson
+              ? ' What the cloud wrote for a need is placed beside each child on this device by plain code, and read by the same rules. Where the on-device model is present, it can also offer more ideas for a child from your note, when you ask.'
+              : ''}
+          </p>
+        </details>
         {privateHeld.length > 0 && (
           <details>
             <summary>
@@ -1869,6 +1933,23 @@ export function App() {
         <p className="item-text">
           <DeviceText text={item.text} entities={entities} allowed={sent?.tokens} mark={conflict || (doubt && c?.constraintId) ? c?.matched : undefined} />
         </p>
+        {isLesson && variations.some((v) => v.itemIndex === i) && (
+          <ul className="need-lines" aria-label="For the needs you told the cloud">
+            {variations
+              .filter((v) => v.itemIndex === i)
+              .map((v, k) => (
+                <li key={k}>
+                  <b>For Need {v.need}:</b> {v.text}
+                  {/* Whose need it is: known on this device only. */}
+                  {sent && namesForNeed(v.need, sent.lessonNeeds, notesByChild, sent.entities).map((name) => (
+                    <span className="names" key={name}>
+                      {name}
+                    </span>
+                  ))}
+                </li>
+              ))}
+          </ul>
+        )}
         {isLesson && itemHits.length > 0 && (
           <div className="verdict v-fit">
             <b>{needsFitting(itemHits)}</b>
@@ -2182,7 +2263,7 @@ export function App() {
                 <article className="card result">
                   <p className="eyebrow">{restore(draft.title, entities, sent?.tokens)}</p>
                   <h3 className="summary">
-                    {isLesson ? fitSummary(notesByChild.length, replay ? shownPoints.length : pointsSuggested, hits) : summaryLine(checks)}
+                    {isLesson ? fitSummary(notesByChild.length, replay ? shownPoints.filter((p) => p.source === 'model').length : pointsSuggested, hits, shownPoints) : summaryLine(checks)}
                   </h3>
                   {isLesson && fittingLive && (notesByChild.length > 0 || hits.length > 0) && (
                     <div className="actions fit-all">
@@ -2203,9 +2284,11 @@ export function App() {
                       <span className="hint">
                         {!offers.allSeen || !pointOffers.allSeen
                           ? 'Scroll to each suggestion first: one you have not seen cannot be accepted.'
-                          : device === 'available'
-                            ? 'Each child is fitted here, from your private note. Nothing is sent, and nothing lands until you accept it.'
-                            : 'No on-device model here. Write what a child needs yourself; a step that goes against a constraint gets starter wording by rule. Nothing lands until you accept it.'}
+                          : variations.length > 0
+                            ? 'The cloud wrote each line for a need, not for a child. This device put it beside the child. Nothing lands until you accept it.'
+                            : device === 'available'
+                              ? 'Write what a child needs, or ask this device for more ideas under a name. Nothing is sent, and nothing lands until you accept it.'
+                              : 'No on-device model here. Write what a child needs yourself; a step that goes against a constraint gets starter wording by rule. Nothing lands until you accept it.'}
                       </span>
                     </div>
                   )}
@@ -2589,9 +2672,18 @@ export function App() {
                     )}
                   </div>
                   <p className="hint">
-                    Private facts that rule something out. A confirmed one stays here, and every step of the draft is checked against it on
-                    this device.
+                    {isLesson
+                      ? 'What your note says a child cannot do, or needs. The words and the name stay here. If you switch a need on, the cloud is told the need by a letter, with no name and no reason, and writes for it without knowing whose it is.'
+                      : 'Private facts that rule something out. A confirmed one stays here, and every step of the draft is checked against it on this device.'}
                   </p>
+                  {isLesson && !replay && untold.length > 0 && (
+                    <div className="actions">
+                      <button className="secondary small" onClick={tellAll}>
+                        Tell the cloud {untold.length === 1 ? 'the 1 need' : `all ${untold.length} needs`}
+                      </button>
+                      <span className="hint">Letters and lines only. Whose each need is stays on this device.</span>
+                    </div>
+                  )}
                   {constraintGaps?.stopped && <p className="caution">{constraintGaps.stopped} The constraints found by rule still stand.</p>}
                   {constraintGaps && !constraintGaps.stopped && constraintGaps.unread > 0 && (
                     <p className="caution">
@@ -2613,6 +2705,7 @@ export function App() {
                     selection={selection}
                     actions={constraintActions}
                     needOf={needOf}
+                    lesson={isLesson}
                   />
                 </article>
               )}
@@ -2782,10 +2875,27 @@ export function App() {
                         </b>
                         <br />
                         <CloudText text={item.text} />
+                        {variations
+                          .filter((v) => v.itemIndex === i)
+                          .map((v, k) => (
+                            <span key={k}>
+                              <br />
+                              <CloudText text={variationLine(v)} />
+                            </span>
+                          ))}
                       </p>
                     ))}
                   </div>
-                  <p className="hint">The reply uses the stand-ins. Names are put back on your side of the door.</p>
+                  <p className="hint">
+                    {variations.length > 0
+                      ? 'The cloud wrote for each need by its letter. It was not told whose a need is, or how many pupils have it.'
+                      : 'The reply uses the stand-ins. Names are put back on your side of the door.'}
+                  </p>
+                  {variationsDropped > 0 && (
+                    <p className="hint">
+                      {variationsDropped} {variationsDropped === 1 ? 'line was' : 'lines were'} for a need you did not tell the cloud, or had no words, so {variationsDropped === 1 ? 'it is' : 'they are'} left out.
+                    </p>
+                  )}
                 </article>
               )}
 
@@ -2978,6 +3088,11 @@ export function App() {
                     <div key={i}>
                       <h2>{item.heading}</h2>
                       <p>{item.text.trim()}</p>
+                      {variations
+                        .filter((v) => v.itemIndex === i)
+                        .map((v, k) => (
+                          <p key={k}>{variationLine(v)}</p>
+                        ))}
                     </div>
                   ) : null,
                 )}

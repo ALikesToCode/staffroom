@@ -3200,3 +3200,93 @@ mark.hit {
 .child .rewrite select {
   max-width: 100%;
 }
+
+/* What leaves, for a lesson: what stays here beside what the cloud is told. */
+.need-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0;
+  margin-top: 8px;
+  border: 1px solid var(--paper-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.need-pair > p {
+  margin: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.need-pair .stays {
+  background: var(--paper-card);
+}
+
+.need-pair .goes {
+  background: var(--slate-card);
+  border-left: 1px dashed var(--slate-line);
+  color: var(--slate-ink);
+}
+
+.need-pair .goes.nothing {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.pair-label {
+  font: 600 0.7rem var(--sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-style: normal;
+}
+
+.need-pair .need-line {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .need-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .need-pair .goes {
+    border-left: 0;
+    border-top: 1px dashed var(--slate-line);
+  }
+}
+
+/* The lines the cloud wrote for needs, under a stage. Names stand beside them on the device's side only. */
+.need-lines {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.93rem;
+}
+
+.need-lines li {
+  counter-increment: none;
+  display: block;
+  padding: 0;
+}
+
+.need-lines .names {
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--k-student);
+  font: 600 0.8rem var(--sans);
+  white-space: nowrap;
+}
+
+.need-tag {
+  background: var(--slate-card);
+  border-color: var(--slate-line);
+  color: var(--slate-ink);
+}

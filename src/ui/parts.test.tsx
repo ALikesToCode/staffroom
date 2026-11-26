@@ -145,8 +145,10 @@ describe('the lesson as the first job', () => {
     const { LESSON_STEPS, STEPS, Stepper } = await import('./parts');
     const html = renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} noModel={false} />);
     expect(html).toContain('Your device knows why.');
-    expect(html).toContain('Plan tomorrow&#x27;s lesson for the whole class. Your device fits it to each child, using what only you know.');
-    expect(html).toContain('Homework needs fitting for 1 child');
+    expect(html).toContain('Plan tomorrow&#x27;s lesson for the whole class. The cloud writes for each need without knowing whose it is. Your device puts it beside the right child.');
+    expect(html).toContain('Need B: no phone or internet at home');
+    // The name is on the device's side only.
+    expect(html.slice(html.indexOf('mini cloud'))).not.toContain('Tanvi');
     expect(LESSON_STEPS).toEqual(['Write', 'What leaves', 'Lesson', 'Fit to each child', 'Sign off']);
     expect(renderToStaticMarkup(<Stepper step={3} lesson />)).toContain('Fit to each child');
     expect(renderToStaticMarkup(<Stepper step={3} />)).toContain(STEPS[3]);

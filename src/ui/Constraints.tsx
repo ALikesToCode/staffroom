@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Constraint, ConstraintKind, Entity, ItemCheck } from '../core/types';
 import { CloudText } from './parts';
-import { CONSTRAINT_KINDS, CONSTRAINT_LABEL } from '../core/constraints';
+import { ALL_KINDS as CONSTRAINT_KINDS, CONSTRAINT_LABEL } from '../core/constraints';
 
 export interface ConstraintActions {
   onConfirm: (id: string) => void;
@@ -12,6 +12,8 @@ export interface ConstraintActions {
   onAdd: (by: { kind: ConstraintKind; about?: string; text: string }) => void;
   onShare: (id: string, share: boolean) => void;
   onNeed: (id: string, typed: string) => void;
+  /** For a lesson: send a need line with a word from the sensitive list as it is worded. */
+  onNeedAck?: (id: string, on: boolean) => void;
 }
 
 /** What the panel shows of a constraint's need: the line as it would be sent, and what the exit gate stops in it. */
@@ -20,6 +22,8 @@ export interface NeedView {
   typed: boolean;
   line?: string;
   issues: { what: string; why: string }[];
+  /** For a lesson: words from the sensitive list in the line. */
+  sensitive?: string[];
 }
 
 const FOUND_BY: Record<Constraint['source'], string> = {
@@ -52,7 +56,10 @@ export function ConstraintsPanel({
   selection,
   actions,
   needOf,
+  lesson = false,
 }: {
+  /** True for a lesson: a need is told by letter with no child in it, and each row shows what stays and what is told. */
+  lesson?: boolean;
   constraints: Constraint[];
   students: Entity[];
   editable: boolean;
@@ -78,7 +85,7 @@ export function ConstraintsPanel({
       ) : (
         <ul className="constraint-list">
           {constraints.map((c) => (
-            <ConstraintRow key={c.id} c={c} who={nameOf(c.about) ?? 'the class'} need={needOf(c)} editable={editable} actions={actions} />
+            <ConstraintRow key={c.id} c={c} who={nameOf(c.about) ?? 'the class'} need={needOf(c)} editable={editable} actions={actions} lesson={lesson} />
           ))}
         </ul>
       )}
@@ -137,20 +144,21 @@ export function ConstraintsPanel({
   );
 }
 
-function ConstraintRow({ c, who, need, editable, actions }: { c: Constraint; who: string; need: NeedView; editable: boolean; actions: ConstraintActions }) {
+function ConstraintRow({ c, who, need, editable, actions, lesson }: { c: Constraint; who: string; need: NeedView; editable: boolean; actions: ConstraintActions; lesson: boolean }) {
   const nothingToTell = !need.typed && !need.line;
   const telling = Boolean(c.share) && c.confirmed;
   const detail = constraintDetail(c);
   const needInput = need.typed && (
     <label className="field">
-      The need, in your words
+      {lesson ? 'The need, in your words: no name and no reason' : 'The need, in your words'}
       <input
         type="text"
         defaultValue={c.need ?? ''}
         maxLength={200}
         disabled={!editable}
         onBlur={(e) => actions.onNeed(c.id, e.target.value)}
-        placeholder={c.kind === 'health' ? 'For example: No flashing lights for [Student 2]' : 'Say what the school must do, not why'}
+        key={lesson ? (c.need ?? '') : undefined}
+        placeholder={lesson ? (c.kind === 'health' ? 'For example: must avoid flashing or flickering light' : 'Say what such a pupil needs, not why and not who') : c.kind === 'health' ? 'For example: No flashing lights for [Student 2]' : 'Say what the school must do, not why'}
         spellCheck={false}
         autoComplete="off"
       />
@@ -184,7 +192,7 @@ function ConstraintRow({ c, who, need, editable, actions }: { c: Constraint; who
             onChange={(e) => actions.onShare(c.id, e.target.checked)}
           />
           <span />
-          Tell the cloud the need (not the reason)
+          {lesson ? 'Tell the cloud this need (no name, no reason)' : 'Tell the cloud the need (not the reason)'}
         </label>
         <details className="c-more">
           <summary>Details</summary>
@@ -237,10 +245,36 @@ function ConstraintRow({ c, who, need, editable, actions }: { c: Constraint; who
           )}
         </details>
       </div>
-      {telling && need.line && (
+      {telling && need.line && !lesson && (
         <p className="need-told">
           The cloud is told: <code className="need-line">{need.line}</code>
         </p>
+      )}
+      {lesson && c.confirmed && (
+        <div className={telling && need.line ? 'need-pair told' : 'need-pair'}>
+          <p className="stays">
+            <span className="pair-label">Stays here</span>
+            <q>{c.text}</q>
+            <span className="c-who">{who}</span>
+          </p>
+          {telling && need.line ? (
+            <p className="goes">
+              <span className="pair-label">The cloud is told</span>
+              <code className="need-line">{need.line}</code>
+            </p>
+          ) : (
+            <p className="goes nothing">
+              <span className="pair-label">The cloud is told</span>
+              Stays here. Nothing is told.
+            </p>
+          )}
+        </div>
+      )}
+      {lesson && telling && (need.sensitive ?? []).length > 0 && (
+        <label className="read-it">
+          <input type="checkbox" checked={Boolean(c.needAck)} disabled={!editable} onChange={(e) => actions.onNeedAck?.(c.id, e.target.checked)} />
+          Send this need as worded. It has a word that may give the reason (“{need.sensitive!.join('”, “')}”).
+        </label>
       )}
       {telling && need.typed && needInput}
       {telling && !need.line && <p className="need-told">Nothing is typed yet, so nothing is told.</p>}

@@ -26,7 +26,8 @@ export function Hero({
           <span>Your device knows why.</span> <span>The cloud only knows what.</span>
         </h2>
         <p className="hero-sub">
-          Plan tomorrow's lesson for the whole class. Your device fits it to each child, using what only you know.
+          Plan tomorrow's lesson for the whole class. The cloud writes for each need without knowing whose it is. Your device puts it beside
+          the right child.
         </p>
         <div className="actions">
           <button className="primary big" onClick={onTry}>
@@ -55,8 +56,12 @@ export function Hero({
             <mark className="k-student held">Tanvi</mark>'s family <mark className="k-private held">does not have a smartphone or an internet connection</mark>.
           </p>
           <p className="mini-catch">
-            <b>Homework needs fitting for 1 child</b>
-            <span>Tanvi: gets two printed pictures to write from.</span>
+            <b>Stays here</b>
+            <span>“does not have a smartphone or an internet connection” — Tanvi</span>
+          </p>
+          <p className="mini-catch">
+            <b>Homework, beside Tanvi</b>
+            <span>For Need B: write from two printed pictures given out in class.</span>
           </p>
         </div>
         <div className="mini-door" aria-hidden="true">
@@ -67,7 +72,13 @@ export function Hero({
           <p className="mini-wire">
             <span className="bar">[Student 5]</span>'s family <span className="bar">[withheld]</span>. Lesson: English, describing a place.
           </p>
-          <p className="mini-wire reply">Homework: find two pictures of a place online and write three sentences.</p>
+          <p className="mini-wire">
+            <b>The cloud is told</b> Need B: no phone or internet at home
+          </p>
+          <p className="mini-wire reply">
+            Homework: find two pictures of a place online and write three sentences. For Need B: write from two printed pictures given out
+            in class.
+          </p>
         </div>
         <figcaption>An example. All data in the sample is invented.</figcaption>
       </figure>

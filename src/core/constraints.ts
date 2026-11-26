@@ -16,6 +16,9 @@ export const CONSTRAINT_KINDS: ConstraintKind[] = [
   'other',
 ];
 
+/** Every kind a row can have: the constraints, and a learning need, which rules nothing out and has no rule. */
+export const ALL_KINDS: ConstraintKind[] = [...CONSTRAINT_KINDS, 'learning'];
+
 export const CONSTRAINT_LABEL: Record<ConstraintKind, string> = {
   'time-after': 'Cannot stay after school',
   'time-before': 'Cannot come before school',
@@ -25,6 +28,7 @@ export const CONSTRAINT_LABEL: Record<ConstraintKind, string> = {
   contact: 'An adult not to contact',
   health: 'Health',
   other: 'Other',
+  learning: 'Learning need',
 };
 
 export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -247,7 +251,12 @@ export function setShare(constraints: Constraint[], id: string, share: boolean):
 
 /** Set the need line the teacher typed, for a health or "other" constraint. */
 export function setNeed(constraints: Constraint[], id: string, typed: string): Constraint[] {
-  return constraints.map((c) => (c.id === id ? { ...c, need: typed.slice(0, 200) } : c));
+  return constraints.map((c) => {
+    if (c.id !== id) return c;
+    // Other words need their own tick: the one given was for the line as it was.
+    const { needAck: _ack, ...rest } = c;
+    return { ...rest, need: typed.slice(0, 200) };
+  });
 }
 
 export function removeConstraint(constraints: Constraint[], id: string): Constraint[] {
@@ -258,9 +267,18 @@ export function removeConstraint(constraints: Constraint[], id: string): Constra
 export function setConstraintKind(constraints: Constraint[], id: string, kind: ConstraintKind): Constraint[] {
   return constraints.map((c) => {
     if (c.id !== id) return c;
-    const { days: _days, who: _who, guardian: _guardian, away: _away, triggers: _triggers, need: _need, ...rest } = c;
+    const { days: _days, who: _who, guardian: _guardian, away: _away, triggers: _triggers, need: _need, learn: _learn, needAck: _ack, ...rest } = c;
     // Another kind has another need line, so the need is not told until the teacher switches it on again.
     return { ...rest, kind, share: false, ...defaultsFor(kind, c.text) };
+  });
+}
+
+/** For a lesson: tick or untick "send this need as worded" for a need line with a word from the sensitive list. */
+export function setNeedAck(constraints: Constraint[], id: string, on: boolean): Constraint[] {
+  return constraints.map((c) => {
+    if (c.id !== id) return c;
+    const { needAck: _ack, ...rest } = c;
+    return on ? { ...rest, needAck: true } : rest;
   });
 }
 

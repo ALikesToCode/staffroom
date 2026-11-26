@@ -19,7 +19,12 @@ import { RECORDED_FIT_LABEL } from '../core/recorded';
 /** Said over an adjustment the on-device model suggested. */
 export const MODEL_LABEL = 'Suggested on this device from your private note. Nothing was sent.';
 export const TEACHER_LABEL = 'Written by you';
-const SOURCE_LABEL = { model: MODEL_LABEL, starter: STARTER_LABEL, teacher: TEACHER_LABEL } as const;
+/** Said over a line the cloud wrote for a need, placed beside a child here. */
+export const CLOUD_LABEL = 'Written by the cloud for a need you approved. It did not know whose. Placed beside this child on this device.';
+/** Said over a point the on-device model wrote when asked for more ideas. */
+export const MORE_LABEL = 'Suggested on this device from your private note. Read it closely: a small model wrote it.';
+const SOURCE_LABEL = { model: MODEL_LABEL, starter: STARTER_LABEL, teacher: TEACHER_LABEL, cloud: CLOUD_LABEL } as const;
+const POINT_LABEL = { ...SOURCE_LABEL, model: MORE_LABEL } as const;
 
 export interface HitActions {
   /** Ask for words: the on-device model when it is here, the starter when it is not. */
@@ -193,6 +198,10 @@ export interface PointActions {
   onReopen: (key: string) => void;
   onSeen: (key: string) => void;
   repeats: (childId: string, text: string) => boolean;
+  /** Put the starter wording in place of a line a rule fires on. It still waits to be accepted. */
+  onStarter: (key: string) => void;
+  /** Ask the on-device model for more ideas for one child. Only on request. */
+  onMore: (childId: string) => void;
 }
 
 /** The stage and the words of a point, typed by the teacher. */
@@ -259,9 +268,10 @@ function PointRow({ point, stages, live, recorded, actions }: { point: Point; st
     <li className={`child-hit ${point.state}`}>
       {!changing && (
         <div className="adjustment" ref={offer}>
-          <span className="adj-source">{recorded && point.source === 'model' ? RECORDED_FIT_LABEL : SOURCE_LABEL[point.source]}</span>
+          <span className="adj-source">{recorded && point.source === 'model' ? RECORDED_FIT_LABEL : POINT_LABEL[point.source]}</span>
           <p>
             <span className="stage-tag">{stages[point.itemIndex]}</span>
+            {point.need && <span className="stage-tag need-tag">Need {point.need}</span>}
             {point.text}
           </p>
           {point.why && <span className="caution">{point.why}</span>}
@@ -276,6 +286,11 @@ function PointRow({ point, stages, live, recorded, actions }: { point: Point; st
               <button className="primary small" onClick={() => actions.onAccept(point.key)}>
                 Accept
               </button>
+              {point.why && point.starter && (
+                <button className="secondary small" onClick={() => actions.onStarter(point.key)} title={point.starter}>
+                  Use starter wording
+                </button>
+              )}
               <button className="link" onClick={() => setChanging(true)}>
                 Change
               </button>
@@ -365,9 +380,16 @@ export function ChildSections({
             {said[n.id] && <p className="hint">{said[n.id]}</p>}
             {live && adding === n.id && <PointForm child={n.child} stages={stages} onSave={(i, text) => pointActions.onAdd(n.id, i, text)} onCancel={() => setAdding(null)} />}
             {live && adding !== n.id && (
-              <button className="link" onClick={() => setAdding(n.id)}>
-                Write what {n.child} needs
-              </button>
+              <div className="actions hit-actions">
+                <button className="link" onClick={() => setAdding(n.id)}>
+                  Write what {n.child} needs
+                </button>
+                {canModel && (
+                  <button className="link" disabled={busyChild !== null || busyKey !== null} onClick={() => pointActions.onMore(n.id)}>
+                    More ideas from this device
+                  </button>
+                )}
+              </div>
             )}
           </section>
         );

@@ -128,7 +128,8 @@ describe('a point for one child', () => {
       { itemIndex: 0, childId: meenal, child: 'Meenal', text: 'Let her read first.', source: 'model' },
       { itemIndex: 4, childId: meenal, child: 'Meenal', text: 'Give her the writing frame first.', source: 'model' },
     ]);
-    expect(pointCounts(points, 3)).toEqual({ pointsSuggested: 3, pointsAccepted: 2 });
+    expect(pointCounts(points, 3)).toEqual({ pointsSuggested: 3, pointsAccepted: 2, variationsPlaced: 0, variationsAccepted: 0 });
+    expect(pointCounts([point({ need: 'A', source: 'cloud', state: 'accepted' }), point({ key: 'p2', need: 'F', source: 'cloud' }), point({ key: 'p3', state: 'accepted' })], 0)).toEqual({ pointsSuggested: 0, pointsAccepted: 1, variationsPlaced: 2, variationsAccepted: 1 });
     const adjustment = { itemIndex: 2, constraintId: 'c', childId: tanvi, child: 'Tanvi', text: 'Gets a printed copy.', source: 'starter' as const };
     expect(byChild(plan, [adjustment, ...kept, { ...adjustment, itemIndex: 1, child: 'Meenal', text: 'Sits away from the lamp.' }])).toEqual([
       { child: 'Tanvi', lines: [{ stage: 'Practise', text: 'Gets a printed copy.' }] },
@@ -159,8 +160,8 @@ describe('the line over the lesson', () => {
   const hits = lessonHits([{ heading: 'Homework', text: 'Pupils find a picture online. Each pupil buys a sheet of chart paper.' }], constraints, entities, going.tokens, SAMPLE_NOTE);
 
   it('says how many children have notes, how many points were suggested and how many steps go against a constraint, leaving out what is zero', () => {
-    expect(fitSummary(5, 7, hits)).toBe('5 children have private notes. 7 points suggested on this device. 2 steps go against a constraint you confirmed.');
-    expect(fitSummary(1, 1, hits.slice(0, 1))).toBe('1 child has private notes. 1 point suggested on this device. 1 step goes against a constraint you confirmed.');
+    expect(fitSummary(5, 7, hits)).toBe('5 children have private notes. 7 points suggested on this device. 2 go against a constraint you confirmed.');
+    expect(fitSummary(1, 1, hits.slice(0, 1))).toBe('1 child has private notes. 1 point suggested on this device. 1 goes against a constraint you confirmed.');
     expect(fitSummary(5, 0, [])).toBe('5 children have private notes.');
     expect(fitSummary(0, 0, [])).toBe('Your note says nothing about any one child, so there is nothing to fit.');
     for (const said of [fitSummary(5, 0, []), fitSummary(5, 3, hits)]) expect(said).not.toMatch(/suit/);

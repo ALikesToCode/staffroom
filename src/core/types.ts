@@ -152,7 +152,7 @@ export interface Receipt {
    */
   signOff: { kept: number; struck: number; at: string; rewritten?: number; fittedOnDevice?: number };
   /** For a lesson: counts of what was fitted. Kept in this browser only; none of them is in the record that may leave the device. */
-  lesson?: { stepsNeedingFit: number; adjustmentsAccepted: number; adjustmentsByModel: number; pointsSuggested?: number; pointsAccepted?: number };
+  lesson?: { stepsNeedingFit: number; adjustmentsAccepted: number; adjustmentsByModel: number; pointsSuggested?: number; pointsAccepted?: number; needsTold?: number; variationsPlaced?: number; variationsAccepted?: number };
 }
 
 /** What a constraint rules out. `other` is free text: only the model can check it. */
@@ -164,7 +164,12 @@ export type ConstraintKind =
   | 'no-phone-internet'
   | 'contact'
   | 'health'
-  | 'other';
+  | 'other'
+  /** Not a constraint: something in the note that matters for teaching ("finishes early"). It has a need line and no rule. */
+  | 'learning';
+
+/** The learning needs a rule can propose from the words of a note. */
+export type LearningKind = 'tests' | 'early' | 'missed' | 'group' | 'shy' | 'reads-above' | 'reads-below' | 'homework';
 
 /**
  * A private fact that rules something out for one student, or for the
@@ -207,4 +212,8 @@ export interface Constraint {
   share?: boolean;
   /** health and other: the need line as the teacher typed it. The other kinds have a fixed line and never use the teacher's words. */
   need?: string;
+  /** learning: which kind of learning need a rule read from the words, when one did. */
+  learn?: LearningKind;
+  /** For a lesson: the teacher ticked "send this need as worded" for a line with a word from the sensitive list. Cleared when the line changes. */
+  needAck?: boolean;
 }
