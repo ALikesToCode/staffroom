@@ -20,9 +20,27 @@ export function storeReceipts(receipts: Receipt[]): boolean {
   }
 }
 
-/** A model name in the form the cloud record accepts: letters, digits, spaces and . ( ) _ - only, 60 at most. */
+/** The name the app gives the on-device model. */
+export const ON_DEVICE_MODEL = 'Gemini Nano (Chrome built-in)';
+
+/** The model names a record may carry: a Gemini cloud model, the on-device model, or "other". */
+const RECORD_MODEL = /^gemini-[a-z0-9.-]{1,40}$/;
+
+/**
+ * A model name in the form the cloud record accepts. The Firestore rules
+ * take a Gemini model name, the on-device model's fixed name, or the word
+ * "other", and nothing else, so the field cannot be used to carry text.
+ */
 export function recordModelName(name: string): string {
-  return name.replace(/[^A-Za-z0-9 .()_-]/g, '').slice(0, 60) || 'unknown';
+  return RECORD_MODEL.test(name) || name === ON_DEVICE_MODEL ? name : 'other';
+}
+
+/** The form of a receipt id: the time in base 36, a hyphen, six characters. The Firestore rules accept only this form. */
+export const RECEIPT_ID = /^[0-9a-z]{8,9}-[0-9a-z]{6}$/;
+
+/** A new receipt id. */
+export function newReceiptId(now = Date.now(), random = Math.random()): string {
+  return `${now.toString(36)}-${random.toString(36).slice(2, 8).padEnd(6, '0')}`;
 }
 
 /** The first eight characters of a digest: enough to match a receipt here to its record in the account. */
@@ -67,7 +85,7 @@ export function makeReceipt(run: Run): Receipt {
   const count = (v: ItemCheck['verdict']) => run.checks.filter((c) => c.verdict === v).length;
   const now = new Date().toISOString();
   return {
-    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    id: newReceiptId(),
     createdAt: now,
     task: run.task,
     label: run.label,
@@ -109,7 +127,9 @@ export function draftLine(draft: Receipt['draft']): string {
 
 /**
  * The copy of a receipt that may be kept in the teacher's account in the
- * cloud. It is the record only: counts, times, where each step ran, and a
+ * cloud. It is a record written by this browser: the teacher's own note of
+ * a run, not evidence of it to anyone else, since whoever holds the account
+ * can write one. It is the record only: counts, times, where each step ran, and a
  * digest of the approved text. It holds no text at all: not the approved
  * text, not the model-written label, no name.
  */
@@ -123,7 +143,7 @@ export interface ReceiptRecord {
   released: number;
   approvedAt: string;
   approvedChars: number;
-  /** SHA-256 of the approved text, in hex. Lets the teacher match this record to a local receipt. */
+  /** SHA-256 of the approved text, in hex. A value for matching this record to the local receipt, and no more than that. */
   approvedSha256: string;
   guardWhere: Where;
   draftWhere: Where;
@@ -206,7 +226,8 @@ export function asReceiptRecord(data: unknown): ReceiptRecord | undefined {
   // The same forms the Firestore rules insist on.
   const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
   if (!iso.test(d.createdAt as string) || !iso.test(d.approvedAt as string)) return undefined;
-  if (!/^[0-9a-f]{64}$/.test(d.approvedSha256 as string) || !/^[A-Za-z0-9 .()_-]{1,60}$/.test(d.draftModel as string)) return undefined;
+  if (!/^[0-9a-f]{64}$/.test(d.approvedSha256 as string) || recordModelName(d.draftModel as string) !== d.draftModel) return undefined;
+  if (!RECEIPT_ID.test(d.id as string)) return undefined;
   if (typeof flags.replyFlagged !== 'boolean' || !['plan', 'parents', 'handover'].includes(d.task as string)) return undefined;
   return {
     id: d.id as string,

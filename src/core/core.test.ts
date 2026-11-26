@@ -1,4 +1,5 @@
 import indexHtml from '../../index.html?raw';
+import firestoreRules from '../../firestore.rules?raw';
 import { describe, expect, it, vi } from 'vitest';
 import { findByRule, findSensitive, nameParts, sentences } from './rules';
 import {
@@ -589,7 +590,7 @@ describe('vault', () => {
 
 import { anchor, anchorQuote, guardOutcome, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
 import { anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, NOT_ANSWERED, readVerdict, startsKept, studentsNamed, UNCLEAR, worse } from '../ai/check';
-import { asReceiptRecord, digestPrefix, draftLine, makeReceipt, receiptRecord, recordModelName, sha256Hex } from './receipts';
+import { asReceiptRecord, digestPrefix, draftLine, makeReceipt, newReceiptId, receiptRecord, RECEIPT_ID, recordModelName, sha256Hex } from './receipts';
 import { approvalKey, DEFAULT_POLICY, fallbackPolicy, readSaved, toSave, withTimeout } from './policy';
 import { familyFor, ownersOf } from './family';
 
@@ -1071,10 +1072,21 @@ describe('check and receipt', () => {
     expect(record.createdAt).toMatch(iso);
     expect(record.approvedAt).toMatch(iso);
     expect(record.approvedSha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(record.draftModel).toMatch(/^[A-Za-z0-9 .()_-]{1,60}$/);
+    // A model name is a Gemini cloud model, the on-device model's one name, or "other": never free text.
+    expect(record.draftModel).toBe('other');
     expect(recordModelName('Gemini Nano (Chrome built-in)')).toBe('Gemini Nano (Chrome built-in)');
     expect(recordModelName('gemini-3.5-flash-lite')).toBe('gemini-3.5-flash-lite');
-    expect(recordModelName('<>')).toBe('unknown');
+    for (const name of ['<>', '', 'Gemini Nano', 'gemini-', 'gemini-3.5 flash', 'Gemini-3.5-Flash', 'my-model', `gemini-${'x'.repeat(41)}`]) {
+      expect(recordModelName(name), name).toBe('other');
+    }
+    expect(record.id).toMatch(RECEIPT_ID);
+    expect(newReceiptId(1795000000000, 0)).toBe('mwm0nk74-000000');
+    expect(newReceiptId(1795000000000, 0.5)).toMatch(RECEIPT_ID);
+    for (let i = 0; i < 50; i++) expect(newReceiptId()).toMatch(RECEIPT_ID);
+    // The rules file states the same two forms.
+    expect(firestoreRules).toContain("receiptId.matches('^[0-9a-z]{8,9}-[0-9a-z]{6}$')");
+    expect(firestoreRules).toContain("v.matches('^gemini-[a-z0-9.-]{1,40}$') || v == 'Gemini Nano (Chrome built-in)' || v == 'other'");
+    expect(firestoreRules).toContain('&& isModel(d.draftModel)');
     expect(['ON_DEVICE', 'RULES_ONLY']).toContain(record.guardWhere);
     expect(['ON_DEVICE', 'IN_CLOUD']).toContain(record.draftWhere);
     expect(['ON_DEVICE', 'NOT_RUN', 'SKIPPED']).toContain(record.checkWhere);
@@ -1095,6 +1107,8 @@ describe('check and receipt', () => {
     expect(asReceiptRecord({ ...record, task: 'other' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, kept: -1 })).toBeUndefined();
     expect(asReceiptRecord({ ...record, draftModel: 'x'.repeat(61) })).toBeUndefined();
+    expect(asReceiptRecord({ ...record, draftModel: 'A sentence about a child' })).toBeUndefined();
+    expect(asReceiptRecord({ ...record, id: 'a-note-about-meenal' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, draftModel: 'gemini<script>' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, createdAt: 'yesterday' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, approvedSha256: 'abc' })).toBeUndefined();

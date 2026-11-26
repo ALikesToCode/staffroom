@@ -1234,7 +1234,7 @@ export function App() {
                           {online ? 'Saving the record to your account.' : 'The record will be saved when the network is back. Keep this tab open.'}
                         </p>
                       )}
-                      {copyState === 'saved' && <p className="hint">The receipt's record (no text) was saved to your account.</p>}
+                      {copyState === 'saved' && <p className="hint">The receipt's record (no text) was written to your account by this browser.</p>}
                       {copyState === 'failed' && (
                         <p className="caution">The record could not be saved to your account. The receipt is still kept in this browser.</p>
                       )}
@@ -1589,12 +1589,17 @@ function Receipts({
         Keep a copy of each receipt's record (no text) in my account (Firestore).
         {!signedIn && <em>{configured ? ' Sign-in is not available right now.' : ' Not available: no Firebase project is connected.'}</em>}
       </label>
+      <p className="hint">
+        A record is written by this browser. It is your own note of a run, not proof of it to anyone else. Its matching value is
+        the start of a digest of the approved text: the same on a receipt here and on its record in your account, so you can pair
+        the two.
+      </p>
       {signedIn && records.state === 'loading' && <p className="hint">Looking up the records kept in your account.</p>}
       {signedIn && records.state === 'failed' && <p className="caution">The records kept in your account could not be read just now.</p>}
       {signedIn && records.state === 'ready' && (
         <div className="records">
           <p className="hint">
-            Records kept in your account: {records.list.length}
+            Records written by this browser to your account: {records.list.length}
             {records.unreadable > 0 &&
               `. ${records.unreadable} older ${records.unreadable === 1 ? 'entry is' : 'entries are'} in an earlier form and ${records.unreadable === 1 ? 'is' : 'are'} not listed`}
           </p>
@@ -1612,7 +1617,7 @@ function Receipts({
                     <span>
                       Guard {RECORD_WHERE[r.guardWhere]} · draft {RECORD_WHERE[r.draftWhere]} ({r.draftModel}) · check{' '}
                       {RECORD_WHERE[r.checkWhere]}
-                      {r.flags.replyFlagged ? ' · reply flagged' : ''} · digest {digestPrefix(r.approvedSha256)}
+                      {r.flags.replyFlagged ? ' · reply flagged' : ''} · matching value {digestPrefix(r.approvedSha256)}
                     </span>
                   </li>
                 );
@@ -1656,7 +1661,7 @@ function Receipts({
                       <dt>Approved</dt>
                       <dd>
                         {new Date(r.sent.approvedAt).toLocaleString()} · {r.sent.chars.toLocaleString()} characters · exit gate {r.sent.gate}
-                        {r.sent.sha256 ? ` · digest ${digestPrefix(r.sent.sha256)}` : ''}
+                        {r.sent.sha256 ? ` · matching value ${digestPrefix(r.sent.sha256)}` : ''}
                       </dd>
                       <dt>Draft</dt>
                       <dd>

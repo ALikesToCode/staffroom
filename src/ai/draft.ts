@@ -1,4 +1,5 @@
 import type { Draft, LabelWhere, Task, Where } from '../core/types';
+import { ON_DEVICE_MODEL } from '../core/receipts';
 import { plainText } from '../core/text';
 import { modelFor } from './routes';
 
@@ -72,7 +73,7 @@ export async function writeDraft(redacted: string, task: Task, cloudModel: strin
       items: draft.items.map((i) => ({ heading: plainText(String(i.heading ?? '')), text: plainText(String(i.text ?? '')) })),
     },
     where: onDevice ? 'ON_DEVICE' : 'IN_CLOUD',
-    model: onDevice ? 'Gemini Nano (Chrome built-in)' : cloudModel,
+    model: onDevice ? ON_DEVICE_MODEL : cloudModel,
   };
 }
 
