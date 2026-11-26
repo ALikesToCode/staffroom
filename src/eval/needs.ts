@@ -1,5 +1,7 @@
 import type { DraftItem, LearningKind } from '../core/types';
-import { confirmConstraint, lockConstraints, proposeConstraints } from '../core/constraints';
+import { confirmConstraint, lockConstraints, proposeConstraints, restoreConstraints } from '../core/constraints';
+import type { SavedLesson } from '../core/lesson';
+import { withTicketNeeds, type Ticket } from '../core/ticket';
 import { lessonNeedLine, lessonNeeds, proposeLearning, splitVariations } from '../core/lessonNeeds';
 import { placeVariations } from '../core/points';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from '../core/samples';
@@ -215,6 +217,80 @@ export function runNeedsSet(): { rows: NeedsRow[]; totals: NeedsTotals } {
       hitsFalse: n((r) => !r.hitExpected && r.hitFound),
     },
   };
+}
+
+// ---------------------------------------------------------------- needs from an exit ticket
+
+/**
+ * Cases for the builder of needs from an exit ticket: the marks of a
+ * lesson and its topic, and the needs the next lesson should be told, by
+ * letter, with the children each belongs to (first names; known on the
+ * device only). Plain code, no model.
+ */
+export interface TicketCase {
+  id: string;
+  topic: string;
+  ticket: Ticket;
+  expected: [letter: string, line: string, children: string[]][];
+}
+
+export const TICKET_CASES: TicketCase[] = [
+  {
+    id: 'mixed',
+    topic: 'Writing a short description of a place',
+    ticket: { 'Aarav Sharma': 'absent', 'Diya Sharma': 'got', 'Meenal Joshi': 'partly', 'Kabir Qureshi': 'not', 'Tanvi Rao': 'got', 'Ishaan Verma': 'not' },
+    expected: [
+      ['J', 'has not yet got writing a short description of a place; needs it taught again another way', ['Ishaan', 'Kabir']],
+      ['K', 'got writing a short description of a place quickly; needs a harder task', ['Diya', 'Tanvi']],
+      ['L', 'was absent for writing a short description of a place', ['Aarav']],
+    ],
+  },
+  {
+    id: 'all-got-it',
+    topic: 'Continue: Equivalent fractions.',
+    ticket: Object.fromEntries(SAMPLE_CLASS_LIST.map((n) => [n, 'got' as const])),
+    expected: [['K', 'got equivalent fractions quickly; needs a harder task', ['Aarav', 'Diya', 'Ishaan', 'Kabir', 'Meenal', 'Tanvi']]],
+  },
+  { id: 'partly-only', topic: 'Shadows', ticket: { 'Meenal Joshi': 'partly', 'Tanvi Rao': 'partly' }, expected: [] },
+  { id: 'one-absent', topic: 'Maps and keys', ticket: { 'Kabir Qureshi': 'absent' }, expected: [['L', 'was absent for maps and keys', ['Kabir']]] },
+  { id: 'no-marks', topic: 'Collage', ticket: {}, expected: [] },
+];
+
+export interface TicketRow {
+  id: string;
+  expected: string[];
+  found: string[];
+  right: boolean;
+  /** True when no child's name and no count is in the lines the cloud would be told. */
+  noNames: boolean;
+}
+
+/** Build the needs for each case as the app does on "Plan the next lesson", and set them against the labels. */
+export function runTicketSet(): { rows: TicketRow[]; right: number; cases: number } {
+  const vault = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
+  const rows = TICKET_CASES.map((c) => {
+    const lesson: SavedLesson = {
+      id: c.id,
+      savedAt: '',
+      fields: { klass: 'Class 6', subject: 'x', topic: c.topic, minutes: 40, lastTime: '' },
+      title: c.topic,
+      stages: [],
+      adjustments: [],
+      constraintIds: [],
+      after: { stages: [], line: '', at: '', ticket: c.ticket },
+    };
+    const held = restoreConstraints(SAMPLE_NOTE, vault, withTicketNeeds([], lesson), []);
+    const entities = lockConstraints(held.entities, held.constraints);
+    const needs = lessonNeeds(held.constraints, entities);
+    const first = (n: string) => n.split(' ')[0];
+    const say = (letter: string, line: string, children: string[]) => `${letter}: ${line} [${[...children].sort().join(', ')}]`;
+    const found = needs.map((n) => say(n.letter, n.line, [...n.children.map((id) => first(entities.find((e) => e.id === id)?.surfaces[0] ?? '?')), ...n.others.map(first)]));
+    const expected = c.expected.map((e) => say(...e));
+    const told = needs.map((n) => `Need ${n.letter}: ${n.line}`).join('\n');
+    const noNames = needs.every((n) => n.issues.length === 0) && !SAMPLE_CLASS_LIST.some((n) => n.split(' ').some((part) => told.includes(part))) && !/\b\d+\b/.test(told);
+    return { id: c.id, expected, found, right: expected.join('|') === found.join('|'), noNames };
+  });
+  return { rows, right: rows.filter((r) => r.right && r.noNames).length, cases: rows.length };
 }
 
 // ---------------------------------------------------------------- learning needs, for the on-device model

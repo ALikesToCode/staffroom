@@ -10,7 +10,7 @@ import { runRuleSet } from './rules';
 import { FIT_CASES, FIT_CHILD_CASES, fitRow, fitTotals, lessonFitCases, lessonFitRow, lessonFitTotals, type FitRow, type LessonFitRow } from './fit';
 import { FIT_CHILD_SYSTEM, FIT_LESSON_SYSTEM, fitLessonSchema, onDeviceFit } from '../ai/fit';
 import { runLessonSet } from './lesson';
-import { LEARNING_CASES, learningVault, runLearningRules, runNeedsSet } from './needs';
+import { LEARNING_CASES, learningVault, runLearningRules, runNeedsSet, runTicketSet } from './needs';
 import { LEARNING_SCHEMA, LEARNING_SYSTEM, readLearningAnswer } from '../ai/learning';
 
 // A developer page, not part of the app. It runs fixed cases through the same check the app runs and shows
@@ -333,8 +333,20 @@ function runNeeds() {
     cell(tr, row.why);
     cell(tr, '');
   }
-  status.textContent = `Done (${SET_NAME.needs}). Of ${t.lines} labelled lines: ${t.right} beside the right child, ${t.missing} missing, ${t.wrongChild} beside a wrong child. Lines left out (letter not sent, or no words): ${t.droppedFound}, expected ${t.droppedExpected}. Rule hits: ${t.hitsFound} of ${t.hitsExpected} found, ${t.hitsFalse} not labelled.`;
-  json.textContent = JSON.stringify({ done: true, at: new Date().toISOString(), userAgent: navigator.userAgent, set, totals: t, rows }, null, 2);
+  const tickets = runTicketSet();
+  for (const row of tickets.rows) {
+    const tr = table.insertRow();
+    cell(tr, '1');
+    cell(tr, `ticket: ${row.id}`);
+    cell(tr, 'the marks of an exit ticket');
+    cell(tr, 'the needs the next lesson is told');
+    cell(tr, row.expected.join(' / ') || 'no need');
+    cell(tr, row.right && row.noNames ? 'right' : 'wrong', row.right && row.noNames ? 'right' : 'wrong');
+    cell(tr, `${row.found.join(' / ') || 'no need'}${row.noNames ? '' : ' (a name or a count is in what would be told)'}`);
+    cell(tr, '');
+  }
+  status.textContent = `Done (${SET_NAME.needs}). Of ${t.lines} labelled lines: ${t.right} beside the right child, ${t.missing} missing, ${t.wrongChild} beside a wrong child. Lines left out (letter not sent, or no words): ${t.droppedFound}, expected ${t.droppedExpected}. Rule hits: ${t.hitsFound} of ${t.hitsExpected} found, ${t.hitsFalse} not labelled. Needs built from an exit ticket: ${tickets.right} of ${tickets.cases} cases right.`;
+  json.textContent = JSON.stringify({ done: true, at: new Date().toISOString(), userAgent: navigator.userAgent, set, totals: t, rows, tickets }, null, 2);
   document.body.dataset.state = 'done';
 }
 

@@ -71,6 +71,44 @@ describe('a recorded run with rewrites and suggestions', () => {
 
 describe('a recorded lesson', () => {
   const lesson = { klass: 'Class 6', subject: 'English', topic: 'Describing a place', minutes: 40, lastTime: '' };
+
+  it('holds the needs by letter, whose each is, the lines for needs and the materials, and refuses any that is not in form', () => {
+    const student = entities.find((e) => e.kind === 'student')!.id;
+    const needs = [{ letter: 'A', line: 'cannot stay after the last bell' }];
+    const variations = [{ itemIndex: 0, need: 'A', text: 'does it at lunch' }];
+    const materials = {
+      board: ['A place'],
+      sheet: ['1', '2', '3', '4', '5'],
+      versions: [{ need: 'A', text: 'Does the sheet in class.' }],
+      ticket: [1, 2, 3].map((n) => ({ question: `q${n}`, answer: `a${n}` })),
+    };
+    const full = { ...run, task: 'lesson' as const, lesson: { ...lesson, language: 'Hindi' }, needs, needChildren: { A: [student] }, variations, materials };
+    const saved = captureRun(full, new Date(run.recordedAt), 'Chrome/142.0.7444.60');
+    const back = asRecordedRun(JSON.parse(JSON.stringify(saved)))!;
+    expect(back.needs).toEqual(needs);
+    expect(back.needChildren).toEqual({ A: [student] });
+    expect(back.variations).toEqual(variations);
+    expect(back.materials).toEqual(materials);
+    expect(back.lesson?.language).toBe('Hindi');
+    const json = () => JSON.parse(JSON.stringify(saved)) as Record<string, unknown>;
+    for (const bad of [
+      { needs: [{ letter: 'a', line: 'x' }] },
+      { needs: [...needs, ...needs] },
+      { needChildren: { B: [student] } },
+      { needChildren: { A: ['nobody'] } },
+      { variations: [{ itemIndex: 0, need: 'B', text: 'x' }] },
+      { variations: [{ itemIndex: 9, need: 'A', text: 'x' }] },
+      { materials: { ...materials, board: [] } },
+      { materials: { ...materials, sheet: ['1', '2'] } },
+      { materials: { ...materials, ticket: materials.ticket.slice(0, 2) } },
+      { materials: { ...materials, versions: [{ need: 'B', text: 'x' }] } },
+      { materials: { ...materials, versions: [...materials.versions, ...materials.versions] } },
+      { lesson: { ...lesson, language: 'x'.repeat(41) } },
+    ]) expect(asRecordedRun({ ...json(), ...bad }), JSON.stringify(bad).slice(0, 60)).toBeUndefined();
+    // No materials outside a lesson.
+    expect(asRecordedRun({ ...(JSON.parse(JSON.stringify(run)) as object), materials })).toBeUndefined();
+    expect(captureRun({ ...run, task: 'lesson', lesson, needs: [], variations: [] }, new Date(run.recordedAt), 'x')).not.toHaveProperty('needs');
+  });
   const adjustment = { itemIndex: 0, constraintId: held.constraints[0].id, text: 'Uses chart paper from the class set.', source: 'rule starter' as const };
   const student = held.entities.find((e) => e.kind === 'student')!;
   const point = { itemIndex: 0, stage: 'Teach', childId: student.id, text: 'Seat her near the front for the demonstration.', source: 'on-device model' as const };

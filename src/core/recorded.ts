@@ -1,3 +1,4 @@
+import { BOARD_MAX, MATERIAL_LINE_MAX, SHEET_MAX, SHEET_MIN, TICKET_QUESTIONS, type Materials } from './materials';
 import type { Constraint, Draft, Entity, ItemCheck, Kind, TaskId, Where } from './types';
 import type { Policy } from './policy';
 import { KINDS } from './policy';
@@ -91,7 +92,11 @@ export interface RecordedRun {
   needChildren?: Record<string, string[]>;
   /** For a lesson: the lines the cloud wrote for needs, taken out of the stages. Absent: none. */
   variations?: Variation[];
+  /** For a lesson: the materials the cloud wrote from the signed plan and the needs by letter. Letters only: no name is in them. Absent: none were made. */
+  materials?: RecordedMaterials;
 }
+
+export type RecordedMaterials = Pick<Materials, 'board' | 'sheet' | 'versions' | 'ticket'>;
 
 const WHERES: Where[] = ['ON_DEVICE', 'IN_CLOUD', 'RULES_ONLY', 'NOT_RUN', 'SKIPPED'];
 const VERDICTS: ItemCheck['verdict'][] = ['fits', 'conflict', 'unsure', 'nothing withheld', 'not checked'];
@@ -235,6 +240,19 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
   ) {
     return undefined;
   }
+  const materials = d.materials;
+  if (materials !== undefined) {
+    const line = (v: unknown): v is string => str(v) && v.trim().length > 0 && v.length <= MATERIAL_LINE_MAX;
+    const whole =
+      d.task === 'lesson' &&
+      obj(materials) &&
+      list(materials.board, line) && materials.board.length >= 1 && materials.board.length <= BOARD_MAX &&
+      list(materials.sheet, line) && materials.sheet.length >= SHEET_MIN && materials.sheet.length <= SHEET_MAX &&
+      list(materials.versions, (v): v is { need: string; text: string } => obj(v) && letter(v.need) && letters.has(v.need) && line(v.text)) &&
+      new Set(materials.versions.map((v) => v.need)).size === materials.versions.length &&
+      list(materials.ticket, (t): t is { question: string; answer: string } => obj(t) && line(t.question) && line(t.answer)) && materials.ticket.length === TICKET_QUESTIONS;
+    if (!whole) return undefined;
+  }
   return {
     recordedAt: d.recordedAt,
     chrome: d.chrome,
@@ -270,6 +288,12 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
     ...(needs ? { needs: (needs as RecordedNeed[]).map((n) => ({ letter: n.letter, line: n.line })) } : {}),
     ...(needChildren ? { needChildren: Object.fromEntries(Object.entries(needChildren as Record<string, string[]>).map(([k, v]) => [k, [...v]])) } : {}),
     ...(variations ? { variations: (variations as Variation[]).map((v) => ({ itemIndex: v.itemIndex, need: v.need, text: v.text })) } : {}),
+    ...(materials
+      ? (() => {
+          const m = materials as RecordedMaterials;
+          return { materials: { board: [...m.board], sheet: [...m.sheet], versions: m.versions.map((v) => ({ need: v.need, text: v.text })), ticket: m.ticket.map((t) => ({ question: t.question, answer: t.answer })) } };
+        })()
+      : {}),
   };
 }
 
@@ -286,7 +310,7 @@ export function browserName(userAgent: string): string {
  * An empty list of either is left out.
  */
 export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now: Date, userAgent: string): RecordedRun {
-  const { rewrites, fits, adjustments, needs, needChildren, variations, ...rest } = run;
+  const { rewrites, fits, adjustments, needs, needChildren, variations, materials, ...rest } = run;
   return {
     recordedAt: now.toISOString(),
     chrome: browserName(userAgent),
@@ -296,6 +320,7 @@ export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now:
     ...(adjustments && adjustments.length > 0 ? { adjustments } : {}),
     ...(needs && needs.length > 0 ? { needs, ...(needChildren ? { needChildren } : {}) } : {}),
     ...(variations && variations.length > 0 ? { variations } : {}),
+    ...(materials ? { materials: { board: materials.board, sheet: materials.sheet, versions: materials.versions, ticket: materials.ticket } } : {}),
   };
 }
 

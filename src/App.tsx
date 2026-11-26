@@ -1624,6 +1624,7 @@ export function App() {
               needs: sent.lessonNeeds.map((n) => ({ letter: n.letter, line: n.line })),
               needChildren: Object.fromEntries(sent.lessonNeeds.map((n) => [n.letter, n.children])),
               variations,
+              ...(materials ? { materials: materials.materials } : {}),
             }
           : {}),
       },
