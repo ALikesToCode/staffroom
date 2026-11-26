@@ -5,7 +5,7 @@ import { buildVault, deterministicCandidates, possibleNameCandidates, redactRang
 import { confirmConstraint, proposeConstraints } from './constraints';
 import { afterBellActivities, cloudSawAround, combineChecks, layerCounts, negated, ruleCheckItem, ruleConflicts, ruleOnlyReason, verdictLabel } from './conflicts';
 import { keepNoConflict, NOT_ANSWERED, NOTHING_WITHHELD, startsKept } from '../ai/check';
-import { makeReceipt, receiptRecord } from './receipts';
+import { makeReceipt, plainTitle, receiptRecord } from './receipts';
 import { constraintCounts } from './constraints';
 
 const c = (kind: ConstraintKind, extra: Partial<Constraint> = {}): Constraint => ({
@@ -327,5 +327,13 @@ describe('what a receipt keeps of the constraints and the two layers', () => {
     const record = receiptRecord(receipt);
     expect(record).toMatchObject({ checkWhere: 'RULES_ONLY', conflictsByRule: 1, doubtsByModel: 1, constraintsConfirmed: 2, needsShared: 1 });
     expect(JSON.stringify(record)).not.toMatch(/time-after|health/);
+  });
+});
+
+describe('the title a receipt has before a model names it', () => {
+  it('is the task and the day, and nothing from the note', () => {
+    expect(plainTitle('plan', new Date(2026, 10, 26, 9, 30))).toBe('Support plan · 26 Nov 2026');
+    expect(plainTitle('parents', new Date(2027, 0, 3))).toBe('Notes to parents · 3 Jan 2027');
+    expect(plainTitle('handover', new Date(2026, 11, 31))).toBe('Hand-over · 31 Dec 2026');
   });
 });

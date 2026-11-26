@@ -21,6 +21,18 @@ export function storeReceipts(receipts: Receipt[]): boolean {
   }
 }
 
+const SHORT_TASK: Record<TaskId, string> = { plan: 'Support plan', parents: 'Notes to parents', handover: 'Hand-over' };
+const SHORT_MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * The title a receipt has before a model has named it, and keeps if none
+ * does: the task and the day, as in "Support plan · 26 Nov 2026". Made
+ * from nothing in the note.
+ */
+export function plainTitle(task: TaskId, at: Date): string {
+  return `${SHORT_TASK[task]} \u00B7 ${at.getDate()} ${SHORT_MONTH[at.getMonth()]} ${at.getFullYear()}`;
+}
+
 /** The name the app gives the on-device model. */
 export const ON_DEVICE_MODEL = 'Gemini Nano (Chrome built-in)';
 

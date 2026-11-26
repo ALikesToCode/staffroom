@@ -16,7 +16,7 @@ import {
   TOKEN_RE,
 } from './core/vault';
 import { checkReply, safeTitle, type Violation } from './core/gate';
-import { draftLine, loadReceipts, makeReceipt, recordIdTail, storeReceipts, type ReceiptRecord } from './core/receipts';
+import { draftLine, loadReceipts, makeReceipt, plainTitle, recordIdTail, storeReceipts, type ReceiptRecord } from './core/receipts';
 import { approvalKey } from './core/policy';
 import {
   addConstraint,
@@ -657,14 +657,18 @@ export function App() {
     // An item in conflict starts struck. Every other item starts undecided: nothing is kept until the teacher keeps it.
     setKept(startsKept(itemChecks));
     setCheckWhere(where);
-    setProgress('Naming the receipt');
-    const named = await labelReceipt(text, currentTask.label, cloudModel);
-    if (gone()) return;
-    // The title is model-written and is kept with the receipt, so it passes the same checks as outgoing text
-    // (names, withheld items, patterns, sensitive words) or the task's own title is used.
-    setLabel({ ...named, title: safeTitle(named.title, entities, currentTask.label) });
+    // The result is shown at once. The receipt has a plain title, made from the task and the day, until the
+    // naming call answers; it keeps that title if the call fails or the teacher signs off first.
+    const plain = plainTitle(currentTask.id, new Date(approvedAt));
+    setLabel({ title: plain, where: 'FALLBACK' });
     sendingRef.current = false;
     setStage('result');
+    void labelReceipt(text, plain, cloudModel).then((named) => {
+      if (gone() || signingRef.current) return;
+      // The title is model-written and is kept with the receipt, so it passes the same checks as outgoing text
+      // (names, withheld items, patterns, sensitive words) or the plain title stays.
+      setLabel({ ...named, title: safeTitle(named.title, entities, plain) });
+    });
   };
 
   // ---------------------------------------------------------------- step 6: sign off
@@ -681,7 +685,7 @@ export function App() {
     const signed = [...kept];
     const receipt = makeReceipt({
       task,
-      label: label?.title || currentTask.label,
+      label: label?.title || plainTitle(task, new Date(sent.at)),
       labelWhere: label?.where ?? 'FALLBACK',
       entities,
       guardWhere,
@@ -1919,7 +1923,7 @@ const RECORD_WHERE: Record<Where, string> = {
 const LABEL_WHERE: Record<LabelWhere | 'UNKNOWN', string> = {
   ON_DEVICE: 'Written on the device from the approved text',
   IN_CLOUD: 'Written in the cloud from the approved text',
-  FALLBACK: 'The task name: no model answered',
+  FALLBACK: 'The task and the day: no model had named this receipt when it was signed off',
   UNKNOWN: 'Not recorded for this receipt',
 };
 
