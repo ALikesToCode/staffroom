@@ -59,6 +59,49 @@ describe('pattern rules', () => {
     expect(redact(note, buildVault(note, deterministicCandidates(note, [])))).toBe('[ID 1] was late.');
   });
 
+  it('withholds the whole of two patterns that overlap', () => {
+    const note = 'Roll no. 98765 43210 is hers.';
+    expect(findByRule(note).map((h) => [h.rule, h.text])).toEqual([
+      ['roll or admission number', 'Roll no. 98765'],
+      ['phone number', '98765 43210'],
+    ]);
+    const v = buildVault(note, deterministicCandidates(note, []));
+    expect(redact(note, v)).toBe('[ID 1][Contact 1] is hers.');
+    expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+  });
+
+  it('finds a number written with brackets, odd spaces or a spaced prefix, in the rules and at the gate', () => {
+    const cases: [string, string, string][] = [
+      ['Ring (98765) 43210 after four.', 'Ring [Contact 1] after four.', 'phone number'],
+      ['Ring (+91) 98765 43210 after four.', 'Ring [Contact 1] after four.', 'phone number'],
+      ['Office (022) 2345 6789 today.', 'Office [Contact 1] today.', 'phone number'],
+      ['Aadhaar 1234\u00A05678\u202F9012 seen.', 'Aadhaar [ID 1] seen.', '12-digit identity number'],
+      ['Ring 98765\u00A043210 after four.', 'Ring [Contact 1] after four.', 'phone number'],
+      ['Admission no. AB 12345 is new.', '[ID 1] is new.', 'roll or admission number'],
+      ['Her card says AB 12345 on it.', 'Her card says [ID 1] on it.', 'roll or admission number'],
+    ];
+    for (const [note, out, rule] of cases) {
+      const v = buildVault(note, deterministicCandidates(note, []));
+      expect(redact(note, v)).toBe(out);
+      expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+      // The gate, given the raw text and an empty vault, stops it on its own.
+      expect(checkOutgoing(note, []).map((x) => x.why)).toContain(`looks like a ${rule}`);
+    }
+    expect(findByRule('He scored (45) 50 38 in three tests. Admission number for 2026 is open.')).toEqual([]);
+  });
+
+  it('finds a listed name whichever way its accent is typed', () => {
+    const composed = 'Jos\u00E9';
+    const apart = 'Jose\u0301';
+    for (const [listed, written] of [[composed, apart], [apart, composed], [composed, composed]]) {
+      const note = `${written} is late. Jose is not.`;
+      const v = buildVault(note, deterministicCandidates(note, [listed]));
+      expect(redact(note, v)).toBe('[Student 1] is late. Jose is not.');
+      expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+      expect(checkOutgoing(note, v).map((x) => x.why)).toEqual(['a withheld student name is still in the text']);
+    }
+  });
+
   it('leaves ordinary numbers and dates alone', () => {
     expect(findByRule('Class 6B scored 42 out of 50 on 16 November 2026. 4 days absent.')).toEqual([]);
   });
@@ -314,6 +357,28 @@ describe('vault', () => {
     expect(redact(note, quote)).toBe('She walks home to Rampur Kalan and is [withheld].');
   });
 
+  it('marks the word the teacher selected, not the same letters elsewhere', () => {
+    const note = 'Ravi finished. Ravinder takes tablets.';
+    const inside = addByTeacher(note, [], 'Ravi', 'student', { start: 15, end: 19 });
+    expect(inside[0].surfaces).toEqual(['Ravinder']);
+    expect(redact(note, inside)).toBe('Ravi finished. [Student 1] takes tablets.');
+    expect(checkOutgoing(redact(note, inside), inside, note)).toEqual([]);
+    const first = addByTeacher(note, [], 'Ravi', 'student', { start: 0, end: 4 });
+    expect(redact(note, first)).toBe('[Student 1] finished. Ravinder takes tablets.');
+    // A selection with stray spaces, or one that starts mid-word, is widened where it was made.
+    expect(redact(note, addByTeacher(note, [], ' vinder takes', 'private', { start: 16, end: 29 }))).toBe('Ravi finished. [withheld] tablets.');
+  });
+
+  it('holds the selected place itself when the vault would otherwise leave it in the text', () => {
+    const note = 'Kabir is on medication.\n\nIshaan is on medication.';
+    const pinned = [{ id: 'private-1', kind: 'private' as const, token: PRIVATE_TOKEN, surfaces: ['is on medication'], source: 'on-device model' as const, withheld: true, at: 6 }];
+    expect(redact(note, pinned)).toBe('Kabir [withheld].\n\nIshaan is on medication.');
+    const second = note.lastIndexOf('is on medication');
+    const marked = addByTeacher(note, pinned, 'is on medication', 'private', { start: second, end: second + 16 });
+    expect(redact(note, marked)).toBe('Kabir [withheld].\n\nIshaan [withheld].');
+    expect(checkOutgoing(redact(note, marked), marked, note)).toEqual([]);
+  });
+
   it('widens a mark inside a longer run of letters and digits to the whole run', () => {
     const note = 'Her bus pass is XAB12345 this year.';
     const v = addByTeacher(note, [], 'AB1234', 'id');
@@ -369,6 +434,10 @@ describe('vault', () => {
     expect(redact(note, v)).toBe('[Student 1] [withheld].\n\n[Student 2] [withheld].');
     const oneReleased = v.map((e) => (e === details[0] ? { ...e, withheld: false } : e));
     expect(redact(note, oneReleased)).toBe('[Student 1] is on medication.\n\n[Student 2] [withheld].');
+    // The gate does not take the released one for a leak of the other, and still catches a real one.
+    expect(checkOutgoing(redact(note, oneReleased), oneReleased, note)).toEqual([]);
+    expect(checkOutgoing(note, oneReleased, note).map((v) => v.what)).toContain('is on medication');
+    expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
     // A phrase the teacher marks once is withheld in both places, as two entries.
     const byTeacher = addByTeacher(note, v.filter((e) => e.kind !== 'private'), 'on medication', 'private');
     expect(byTeacher.filter((e) => e.kind === 'private').map((d) => byTeacher.find((e) => e.id === d.about)?.surfaces[0])).toEqual(['Kabir', 'Ishaan']);

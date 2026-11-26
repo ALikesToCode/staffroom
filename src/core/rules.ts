@@ -13,21 +13,39 @@ interface Rule {
   name: string;
   kind: Kind;
   re: RegExp;
+  /** A further test on a match, for what a pattern alone cannot say. */
+  accept?: (m: RegExpMatchArray) => boolean;
 }
+
+/** What may stand between groups of digits: a space, a tab, a no-break, thin or narrow space, or a hyphen. */
+const GAP = '[ \\t\\u00A0\\u2009\\u202F-]';
+const digits = (s: string) => s.replace(/\D/g, '').length;
 
 const RULES: Rule[] = [
   { name: 'email address', kind: 'contact', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g },
-  // (the roll rule below: a single digit counts only after "no.", "number" or "#", so "the bread roll is 5 rupees" is left alone)
   // 12 digits in groups of four: the format of an Aadhaar number.
-  { name: '12-digit identity number', kind: 'id', re: /(?<![\d-])\d{4}[ -]?\d{4}[ -]?\d{4}(?![\d-])/g },
+  { name: '12-digit identity number', kind: 'id', re: new RegExp(`(?<![\\d-])\\d{4}${GAP}?\\d{4}${GAP}?\\d{4}(?![\\d-])`, 'g') },
   // Indian mobile numbers, with or without +91, and other long digit runs written as phone numbers.
-  { name: 'phone number', kind: 'contact', re: /(?<![\d-])(?:\+?91[ -]?|0)?[6-9]\d{4}[ -]?\d{5}(?![\d-])/g },
-  { name: 'phone number', kind: 'contact', re: /(?<![\d-])\+\d{1,3}[ -]?\d[\d -]{7,12}\d(?![\d-])/g },
+  { name: 'phone number', kind: 'contact', re: new RegExp(`(?<![\\d-])(?:\\+?91${GAP}?|0)?[6-9]\\d{4}${GAP}?\\d{5}(?![\\d-])`, 'g') },
+  { name: 'phone number', kind: 'contact', re: /(?<![\d-])\+\d{1,3}[ \t\u00A0\u2009\u202F-]?\d[\d \t\u00A0\u2009\u202F-]{7,12}\d(?![\d-])/g },
+  // A number with part of it in brackets: "(98765) 43210", "(+91) 98765 43210", "(022) 2345 6789".
+  {
+    name: 'phone number',
+    kind: 'contact',
+    re: new RegExp(`(?<![\\d-])(?:\\+?\\d{1,3}${GAP}?)?\\(\\+?\\d{1,5}\\)${GAP}?\\d{3,5}(?:${GAP}?\\d{3,5}){0,2}(?![\\d-])`, 'g'),
+    accept: (m) => digits(m[0]) >= 10 && digits(m[0]) <= 13,
+  },
+  // After "roll", "admission" and the like. A single digit counts only after "no.", "number" or "#", so
+  // "the bread roll is 5 rupees" is left alone. The number may be written with a letter prefix and a space
+  // ("AB 12345"); the prefix must be in capitals, so an ordinary word before a number is not taken for one.
   {
     name: 'roll or admission number',
     kind: 'id',
-    re: /\b(?:roll|admission|adm\.?|registration|reg\.?|enrolment|enrollment|student id|udise)\s*(?:(?:no\.?|number|#)\s*(?:(?:is|was)\s+)?[:#-]?\s*(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]*|(?:(?:is|was)\s+)?[:#-]?\s*(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,})/gi,
+    re: /\b(?:roll|admission|adm\.?|registration|reg\.?|enrolment|enrollment|student id|udise)\s*(?:(?:no\.?|number|#)\s*(?:(?:is|was)\s+)?[:#-]?\s*(?:([A-Z]{1,5})[ \u00A0\u202F])?(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]*|(?:(?:is|was)\s+)?[:#-]?\s*(?:([A-Z]{1,5})[ \u00A0\u202F])?(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,})/gi,
+    accept: (m) => [m[1], m[2]].every((prefix) => prefix === undefined || prefix === prefix.toUpperCase()),
   },
+  // A code of capital letters and at least five digits standing on its own: "AB 12345", "KV-204518".
+  { name: 'roll or admission number', kind: 'id', re: /(?<![\p{L}\p{N}])[A-Z]{2,5}[ \u00A0\u202F-]?\d{5,10}(?![\p{L}\p{N}])/gu },
   {
     name: 'date of birth',
     kind: 'id',
@@ -35,22 +53,24 @@ const RULES: Rule[] = [
   },
 ];
 
-/** Find contact details and identity numbers by pattern. Longer hits win overlaps. */
+/**
+ * Find contact details and identity numbers by pattern. Hits that overlap
+ * are all kept: where "Roll no. 98765 43210" is both a roll number and a
+ * phone number, both are returned, so the whole of it is withheld. Only a
+ * hit that lies wholly inside another is left out, since it adds nothing.
+ */
 export function findByRule(text: string): RuleHit[] {
   const hits: RuleHit[] = [];
   for (const rule of RULES) {
     for (const m of text.matchAll(rule.re)) {
+      if (rule.accept && !rule.accept(m)) continue;
       hits.push({ kind: rule.kind, text: m[0], start: m.index, end: m.index + m[0].length, rule: rule.name });
     }
   }
-  hits.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start));
+  hits.sort((a, b) => a.start - b.start || b.end - a.end);
   const kept: RuleHit[] = [];
   for (const h of hits) {
-    const last = kept[kept.length - 1];
-    if (last && h.start < last.end) {
-      if (h.end - h.start > last.end - last.start) kept[kept.length - 1] = h;
-      continue;
-    }
+    if (kept.some((k) => k.start <= h.start && h.end <= k.end)) continue;
     kept.push(h);
   }
   return kept;
@@ -96,16 +116,46 @@ export function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * A pattern that finds a string however its accents are written and
+ * however its words are spaced. "José" may be typed as one letter é or as e
+ * followed by a combining accent; the two look the same and both must be
+ * found. The pattern is run on the note as written, so the places it
+ * reports are places in the note itself.
+ */
+export function patternFor(text: string): string {
+  let out = '';
+  for (const ch of text.trim().normalize('NFC')) {
+    if (/\s/.test(ch)) {
+      if (!out.endsWith('\\s+')) out += '\\s+';
+      continue;
+    }
+    const apart = ch.normalize('NFD');
+    out += apart === ch ? escapeRe(ch) : `(?:${escapeRe(ch)}|${escapeRe(apart)})`;
+  }
+  return out;
+}
+
+/** The same text whichever way its accents and spacing were typed. Used to compare, never to locate. */
+export function sameForm(text: string): string {
+  return text.normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// A combining mark belongs to the letter before it, so it counts as part of the word on both sides.
 const EDGE_BEFORE = '(?<![\\p{L}\\p{N}])';
-const EDGE_AFTER = '(?![\\p{L}\\p{N}])';
+const EDGE_AFTER = '(?![\\p{L}\\p{N}\\p{M}])';
+
+/** True for a character that is part of a word: a letter, a digit or a combining mark. */
+export function isWordChar(c: string | undefined): boolean {
+  return !!c && /[\p{L}\p{N}\p{M}]/u.test(c);
+}
 
 /** A whole-word, case-insensitive matcher for a set of strings, longest first. */
 export function wholeWordMatcher(surfaces: string[]): RegExp | null {
   const unique = [...new Set(surfaces.map((s) => s.trim()).filter(Boolean))];
   if (unique.length === 0) return null;
   unique.sort((a, b) => b.length - a.length);
-  const body = unique.map((s) => escapeRe(s).replace(/\s+/g, '\\s+')).join('|');
-  return new RegExp(`${EDGE_BEFORE}(?:${body})${EDGE_AFTER}`, 'giu');
+  return new RegExp(`${EDGE_BEFORE}(?:${unique.map(patternFor).join('|')})${EDGE_AFTER}`, 'giu');
 }
 
 // ---------------------------------------------------------------- sensitive words
@@ -235,4 +285,13 @@ export function findPossibleNames(text: string, classList: string[]): PossibleNa
     }
   }
   return out;
+}
+
+/** The words from the sensitive list that a text uses, in lower case, once each. */
+export function sensitiveWords(text: string): string[] {
+  const found = new Set<string>();
+  for (const group of SENSITIVE_RE) {
+    for (const m of text.matchAll(new RegExp(group.re.source, 'giu'))) found.add(m[0].toLowerCase().replace(/\s+/g, ' '));
+  }
+  return [...found];
 }

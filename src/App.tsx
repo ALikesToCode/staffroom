@@ -3,7 +3,6 @@ import type { Entity, ItemCheck, Kind, LabelWhere, Receipt, TaskId, Where } from
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './core/samples';
 import {
   addByTeacher,
-  appearsIn,
   applyLocks,
   buildVault,
   CAPITALISED,
@@ -113,6 +112,8 @@ export function App() {
   const [guardGaps, setGuardGaps] = useState<Gaps>(NO_GAPS);
   const [progress, setProgress] = useState('');
   const [selection, setSelection] = useState('');
+  /** Where in the note the selection was made, so the words meant are marked and not the same letters elsewhere. */
+  const selectionSpan = useRef<{ start: number; end: number } | null>(null);
   /** Said in place of the marking buttons when a selection cannot be used. */
   const [selectionNote, setSelectionNote] = useState('');
   /** The exact outgoing text the teacher ticked as read. The tick holds only while this is still the outgoing text. */
@@ -304,11 +305,21 @@ export function App() {
         );
         return;
       }
-      if (!appearsIn(note, text)) {
+      // The note view shows the note character for character, so a position in it is a position in the note.
+      const range = sel!.getRangeAt(0);
+      const before = document.createRange();
+      before.selectNodeContents(noteRef.current!);
+      before.setEnd(range.startContainer, range.startOffset);
+      const raw = range.toString();
+      const start = before.toString().length + (raw.length - raw.trimStart().length);
+      const end = start + text.length;
+      if (note.slice(start, end) !== text) {
         setSelection('');
-        setSelectionNote('That selection is not one unbroken piece of your note. Select within one paragraph.');
+        selectionSpan.current = null;
+        setSelectionNote('That selection is not one unbroken piece of your note. Select within the note, in one go.');
         return;
       }
+      selectionSpan.current = { start, end };
       setSelection(text);
       setSelectionNote('');
     },
@@ -328,7 +339,10 @@ export function App() {
 
   /** Mark the selection. Text already in the vault is set back to withheld; a cut word is widened to the whole word. */
   const withholdSelection = (kind: Kind) => {
-    setEntities((list) => addByTeacher(note, list, selection, kind));
+    const span = selectionSpan.current ?? undefined;
+    if (!span) return;
+    setEntities((list) => addByTeacher(note, list, selection, kind, span));
+    selectionSpan.current = null;
     setSelection('');
     setSelectionNote('');
     window.getSelection()?.removeAllRanges();

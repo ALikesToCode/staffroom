@@ -1,27 +1,17 @@
 import type { Entity } from './types';
-import { findByRule, wholeWordMatcher } from './rules';
-import { LOOKALIKE_RE, RESERVED } from './vault';
+import { findByRule, sameForm, wholeWordMatcher } from './rules';
+import { covered, LOOKALIKE_RE, RESERVED } from './vault';
 
 export interface Violation {
   what: string;
   why: string;
 }
 
-const flat = (s: string) => s.toLowerCase().replace(/\s+/g, ' ');
-const isWordChar = (c: string | undefined) => !!c && /[\p{L}\p{N}]/u.test(c);
+const flat = sameForm;
 
-/** Whole-word search over the text as it will be sent. */
+/** Whole-word search over the text as it will be sent, whatever way accents and spacing are written. */
 function containsWord(haystack: string, needle: string): boolean {
-  const h = flat(haystack);
-  const n = flat(needle).trim();
-  if (!n) return false;
-  let from = 0;
-  for (;;) {
-    const at = h.indexOf(n, from);
-    if (at < 0) return false;
-    if (!isWordChar(h[at - 1]) && !isWordChar(h[at + n.length])) return true;
-    from = at + 1;
-  }
+  return wholeWordMatcher([needle])?.test(haystack) ?? false;
 }
 
 /**
@@ -46,6 +36,16 @@ export function checkOutgoing(text: string, entities: Entity[], note?: string): 
     // A stand-in look-alike typed into the note reads the same as a real stand-in, so it cannot be searched
     // for in the outgoing text. The redactor always replaces it, whatever the vault says (see RESERVED).
     if (e.category === RESERVED) continue;
+    // A private detail tied to one place may have a twin elsewhere that the teacher released. Its words may
+    // then be in the outgoing text, but no more often than they stand released in the note.
+    if (note !== undefined && e.at !== undefined) {
+      const matcher = () => wholeWordMatcher(e.surfaces)!;
+      const released = [...note.matchAll(matcher())].filter((m) => !covered(note, entities, m.index, m.index + m[0].length)).length;
+      if ([...text.matchAll(matcher())].length > released) {
+        violations.push({ what: e.surfaces[0], why: `a withheld ${label(e)} is still in the text` });
+      }
+      continue;
+    }
     for (const surface of e.surfaces) {
       if (containsWord(text, surface)) {
         violations.push({ what: surface, why: `a withheld ${label(e)} is still in the text` });

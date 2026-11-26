@@ -1,5 +1,5 @@
 import type { Entity, Kind, Source } from './types';
-import { escapeRe, findByRule, findPossibleNames, findSensitive, nameParts, nameWords, wholeWordMatcher } from './rules';
+import { findByRule, findPossibleNames, findSensitive, isWordChar, nameParts, nameWords, patternFor, sameForm, wholeWordMatcher } from './rules';
 
 const TOKEN_NAME: Record<Kind, string> = {
   student: 'Student',
@@ -38,14 +38,12 @@ export interface Candidate {
   aboutName?: string;
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+const norm = sameForm;
 
 /** True when `text` appears in `note`, ignoring case and spacing. */
 export function appearsIn(note: string, text: string): boolean {
   return text.trim().length > 0 && norm(note).includes(norm(text));
 }
-
-const isWordChar = (c: string | undefined) => !!c && /[\p{L}\p{N}]/u.test(c);
 
 /**
  * The text as the note writes it, widened to whole words. A selection or a
@@ -59,13 +57,32 @@ export function widenToWords(note: string, text: string): string | undefined {
   if (!wanted) return undefined;
   const whole = wholeWordMatcher([wanted])!.exec(note);
   if (whole) return whole[0];
-  const loose = new RegExp(escapeRe(wanted).replace(/\s+/g, '\\s+'), 'iu').exec(note);
+  const loose = new RegExp(patternFor(wanted), 'iu').exec(note);
   if (!loose) return undefined;
-  let start = loose.index;
-  let end = start + loose[0].length;
+  const [start, end] = wordSpan(note, loose.index, loose.index + loose[0].length);
+  return note.slice(start, end);
+}
+
+/** A span of the note widened so that it starts and ends at the edge of a word. */
+export function wordSpan(note: string, from: number, to: number): [number, number] {
+  let start = Math.max(0, Math.min(from, note.length));
+  let end = Math.max(start, Math.min(to, note.length));
+  while (start < end && /\s/.test(note[start])) start++;
+  while (end > start && /\s/.test(note[end - 1])) end--;
   while (start > 0 && isWordChar(note[start - 1])) start--;
   while (end < note.length && isWordChar(note[end])) end++;
-  return note.slice(start, end);
+  return [start, end];
+}
+
+/** True when every character of the span is held back: none of it is in the outgoing text. */
+export function covered(note: string, entities: Entity[], from: number, to: number): boolean {
+  let at = 0;
+  for (const s of segment(note, entities)) {
+    const end = at + s.text.length;
+    if (end > from && at < to && !(s.entity && held(s.entity))) return false;
+    at = end;
+  }
+  return true;
 }
 
 /**
@@ -390,17 +407,29 @@ export function restore(text: string, entities: Entity[], allowed?: readonly str
  * rebuilt: every item already in it keeps all its forms, its withheld
  * state and the student it is about.
  *
- * The marked text is widened to whole words first. Text that is already in
- * the vault is set back to withheld (marking a released item again).
+ * `span` is where in the note the selection was made. It decides which
+ * words are meant: selecting "Ravi" inside "Ravinder" marks "Ravinder",
+ * even though a "Ravi" stands on its own elsewhere. The span is widened to
+ * whole words, and the result is checked: if the selected words would
+ * still be in the outgoing text, an item tied to that exact place is added,
+ * so what the teacher selected is always held back.
+ *
+ * Without a span the first place the text stands is taken. Text that is
+ * already in the vault is set back to withheld.
  */
-export function addByTeacher(note: string, entities: Entity[], text: string, kind: Kind): Entity[] {
-  const marked = widenToWords(note, text);
-  if (!marked) return entities;
-  const has = (e: Entity, key: string) => e.surfaces.some((s) => norm(s) === key);
-  if (entities.some((e) => has(e, norm(marked)))) {
-    return entities.map((e) => (has(e, norm(marked)) && !e.withheld ? { ...e, withheld: true } : e));
+export function addByTeacher(note: string, entities: Entity[], text: string, kind: Kind, span?: { start: number; end: number }): Entity[] {
+  let where: [number, number] | undefined;
+  let marked: string | undefined;
+  if (span) {
+    where = wordSpan(note, span.start, span.end);
+    marked = where[1] > where[0] ? note.slice(where[0], where[1]) : undefined;
+  } else {
+    marked = widenToWords(note, text);
   }
-  const next = entities.map((e) => ({ ...e }));
+  if (!marked) return entities;
+  const key = norm(marked);
+  const has = (e: Entity, k: string) => e.surfaces.some((s) => norm(s) === k);
+  const next = entities.map((e) => (has(e, key) && !e.withheld ? { ...e, withheld: true } : { ...e }));
   const number = (d: Sketch): Entity => {
     const n = Math.max(0, ...next.filter((e) => e.kind === d.kind).map((e) => Number(e.id.split('-')[1]) || 0)) + 1;
     const entity: Entity = {
@@ -415,15 +444,21 @@ export function addByTeacher(note: string, entities: Entity[], text: string, kin
     next.push(entity);
     return entity;
   };
-  if (kind === 'private') {
-    addPrivate(note, next, { kind, text: marked, source: 'teacher' }, number);
-    attachPrivateDetails(note, next);
-    return next;
+  if (!entities.some((e) => has(e, key))) {
+    if (kind === 'private') {
+      addPrivate(note, next, { kind, text: marked, source: 'teacher' }, number);
+      attachPrivateDetails(note, next);
+    } else {
+      // A part of a marked name is added only if nobody in the vault already has it.
+      const person = kind === 'student' || kind === 'adult';
+      const parts = person ? nameParts(marked).filter((p) => !next.some((e) => has(e, norm(p)))) : [];
+      number({ kind, source: 'teacher', surfaces: [marked, ...parts.filter((p) => norm(p) !== key)] });
+    }
   }
-  // A part of a marked name is added only if nobody in the vault already has it.
-  const person = kind === 'student' || kind === 'adult';
-  const parts = person ? nameParts(marked).filter((p) => !next.some((e) => has(e, norm(p)))) : [];
-  const surfaces = [marked, ...parts.filter((p) => norm(p) !== norm(marked))];
-  number({ kind, source: 'teacher', surfaces });
+  // The proof: the words the teacher selected are not in the outgoing text. If they still are, hold that place itself.
+  if (where && !covered(note, next, where[0], where[1])) {
+    number({ kind, source: 'teacher', surfaces: [marked] }).at = where[0];
+    if (kind === 'private') attachPrivateDetails(note, next);
+  }
   return next;
 }
