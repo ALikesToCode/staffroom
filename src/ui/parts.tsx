@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import type { Entity, Kind, Where } from '../core/types';
 import { PRIVATE_TOKEN, TOKEN_RE } from '../core/vault';
 import { ROUTES, type RouteId } from '../ai/routes';
@@ -40,28 +40,58 @@ export function CloudText({ text }: { text: string }) {
  * marked. Only a stand-in that was in the approved text (`allowed`) is
  * turned back into a name. Any other is shown as it came, marked unknown,
  * even if the vault happens to hold one that reads the same.
+ *
+ * `mark`: words to highlight where they first stand in the text as it is
+ * read here, names put back. They are the words a rule matched.
  */
-export function DeviceText({ text, entities, allowed }: { text: string; entities: Entity[]; allowed?: readonly string[] }) {
+export function DeviceText({ text, entities, allowed, mark }: { text: string; entities: Entity[]; allowed?: readonly string[]; mark?: string }) {
   const byToken = new Map(entities.filter((e) => e.kind !== 'private').map((e) => [e.token, e]));
-  const out: ReactNode[] = [];
+  const parts: { text: string; token?: string; known?: boolean }[] = [];
   let at = 0;
   for (const m of text.matchAll(TOKEN_RE)) {
-    if (m.index > at) out.push(text.slice(at, m.index));
+    if (m.index > at) parts.push({ text: text.slice(at, m.index) });
     const e = !allowed || allowed.includes(m[0]) ? byToken.get(m[0]) : undefined;
-    out.push(
-      e ? (
-        <span className="restored" key={m.index} title={`The cloud saw ${m[0]}`}>
-          {e.surfaces[0]}
-        </span>
-      ) : (
-        <span className="unknown-token" key={m.index} title="This stand-in was not in the text you approved, so no name is put back">
-          {m[0]}
-        </span>
-      ),
-    );
+    parts.push({ text: e ? e.surfaces[0] : m[0], token: m[0], known: Boolean(e) });
     at = m.index + m[0].length;
   }
-  if (at < text.length) out.push(text.slice(at));
+  if (at < text.length) parts.push({ text: text.slice(at) });
+
+  const read = parts.map((p) => p.text).join('');
+  const from = mark ? read.toLowerCase().indexOf(mark.toLowerCase()) : -1;
+  const to = from < 0 ? -1 : from + mark!.length;
+  const out: ReactNode[] = [];
+  let start = 0;
+  parts.forEach((p, i) => {
+    const end = start + p.text.length;
+    // The piece of this part that lies inside the matched words, if any.
+    const a = Math.max(start, from);
+    const b = Math.min(end, to);
+    const pieces: ReactNode[] =
+      from >= 0 && a < b
+        ? [
+            p.text.slice(0, a - start),
+            <mark className="hit" key="hit">
+              {p.text.slice(a - start, b - start)}
+            </mark>,
+            p.text.slice(b - start),
+          ]
+        : [p.text];
+    if (!p.token) out.push(<Fragment key={i}>{pieces}</Fragment>);
+    else if (p.known) {
+      out.push(
+        <span className="restored" key={i} title={`The cloud saw ${p.token}`}>
+          {pieces}
+        </span>,
+      );
+    } else {
+      out.push(
+        <span className="unknown-token" key={i} title="This stand-in was not in the text you approved, so no name is put back">
+          {pieces}
+        </span>,
+      );
+    }
+    start = end;
+  });
   return <>{out}</>;
 }
 
@@ -84,8 +114,11 @@ export function RouteChip({ route, where }: { route: RouteId; where?: Where }) {
   );
 }
 
+/** The steps of a run, as the teacher meets them. */
+export const STEPS = ['Write', 'What leaves', 'Draft', 'What your device caught', 'Sign off'];
+
 export function Stepper({ step }: { step: number }) {
-  const steps = ['Write', 'Guard', 'Approve', 'Draft', 'Check', 'Sign off'];
+  const steps = STEPS;
   return (
     <ol className="stepper" aria-label="Progress">
       {steps.map((s, i) => (

@@ -33,8 +33,8 @@ export const TASKS: Task[] = [
   },
   {
     id: 'parents',
-    label: 'Notes to parents',
-    blurb: 'A short, kind note home for each child.',
+    label: 'Messages to parents',
+    blurb: 'A short, kind message home for each child.',
     instruction:
       'Draft a short note home for each student mentioned, one item per student. Each note is three or four sentences, warm and specific, says one thing the child does well and one thing to work on together, and asks for one small action at home. Do not mention any other student in a note.',
   },

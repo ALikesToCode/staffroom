@@ -47,13 +47,19 @@ describe('ConstraintsPanel', () => {
       <ConstraintsPanel constraints={constraints} students={vault} editable selection="" actions={actions} needOf={needOf} />,
     ).replace(/<[^>]+>/g, ' ');
     expect(text).toContain('has to leave at the last bell');
-    expect(text).toMatch(/About Meenal · found by rule and model · not confirmed/);
-    expect(text).toMatch(/About the class · added by you · confirmed by you/);
+    // One line each: the words, whose they are and the kind. Who found it is under Details.
+    expect(text).toMatch(/has to leave at the last bell\s+Meenal\s+Cannot stay after school/);
+    expect(text).toMatch(/lives with his grandmother\s+the class\s+An adult not to contact/);
+    expect(text).toContain('Found by rule and by the on-device model.');
+    expect(text).toContain('Added by you.');
+    // The two controls of a row: confirm it, and tell the cloud the need.
+    expect(text).toMatch(/Confirm\s+Tell the cloud the need \(not the reason\)/);
+    expect(text).toMatch(/Confirmed\s+Tell the cloud the need \(not the reason\)/);
     expect(text).toContain('Adult: parents, not there to contact. Looked after by: grandmother');
     expect(text).toContain('Add a constraint');
     // The need line that would be sent is shown beside the switch, before it is switched on.
     expect(text).toContain('Tell the cloud the need (not the reason)');
-    expect(text).toMatch(/If you switch this on, the cloud will be told:\s+\[Student 1\] cannot stay after the last bell\./);
+    expect(text).toMatch(/If you switch it on, the cloud will be told:\s+\[Student 1\] cannot stay after the last bell\./);
     expect(text).toContain('There is no need line for this constraint, so there is nothing to tell the cloud.');
   });
 
@@ -101,11 +107,34 @@ describe('Caught', () => {
 });
 
 describe('the first screen', () => {
-  it('offers the guard, and no recorded run until the file has been read and is in the right form', () => {
+  it('is one sentence and the ways in: no form, and no recorded run until the file has been read and is in the right form', () => {
     const text = renderToStaticMarkup(<App />).replace(/<[^>]+>/g, ' ');
-    expect(text).toContain('Run the guard');
+    expect(text).toMatch(/Your device knows why\.\s+The cloud only knows what\./);
+    expect(text).toContain('Try an invented class');
+    expect(text).toContain('Write a note');
+    expect(text).not.toContain('Run the guard');
+    expect(renderToStaticMarkup(<App />)).not.toContain('<textarea');
     expect(text).not.toContain('Watch a recorded run');
     expect(text).not.toContain('Recorded run.');
     expect(text).not.toContain('Download this run as JSON');
+  });
+});
+
+describe('the words a rule matched', () => {
+  const vault = buildVault('Meenal reads well.', [{ kind: 'student', text: 'Meenal', source: 'class list' }]);
+
+  it('are marked where they stand in the text as it is read on the device', () => {
+    const html = renderToStaticMarkup(
+      <DeviceText text="Ask [Student 1] to stay after the last bell on Monday." entities={vault} allowed={['[Student 1]']} mark="after the last bell" />,
+    );
+    expect(html).toContain('<mark class="hit">after the last bell</mark>');
+    expect(html.replace(/<[^>]+>/g, '')).toBe('Ask Meenal to stay after the last bell on Monday.');
+  });
+
+  it('are marked across a name that was put back, and nothing is marked when they are not there', () => {
+    const across = renderToStaticMarkup(<DeviceText text="Keep [Student 1] late." entities={vault} allowed={['[Student 1]']} mark="Keep Meenal late" />);
+    expect(across.replace(/<[^>]+>/g, '')).toBe('Keep Meenal late.');
+    expect(across.match(/<mark class="hit">/g)).toHaveLength(3);
+    expect(renderToStaticMarkup(<DeviceText text="Seat her near the door." entities={vault} mark="after school" />)).toBe('Seat her near the door.');
   });
 });

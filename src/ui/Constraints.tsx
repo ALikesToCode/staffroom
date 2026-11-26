@@ -23,9 +23,9 @@ export interface NeedView {
 }
 
 const FOUND_BY: Record<Constraint['source'], string> = {
-  rule: 'found by rule',
-  'on-device model': 'found by the on-device model',
-  teacher: 'added by you',
+  rule: 'Found by rule',
+  'on-device model': 'Found by the on-device model',
+  teacher: 'Added by you',
 };
 
 /** What the rules read from the words of a constraint, said in a few words. */
@@ -40,8 +40,10 @@ export function constraintDetail(c: Constraint): string {
 }
 
 /**
- * The constraints of a note: proposed ones to confirm, confirmed ones, and
- * a form to add one by hand. Everything here stays on the device.
+ * The constraints of a note. Each is one line (the words, whose they are,
+ * the kind) with two controls: confirm it, and tell the cloud the need
+ * without the reason. Everything else is under Details. Everything here
+ * stays on the device.
  */
 export function ConstraintsPanel({
   constraints,
@@ -71,89 +73,141 @@ export function ConstraintsPanel({
   };
   return (
     <div className="constraints">
-      <p className="hint">
-        A constraint is a private fact that rules something out for a student. Confirm the ones that are right. A confirmed
-        constraint is withheld from the cloud, and every step of the draft is checked against it on this device, by rule.
-      </p>
       {constraints.length === 0 ? (
         <p className="empty">No constraint was found. Add one below if there is one.</p>
       ) : (
         <ul className="constraint-list">
           {constraints.map((c) => (
-            <li key={c.id} className={c.confirmed ? 'constraint confirmed' : 'constraint'}>
-              <q>{c.text}</q>
-              <small>
-                About {nameOf(c.about) ?? 'the class'} · {FOUND_BY[c.source]}
-                {c.source === 'rule' && c.alsoModel ? ' and model' : ''} · {c.confirmed ? 'confirmed by you' : 'not confirmed'}
-              </small>
-              <label>
-                Kind{' '}
-                <select
-                  value={c.kind}
-                  disabled={!editable}
-                  onChange={(e) => actions.onKind(c.id, e.target.value as ConstraintKind)}
-                  aria-label={`Kind of constraint: ${c.text}`}
-                >
-                  {CONSTRAINT_KINDS.map((k) => (
-                    <option key={k} value={k}>
-                      {CONSTRAINT_LABEL[k]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {constraintDetail(c) && <small>{constraintDetail(c)}</small>}
-              {c.kind === 'health' && (
-                <label>
-                  Words that go against it in a step, separated by commas{' '}
-                  <input
-                    type="text"
-                    defaultValue={(c.triggers ?? []).join(', ')}
-                    key={(c.triggers ?? []).join(',')}
-                    disabled={!editable}
-                    onBlur={(e) => actions.onTriggers(c.id, e.target.value)}
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-                </label>
-              )}
-              <NeedRow c={c} need={needOf(c)} editable={editable} actions={actions} />
-              {editable && (
-                <span className="actions">
-                  {c.confirmed ? (
-                    <button className="link" onClick={() => actions.onUnconfirm(c.id)}>
-                      Unconfirm
-                    </button>
-                  ) : (
-                    <button className="secondary" onClick={() => actions.onConfirm(c.id)}>
-                      Confirm
-                    </button>
-                  )}
-                  <button className="link" onClick={() => actions.onRemove(c.id)}>
-                    Remove
-                  </button>
-                </span>
-              )}
-            </li>
+            <ConstraintRow key={c.id} c={c} who={nameOf(c.about) ?? 'the class'} need={needOf(c)} editable={editable} actions={actions} />
           ))}
         </ul>
       )}
       {editable && (
-        <fieldset className="constraint-add">
-          <legend>Add a constraint</legend>
-          <label>
-            About{' '}
-            <select value={about} onChange={(e) => setAbout(e.target.value)}>
-              <option value="">The whole class</option>
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.surfaces[0]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Kind{' '}
-            <select value={kind} onChange={(e) => setKind(e.target.value as ConstraintKind)}>
+        <details className="constraint-add" open={selection !== '' || undefined}>
+          <summary>Add a constraint</summary>
+          <div className="add-grid">
+            <label>
+              About
+              <select value={about} onChange={(e) => setAbout(e.target.value)}>
+                <option value="">The whole class</option>
+                {students.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.surfaces[0]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Kind
+              <select value={kind} onChange={(e) => setKind(e.target.value as ConstraintKind)}>
+                {CONSTRAINT_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {CONSTRAINT_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="wide">
+              The words
+              <input
+                type="text"
+                value={text}
+                maxLength={300}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Type them, or select them in your note"
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </label>
+          </div>
+          <span className="actions">
+            <button className="secondary small" disabled={text.trim().length === 0} onClick={add}>
+              Add and confirm
+            </button>
+            {selection && selection !== text && (
+              <button className="link" onClick={() => setText(selection)}>
+                Use the words selected in the note
+              </button>
+            )}
+          </span>
+          <p className="hint">Words that stand in your note are withheld. Words you only type here are in no text that is sent.</p>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function ConstraintRow({ c, who, need, editable, actions }: { c: Constraint; who: string; need: NeedView; editable: boolean; actions: ConstraintActions }) {
+  const nothingToTell = !need.typed && !need.line;
+  const telling = Boolean(c.share) && c.confirmed;
+  const detail = constraintDetail(c);
+  const needInput = need.typed && (
+    <label className="field">
+      The need, in your words
+      <input
+        type="text"
+        defaultValue={c.need ?? ''}
+        maxLength={200}
+        disabled={!editable}
+        onBlur={(e) => actions.onNeed(c.id, e.target.value)}
+        placeholder={c.kind === 'health' ? 'For example: No flashing lights for [Student 2]' : 'Say what the school must do, not why'}
+        spellCheck={false}
+        autoComplete="off"
+      />
+    </label>
+  );
+  return (
+    <li className={c.confirmed ? 'constraint confirmed' : 'constraint'}>
+      <div className="c-line">
+        <q>{c.text}</q>
+        <span className="c-who">{who}</span>
+        <span className="kind-chip">{CONSTRAINT_LABEL[c.kind]}</span>
+      </div>
+      <div className="c-controls">
+        {editable ? (
+          <button
+            className={c.confirmed ? 'confirm-btn on' : 'confirm-btn'}
+            aria-pressed={c.confirmed}
+            title={c.confirmed ? 'Confirmed. Press to unconfirm.' : 'Confirm that this is right'}
+            onClick={() => (c.confirmed ? actions.onUnconfirm(c.id) : actions.onConfirm(c.id))}
+          >
+            {c.confirmed ? 'Confirmed' : 'Confirm'}
+          </button>
+        ) : (
+          <span className={c.confirmed ? 'confirm-btn on static' : 'confirm-btn static'}>{c.confirmed ? 'Confirmed' : 'Not confirmed'}</span>
+        )}
+        <label className="switch need-switch" title={!c.confirmed ? 'Confirm the constraint first' : nothingToTell ? 'There is no need line for this kind' : ''}>
+          <input
+            type="checkbox"
+            checked={Boolean(c.share)}
+            disabled={!editable || !c.confirmed || nothingToTell}
+            onChange={(e) => actions.onShare(c.id, e.target.checked)}
+          />
+          <span />
+          Tell the cloud the need (not the reason)
+        </label>
+        <details className="c-more">
+          <summary>Details</summary>
+          <p>
+            {FOUND_BY[c.source]}
+            {c.source === 'rule' && c.alsoModel ? ' and by the on-device model' : ''}. {detail}
+          </p>
+          {!telling && need.line && (
+            <p>
+              If you switch it on, the cloud will be told: <code className="need-line">{need.line}</code>
+            </p>
+          )}
+          {nothingToTell && <p>There is no need line for this constraint, so there is nothing to tell the cloud.</p>}
+          {c.kind === 'health' && <p>A health need can hint at the condition. There is no fixed line for it: it is told only if you type one.</p>}
+          {!telling && needInput}
+          <label className="field">
+            Kind
+            <select
+              value={c.kind}
+              disabled={!editable}
+              onChange={(e) => actions.onKind(c.id, e.target.value as ConstraintKind)}
+              aria-label={`Kind of constraint: ${c.text}`}
+            >
               {CONSTRAINT_KINDS.map((k) => (
                 <option key={k} value={k}>
                   {CONSTRAINT_LABEL[k]}
@@ -161,32 +215,41 @@ export function ConstraintsPanel({
               ))}
             </select>
           </label>
-          <label>
-            The words{' '}
-            <input
-              type="text"
-              value={text}
-              maxLength={300}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Type them, or select them in your note"
-              spellCheck={false}
-              autoComplete="off"
-            />
-          </label>
-          <span className="actions">
-            {selection && selection !== text && (
-              <button className="link" onClick={() => setText(selection)}>
-                Use the words selected in the note
-              </button>
-            )}
-            <button className="secondary" disabled={text.trim().length === 0} onClick={add}>
-              Add and confirm
+          {c.kind === 'health' && (
+            <label className="field">
+              Words that go against it in a step, separated by commas
+              <input
+                type="text"
+                defaultValue={(c.triggers ?? []).join(', ')}
+                key={(c.triggers ?? []).join(',')}
+                disabled={!editable}
+                onBlur={(e) => actions.onTriggers(c.id, e.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </label>
+          )}
+          {editable && (
+            <button className="link" onClick={() => actions.onRemove(c.id)}>
+              Remove this constraint
             </button>
-          </span>
-          <p className="hint">Words that stand in your note are withheld. Words you only type here are in no text that is sent.</p>
-        </fieldset>
+          )}
+        </details>
+      </div>
+      {telling && need.line && (
+        <p className="need-told">
+          The cloud is told: <code className="need-line">{need.line}</code>
+        </p>
       )}
-    </div>
+      {telling && need.typed && needInput}
+      {telling && !need.line && <p className="need-told">Nothing is typed yet, so nothing is told.</p>}
+      {need.line &&
+        need.issues.map((v, i) => (
+          <p className="caution" key={i}>
+            This line cannot be sent: <b>{v.what}</b> {v.why}.
+          </p>
+        ))}
+    </li>
   );
 }
 
@@ -199,74 +262,24 @@ export function Caught({ check, constraint }: { check: ItemCheck; constraint?: C
   if (!check.constraintId || !constraint) return null;
   return (
     <dl className="caught">
-      <dt>The cloud was shown</dt>
-      <dd>{check.cloudSaw ? <CloudText text={check.cloudSaw} /> : 'Nothing of this: the words are not in the text that was sent.'}</dd>
-      {check.told && (
-        <>
-          <dt>The cloud was told</dt>
-          <dd>
-            <CloudText text={check.told} />
-          </dd>
-        </>
-      )}
-      <dt>Your device knows</dt>
-      <dd>
-        <q>{constraint.text}</q>
-      </dd>
+      <div className="saw">
+        <dt>The cloud was shown</dt>
+        <dd>{check.cloudSaw ? <CloudText text={check.cloudSaw} /> : 'Nothing of this: the words are not in the text that was sent.'}</dd>
+        {check.told && (
+          <>
+            <dt>The cloud was told</dt>
+            <dd>
+              <CloudText text={check.told} />
+            </dd>
+          </>
+        )}
+      </div>
+      <div className="knows">
+        <dt>Your device knows</dt>
+        <dd>
+          <q>{constraint.text}</q>
+        </dd>
+      </div>
     </dl>
-  );
-}
-
-/** The switch that tells the cloud a need without its reason, with the exact line that would be sent. */
-function NeedRow({ c, need, editable, actions }: { c: Constraint; need: NeedView; editable: boolean; actions: ConstraintActions }) {
-  const nothingToTell = !need.typed && !need.line;
-  return (
-    <div className="need">
-      <label className="read-it">
-        <input
-          type="checkbox"
-          checked={Boolean(c.share)}
-          disabled={!editable || !c.confirmed || nothingToTell}
-          onChange={(e) => actions.onShare(c.id, e.target.checked)}
-        />
-        Tell the cloud the need (not the reason)
-      </label>
-      {need.typed && (
-        <label>
-          The need, in your words{' '}
-          <input
-            type="text"
-            defaultValue={c.need ?? ''}
-            maxLength={200}
-            disabled={!editable}
-            onBlur={(e) => actions.onNeed(c.id, e.target.value)}
-            placeholder={c.kind === 'health' ? 'For example: No flashing lights for [Student 2]' : 'Say what the school must do, not why'}
-            spellCheck={false}
-            autoComplete="off"
-          />
-        </label>
-      )}
-      {c.kind === 'health' && (
-        <small>A health need can hint at the condition. There is no fixed line for it: it is told only if you type one.</small>
-      )}
-      {need.line ? (
-        <small>
-          {c.share && c.confirmed ? 'The cloud will be told:' : 'If you switch this on, the cloud will be told:'} <code className="need-line">{need.line}</code>
-        </small>
-      ) : (
-        <small>
-          {nothingToTell
-            ? 'There is no need line for this constraint, so there is nothing to tell the cloud.'
-            : 'Nothing is typed, so there is nothing to tell the cloud.'}
-        </small>
-      )}
-      {!c.confirmed && !nothingToTell && <small>Confirm the constraint before you tell the cloud its need.</small>}
-      {need.line &&
-        need.issues.map((v, i) => (
-          <small className="caution" key={i}>
-            This line cannot be sent: <b>{v.what}</b> {v.why}.
-          </small>
-        ))}
-    </div>
   );
 }
