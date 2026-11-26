@@ -892,6 +892,39 @@ mark.released {
   color: var(--ink-soft);
 }
 
+.vault-fold {
+  display: block;
+}
+
+.vault-fold > * + * {
+  margin-top: 12px;
+}
+
+.vault-fold > summary {
+  cursor: pointer;
+  font: 600 1.02rem/1.25 var(--serif);
+}
+
+.vault-fold[open] > summary {
+  margin-bottom: 4px;
+}
+
+.result-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.chip-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
 /* ------------------------------------------------------------------ result */
 
 .items {

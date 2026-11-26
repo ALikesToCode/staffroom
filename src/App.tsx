@@ -412,6 +412,53 @@ export function App() {
   const editing = stage === 'write';
   const busy = stage === 'guarding' || stage === 'drafting' || stage === 'checking';
 
+  const vaultBody = (
+    <>
+      {guardWhere === 'RULES_ONLY' && (
+        <p className="caution">
+          No on-device model ran, so the raw note was not shown to any model. Only your class list, the pattern rules and a
+          short list of sensitive words were applied. Names that are not on the list were not looked for, and nor were
+          private details beyond those words: select them in your note.
+        </p>
+      )}
+      {entities.length === 0 ? (
+        <p className="empty">Nothing was found to withhold.</p>
+      ) : (
+        <ul className="vault">
+          {entities.map((e) => {
+            const locked = policy.lockedKinds.includes(e.kind);
+            const about = entities.find((s) => s.id === e.about);
+            return (
+              <li key={e.id} className={e.withheld ? '' : 'off'}>
+                <span className={`dot k-${e.kind}`} />
+                <div className="what">
+                  <strong>{e.surfaces[0]}</strong>
+                  <small>
+                    {KIND_LABEL[e.kind]}
+                    {e.category ? `, ${e.category}` : ''}
+                    {about ? `, about ${about.surfaces[0]}` : ''} · found by {e.source}
+                  </small>
+                </div>
+                <code className="token">{e.withheld ? e.token : 'released'}</code>
+                <label className="switch" title={locked ? 'A setting the school publishes: the app keeps this kind withheld' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={e.withheld}
+                    disabled={locked || stage !== 'review'}
+                    onChange={() => toggle(e.id)}
+                    aria-label={`Withhold ${e.surfaces[0]}`}
+                  />
+                  <span />
+                  {locked && <em>locked</em>}
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+
   return (
     <div className="app">
       <header className="top">
@@ -603,7 +650,7 @@ export function App() {
                 </article>
               )}
 
-              {!editing && stage !== 'guarding' && (
+              {!editing && stage !== 'guarding' && stage === 'review' && (
                 <article className="card">
                   <div className="card-head">
                     <h3>
@@ -611,49 +658,17 @@ export function App() {
                     </h3>
                     <RouteChip route="guard" where={guardWhere} />
                   </div>
-                  {guardWhere === 'RULES_ONLY' && (
-                    <p className="caution">
-                      No on-device model ran, so the raw note was not shown to any model. Only your class list, the pattern rules and a
-                      short list of sensitive words were applied. Names that are not on the list were not looked for, and nor were
-                      private details beyond those words: select them in your note.
-                    </p>
-                  )}
-                  {entities.length === 0 ? (
-                    <p className="empty">Nothing was found to withhold.</p>
-                  ) : (
-                    <ul className="vault">
-                      {entities.map((e) => {
-                        const locked = policy.lockedKinds.includes(e.kind);
-                        const about = entities.find((s) => s.id === e.about);
-                        return (
-                          <li key={e.id} className={e.withheld ? '' : 'off'}>
-                            <span className={`dot k-${e.kind}`} />
-                            <div className="what">
-                              <strong>{e.surfaces[0]}</strong>
-                              <small>
-                                {KIND_LABEL[e.kind]}
-                                {e.category ? `, ${e.category}` : ''}
-                                {about ? `, about ${about.surfaces[0]}` : ''} · found by {e.source}
-                              </small>
-                            </div>
-                            <code className="token">{e.withheld ? e.token : 'released'}</code>
-                            <label className="switch" title={locked ? 'A setting the school publishes: the app keeps this kind withheld' : ''}>
-                              <input
-                                type="checkbox"
-                                checked={e.withheld}
-                                disabled={locked || stage !== 'review'}
-                                onChange={() => toggle(e.id)}
-                                aria-label={`Withhold ${e.surfaces[0]}`}
-                              />
-                              <span />
-                              {locked && <em>locked</em>}
-                            </label>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
+                  {vaultBody}
                 </article>
+              )}
+
+              {/* Past the review the vault is folded away, so the draft and its verdicts are near the top. */}
+              {!editing && stage !== 'guarding' && stage !== 'review' && (
+                <details className="card vault-fold">
+                  <summary>The vault: {withheld.length} withheld</summary>
+                  <RouteChip route="guard" where={guardWhere} />
+                  {vaultBody}
+                </details>
               )}
 
               {stage === 'checking' && (
@@ -666,7 +681,15 @@ export function App() {
                 <article className="card result">
                   <div className="card-head">
                     <h3>{restore(result.draft.title, entities)}</h3>
-                    <RouteChip route="check" where={checkWhere} />
+                  </div>
+                  <div className="result-chips">
+                    <span className={`route route-${result.where.toLowerCase()}`}>
+                      Draft: {result.model} {result.where === 'IN_CLOUD' ? 'in the cloud' : 'on this device'}
+                    </span>
+                    <span className="chip-line">
+                      <span className="chip-label">Check against withheld details:</span>
+                      <RouteChip route="check" where={checkWhere} />
+                    </span>
                   </div>
                   {replyIssues.length > 0 && (
                     <p className="caution">
