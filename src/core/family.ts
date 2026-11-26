@@ -1,6 +1,7 @@
 import type { DraftItem, Entity } from './types';
-import { wholeWordMatcher } from './rules';
-import { bareNotSent, LOOKALIKE_RE, segment } from './vault';
+import { listedParts, nameWords, sameForm, wholeWordMatcher } from './rules';
+import { WITHHELD_MARK } from './gate';
+import { bareNotSent, LOOKALIKE_RE, restore, segment } from './vault';
 
 /** Whose family a message home is for, or why the app cannot tell. */
 export interface Family {
@@ -37,11 +38,21 @@ export function ownersOf(note: string, entities: Entity[], detail: Entity): (Ent
 
 /**
  * A message home is for one family. This finds the one student an item
- * names. It refuses when the item names none or several, when it has a
- * stand-in that was never sent, and when it carries a contact detail or an
- * identity number that the note does not tie to that student.
+ * names, and then reads the exact text that would be copied: the item's
+ * text with the names put back. Copying is refused when
+ *
+ * - the item names no student, or several;
+ * - it repeats the marker "[withheld]", or has a stand-in that was never sent;
+ * - the text to be copied has another student's name in it, whether that
+ *   student is in the vault or only on the class list, and whether it is
+ *   written out or as a stand-in;
+ * - it carries an adult, a place, a contact detail or an identity number
+ *   that the note does not tie to that student.
+ *
+ * None of this depends on the teacher having read a flagged reply: ticking
+ * that box does not turn copying back on.
  */
-export function familyFor(item: DraftItem, note: string, entities: Entity[], sent: readonly string[]): Family {
+export function familyFor(item: DraftItem, note: string, entities: Entity[], sent: readonly string[], classList: readonly string[] = []): Family {
   const text = `${item.heading}\n${item.text}`;
   const students = entities.filter((e) => e.kind === 'student' && mentions(text, e, sent));
   if (students.length === 0) {
@@ -51,14 +62,28 @@ export function familyFor(item: DraftItem, note: string, entities: Entity[], sen
     return { why: `Copy is off: this message names more than one student (${names(students)}). A message home goes to one family.` };
   }
   const student = students[0];
-  const strange = [...text.matchAll(LOOKALIKE_RE)].some((m) => m[0] !== '[withheld]' && !sent.includes(m[0])) || bareNotSent(text, sent).length > 0;
+  if (WITHHELD_MARK.test(text)) {
+    return { why: 'Copy is off: this message repeats the marker [withheld], so something may be missing from it.' };
+  }
+  const strange = [...text.matchAll(LOOKALIKE_RE)].some((m) => !sent.includes(m[0])) || bareNotSent(text, sent).length > 0;
   if (strange) return { why: 'Copy is off: this message has a stand-in that was not in the text you approved.' };
-  for (const detail of entities.filter((e) => (e.kind === 'contact' || e.kind === 'id') && mentions(text, e, sent))) {
+
+  // The text as it would be copied, names put back.
+  const copied = restore(item.text, entities, sent);
+  const own = new Set(student.surfaces.flatMap((s) => [sameForm(s), ...nameWords(s).map(sameForm)]));
+  const others = [
+    ...entities.filter((e) => e.kind === 'student' && e !== student).flatMap((e) => e.surfaces),
+    ...classList.flatMap((name) => [name, ...listedParts(name)]),
+  ].filter((s) => !own.has(sameForm(s)));
+  const other = wholeWordMatcher(others)?.exec(copied);
+  if (other) {
+    return { why: `Copy is off: this message has another student's name in it (${other[0]}). A message home goes to one family.` };
+  }
+  for (const detail of entities.filter((e) => e.kind !== 'student' && e.kind !== 'private' && mentions(text, e, sent))) {
     const owners = ownersOf(note, entities, detail);
     if (owners.length !== 1 || owners[0] !== student) {
-      return {
-        why: `Copy is off: this message includes a contact detail or an identity number that your note does not tie to ${student.surfaces[0]}.`,
-      };
+      const what = detail.kind === 'adult' || detail.kind === 'place' ? 'a person or a place' : 'a contact detail or an identity number';
+      return { why: `Copy is off: this message includes ${what} that your note does not tie to ${student.surfaces[0]}.` };
     }
   }
   return { student };

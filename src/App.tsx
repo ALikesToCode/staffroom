@@ -1137,7 +1137,7 @@ export function App() {
                       const c = checks[i];
                       const facts = detailsFor(item, entities);
                       // A message home is for one family: the copy button is offered only when the app can tell which.
-                      const family = task === 'parents' ? familyFor(item, note, entities, sent?.tokens ?? []) : null;
+                      const family = task === 'parents' ? familyFor(item, note, entities, sent?.tokens ?? [], classList) : null;
                       return (
                         <li key={i} className={kept[i] === null ? 'undecided' : kept[i] ? '' : 'struck'}>
                           <h4>

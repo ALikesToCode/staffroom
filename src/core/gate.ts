@@ -1,6 +1,6 @@
 import type { Entity } from './types';
 import { findByRule, sameForm, sensitiveWords, wholeWordMatcher } from './rules';
-import { bareNotSent, covered, LOOKALIKE_RE, RESERVED, spanHolds } from './vault';
+import { bareNotSent, covered, LOOKALIKE_RE, PRIVATE_TOKEN, RESERVED, spanHolds } from './vault';
 
 export interface Violation {
   what: string;
@@ -10,6 +10,11 @@ export interface Violation {
 }
 
 const flat = sameForm;
+
+/** The marker "[withheld]", in any case or spacing. */
+export const WITHHELD_MARK = /\[\s*withheld\s*\]/i;
+
+const REPEATS_MARKER = 'The reply repeats the marker [withheld]. Read that item: something may be missing from it.';
 
 /** Whole-word search over the text as it will be sent, whatever way accents and spacing are written. */
 function containsWord(haystack: string, needle: string): boolean {
@@ -85,7 +90,8 @@ export function checkOutgoing(text: string, entities: Entity[], note?: string): 
  * the exit gate would have stopped.
  *
  * It is also flagged when it uses a word from the sensitive list that
- * `approvedText`, the text the teacher approved, did not have.
+ * `approvedText`, the text the teacher approved, did not have, and when it
+ * repeats the marker "[withheld]".
  *
  * A stand-in written without its brackets ("Student 9") is treated the
  * same way.
@@ -98,7 +104,13 @@ export function checkOutgoing(text: string, entities: Entity[], note?: string): 
 export function checkReply(text: string, entities: Entity[], sentTokens: readonly string[], approvedText: string): Violation[] {
   const violations = checkOutgoing(text, entities);
   const seen = new Set<string>();
+  // The marker for a withheld detail is never an answer. If the reply repeats it, a sentence was written
+  // around something the cloud model did not know, and the teacher is told to read that item.
+  if (WITHHELD_MARK.test(text)) {
+    violations.push({ what: PRIVATE_TOKEN, why: 'the marker for a withheld detail, repeated in the reply', say: REPEATS_MARKER });
+  }
   for (const m of text.matchAll(LOOKALIKE_RE)) {
+    if (WITHHELD_MARK.test(m[0])) continue;
     if (sentTokens.includes(m[0]) || seen.has(m[0])) continue;
     seen.add(m[0]);
     violations.push({ what: m[0], why: 'a stand-in that was not in the text you approved' });
@@ -117,7 +129,7 @@ export function checkReply(text: string, entities: Entity[], sentTokens: readonl
     violations.push({
       what: word,
       why: 'a sensitive word that was not in the text you approved',
-      say: `The reply mentions ${word}, which was not in the text you approved.`,
+      say: `The reply mentions ${word}, which was not in the text you approved. This can be ordinary advice. Read it and carry on if it is.`,
     });
   }
   return violations;

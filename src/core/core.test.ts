@@ -575,6 +575,8 @@ describe('vault', () => {
     it('flags a malformed look-alike of a stand-in', () => {
       const approved = ['[Student 1]', '[withheld]'];
       expect(checkReply('Ask [student 1], [Student1], [ Student 1 ] and [Student 99]. [withheld] stays.', vault, approved, '').map((v) => v.what)).toEqual([
+        // The marker itself is flagged too: a reply should never repeat it.
+        '[withheld]',
         '[student 1]',
         '[Student1]',
         '[ Student 1 ]',
@@ -1407,8 +1409,8 @@ describe('return gate: sensitive words', () => {
   it('flags a sensitive word in the reply that was not in the approved text', () => {
     expect(approved).toBe('[Student 1] reads well. [withheld].');
     expect(checkReply('Watch [Student 1] for seizures, and ask about her medication.', v, tokens, approved)).toEqual([
-      { what: 'seizures', why: 'a sensitive word that was not in the text you approved', say: 'The reply mentions seizures, which was not in the text you approved.' },
-      { what: 'medication', why: 'a sensitive word that was not in the text you approved', say: 'The reply mentions medication, which was not in the text you approved.' },
+      { what: 'seizures', why: 'a sensitive word that was not in the text you approved', say: 'The reply mentions seizures, which was not in the text you approved. This can be ordinary advice. Read it and carry on if it is.' },
+      { what: 'medication', why: 'a sensitive word that was not in the text you approved', say: 'The reply mentions medication, which was not in the text you approved. This can be ordinary advice. Read it and carry on if it is.' },
     ]);
   });
 
@@ -2036,5 +2038,56 @@ describe('the full-note set for measuring the on-device check', () => {
       const perFact = await checkItems([c.item], set.entities, paras, set.tokens, fits, undefined, { perFact: true });
       expect(perFact.asked, c.id).toBe(c.student === 'Meenal' ? 9 : 3);
     }
+  });
+});
+
+describe('a reply that repeats the withheld marker', () => {
+  const note = 'Meenal reads well. She has epilepsy.\n\nAarav is late. His mother Sunita rang from Rampur.';
+  const v = buildVault(note, [
+    ...deterministicCandidates(note, ['Meenal Joshi', 'Aarav Sharma', 'Diya Sharma']),
+    { kind: 'adult', text: 'Sunita', source: 'on-device model' },
+    { kind: 'place', text: 'Rampur', source: 'on-device model' },
+  ]);
+  const { text: approved, tokens } = redactWithTokens(note, v);
+  const list = ['Meenal Joshi', 'Aarav Sharma', 'Diya Sharma'];
+  const family = (heading: string, text: string, vault = v) => familyFor({ heading, text }, note, vault, tokens, list);
+
+  it('is flagged at the return gate, once, in plain words', () => {
+    expect(approved).toBe('[Student 1] reads well. [withheld].\n\n[Student 2] is late. His mother [Adult 1] rang from [Place 1].');
+    expect(checkReply('Because of [withheld], give [Student 1] more time. Also [ Withheld ].', v, tokens, approved)).toEqual([
+      {
+        what: '[withheld]',
+        why: 'the marker for a withheld detail, repeated in the reply',
+        say: 'The reply repeats the marker [withheld]. Read that item: something may be missing from it.',
+      },
+    ]);
+    expect(checkReply('Give [Student 1] more time.', v, tokens, approved)).toEqual([]);
+  });
+
+  it('cannot be copied as a message home', () => {
+    expect(family('[Student 1]', 'Dear family, because of [withheld] we will give [Student 1] more time.').why).toBe(
+      'Copy is off: this message repeats the marker [withheld], so something may be missing from it.',
+    );
+  });
+
+  it("is refused when the text to be copied has another student's name, however it is written", () => {
+    expect(family('[Student 1]', '[Student 1] reads well.').student?.surfaces[0]).toBe('Meenal Joshi');
+    // Another student in the vault, released by the teacher and written out by the model.
+    const released = v.map((e) => (e.token === '[Student 2]' ? { ...e, withheld: false } : e));
+    expect(family('[Student 1]', '[Student 1] could read with Aarav.', released).why).toMatch(/more than one student/);
+    // A student on the class list who is not in the note at all.
+    expect(family('[Student 1]', '[Student 1] could read with Diya.').why).toBe(
+      "Copy is off: this message has another student's name in it (Diya). A message home goes to one family.",
+    );
+    // A shared surname is this student's own name, not another's.
+    expect(family('[Student 2]', '[Student 2] is settling in.').student?.surfaces[0]).toBe('Aarav Sharma');
+  });
+
+  it('is refused when it carries an adult or a place the note ties to another student', () => {
+    expect(family('[Student 2]', 'Please thank [Adult 1] for ringing from [Place 1].').student?.surfaces[0]).toBe('Aarav Sharma');
+    expect(family('[Student 1]', 'Please thank [Adult 1] for ringing.').why).toBe(
+      'Copy is off: this message includes a person or a place that your note does not tie to Meenal Joshi.',
+    );
+    expect(family('[Student 1]', '[Student 1] could visit [Place 1].').why).toMatch(/a person or a place that your note does not tie to Meenal Joshi/);
   });
 });
