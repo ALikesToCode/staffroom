@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Constraint, ConstraintKind, Entity, ItemCheck, Kind, LabelWhere, Receipt, TaskId, Where } from './core/types';
+import type { Constraint, ConstraintKind, DraftItem, Entity, ItemCheck, Kind, LabelWhere, Receipt, TaskId, Where } from './core/types';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './core/samples';
 import {
   addByTeacher,
@@ -43,7 +43,8 @@ import { canFit, FIT_FAILED, FIT_LABEL, fitInputFor, fitStep } from './ai/fit';
 import { useInstall, useUpdate } from './ui/pwa';
 import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
 import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, replayBanner, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
-import { familyFor } from './core/family';
+import { familyAfterRewrite, familyFor } from './core/family';
+import { REPEATS_NOTE, repeatsPrivate } from './core/repeats';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
@@ -212,6 +213,8 @@ export function App() {
   const [fits, setFits] = useState<RecordedFit[]>([]);
   /** The items whose saved rewrite began as a suggestion of the on-device model. */
   const [fitted, setFitted] = useState<number[]>([]);
+  /** Rewritten messages home that repeat words of the private note, whose copy the teacher turned on. */
+  const [copyOn, setCopyOn] = useState<number[]>([]);
   /** Where the fit ran in this run. NOT_RUN until the on-device model has answered once. */
   const [fitWhere, setFitWhere] = useState<Where>('NOT_RUN');
   const [checkWhere, setCheckWhere] = useState<Where>('NOT_RUN');
@@ -711,6 +714,7 @@ export function App() {
     setFitSaid({});
     setFits([]);
     setFitted([]);
+    setCopyOn([]);
     setFitWhere('NOT_RUN');
     // An item in conflict starts struck. Every other item starts undecided: nothing is kept until the teacher keeps it.
     setKept(startsKept(itemChecks));
@@ -976,6 +980,7 @@ export function App() {
     setFitSaid({});
     setFits([]);
     setFitted([]);
+    setCopyOn([]);
     setFitWhere('NOT_RUN');
     setDraftFail(null);
     setCheckWhere('NOT_RUN');
@@ -1176,11 +1181,18 @@ export function App() {
   const install = useInstall();
   const update = useUpdate();
 
+  /** True for an item the teacher rewrote, or saved a suggestion for, that repeats words of the private note. Other words for the same thing are not found. */
+  const repeatsNote = (i: number) =>
+    Boolean(draft && sent && i in edits && repeatsPrivate(draft.items[i], sent.entities, liveConstraints, sent.tokens).length > 0);
+  /** Whose family a message home is for. A rewrite that repeats words of the private note starts with copy off. */
+  const familyOf = (item: DraftItem, i: number) =>
+    familyAfterRewrite(familyFor(item, note, entities, sent?.tokens ?? [], classList), repeatsNote(i), copyOn.includes(i));
+
   /** The messages home that may be printed: the same ones that may be copied, each for one family. */
   const printable =
     stage === 'signed' && task === 'parents' && draft
       ? draft.items
-          .map((item, i) => ({ item, i, family: familyFor(item, note, entities, sent?.tokens ?? [], classList) }))
+          .map((item, i) => ({ item, i, family: familyOf(item, i) }))
           .filter((x) => kept[x.i] === true && x.family.student)
       : [];
   const canPrint = stage === 'signed' && !replay && !replyBlocked && keptCount > 0 && (task !== 'parents' || printable.length > 0);
@@ -1450,7 +1462,7 @@ export function App() {
     const facts = detailsFor(item, withConstraintFacts(entities, sent?.constraints ?? []));
     const factCount = facts.reduce((n, f) => n + f.details.length, 0);
     // A message home is for one family: the copy button is offered only when the app can tell which.
-    const family = task === 'parents' ? familyFor(item, note, entities, sent?.tokens ?? [], classList) : null;
+    const family = task === 'parents' ? familyOf(item, i) : null;
     const live = stage === 'result' && !replay;
     const whole = live && (conflict || doubt) && sent ? stepToRewrite(item, sent.entities, sent.tokens, c?.matched).whole : true;
     const box = rewriting[i];
@@ -1515,6 +1527,11 @@ export function App() {
             <p>{facts.flatMap((f) => f.details.map((d) => `“${d.surfaces[0]}”`)).join(', ')}</p>
           </details>
         )}
+        {edited && repeatsNote(i) && (
+          <p className="caution repeats-note" role="status">
+            {REPEATS_NOTE}
+          </p>
+        )}
         {fitSaid[i] && live && !box && (
           <p className="caution fit-said" role="status">
             {fitSaid[i]}
@@ -1566,7 +1583,14 @@ export function App() {
                 </button>
               </>
             ) : (
-              <span className="caution copy-off">{family.why}</span>
+              <>
+                <span className="caution copy-off">{family.why}</span>
+                {family.mayTurnOn && !replay && (
+                  <button className="secondary small" onClick={() => setCopyOn((on) => [...on, i])}>
+                    Turn copy on for this message
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}

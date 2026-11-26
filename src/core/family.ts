@@ -11,6 +11,20 @@ export interface Family {
   why?: string;
 }
 
+/** Said in place of the copy button on a rewritten message that repeats words of the private note, until the teacher turns copy on. */
+export const COPY_OFF_REPEATS = 'Copy is off: this rewrite repeats words from your private note.';
+
+/**
+ * The family copy of a rewritten message. When the rewrite repeats words
+ * of the private note, copy starts off and the teacher may turn it on for
+ * that one message. A message whose copy is off for another reason stays
+ * off: that cannot be turned on.
+ */
+export function familyAfterRewrite(family: Family, repeats: boolean, turnedOn: boolean): Family & { mayTurnOn?: true } {
+  if (!family.student || !repeats || turnedOn) return family;
+  return { why: COPY_OFF_REPEATS, mayTurnOn: true };
+}
+
 const names = (list: Entity[]) => list.map((e) => e.surfaces[0]).join(' and ');
 
 /** True when the text has this item in it: by its stand-in, or by its own words when the teacher released it. */

@@ -1,6 +1,7 @@
 import type { Constraint, DraftItem, Entity, ItemCheck, TaskId } from '../core/types';
 import { afterBellActivities, nameInNote, ruleConflicts, type RuleHit } from '../core/conflicts';
 import { stepToRewrite, SUGGESTION_MAX } from '../core/recheck';
+import { SMALL_WORDS } from '../core/repeats';
 import { modelFor } from './routes';
 
 // The device fits a step to the child. The cloud wrote the step without the private fact; the on-device
@@ -130,12 +131,6 @@ export function fitHits(suggestion: string, input: Pick<FitInput, 'constraint' |
     .map((c) => ruleConflicts(suggestion, c, { name: input.studentName, afterBell: input.afterBell }))
     .filter((h): h is RuleHit => h !== undefined);
 }
-
-const SMALL_WORDS = new Set(
-  'about after again also because been before being cannot could does each every from have her here hers him his into just more most must near need needs only other over same she should some such than that the their them then there these they this those through under until very want wants were what when where which while with will would your'.split(
-    ' ',
-  ),
-);
 
 /** The words of the private fact that a text repeats: whole words of four letters or more, small words left out. */
 export function factWordsIn(text: string, constraint: Pick<Constraint, 'text'>): string[] {
