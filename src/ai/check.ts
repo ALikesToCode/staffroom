@@ -12,6 +12,7 @@ verdict "unsure": the advice touches on the private facts and the teacher should
 
 Most advice fits. Choose "fits" unless you can point to one private fact that the advice runs against. A hard home life alone is not a reason to doubt kind, ordinary advice.
 Choose "conflict" only when a fact makes the advice impossible or harmful as written: for example, advice to stay after school for a child who must leave early, or advice to phone a parent who is not at home.
+Read every step of the advice, one at a time. If any single step asks the child to be somewhere, stay somewhere or do something at a time or place that a private fact rules out, the verdict is "conflict", even when the other steps are fine. Name that step in the reason.
 When the first line is "Private facts about" one child's name, judge only that child. Do not judge the advice for other children.
 When the first line is "Private facts about children in this class", each fact says which child it is about, when that is known. The advice conflicts only if it runs against a fact about a child the advice applies to. Advice for the whole class applies to every child.
 
