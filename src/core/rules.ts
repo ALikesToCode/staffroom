@@ -25,7 +25,7 @@ const RULES: Rule[] = [
   {
     name: 'roll or admission number',
     kind: 'id',
-    re: /\b(?:roll|admission|adm\.?|registration|reg\.?|enrolment|enrollment|student id|udise)\s*(?:no\.?|number|#)?\s*[:#-]?\s*(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,}/gi,
+    re: /\b(?:roll|admission|adm\.?|registration|reg\.?|enrolment|enrollment|student id|udise)\s*(?:no\.?|number|#)?\s*(?:(?:is|was)\s+)?[:#-]?\s*(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,}/gi,
   },
   {
     name: 'date of birth',
@@ -60,6 +60,16 @@ const HONORIFICS = new Set([
 ]);
 
 /**
+ * Words a model sometimes hands back as part of a name ("his mother
+ * Sunita"). They are never a name or a part of one: withholding "his" or
+ * "mother" on its own would blank out half the note.
+ */
+const NOT_A_NAME = new Set([
+  'his', 'her', 'their', 'mother', 'father', 'parent', 'parents', 'grandmother', 'grandfather', 'uncle', 'aunt',
+  'brother', 'sister', 'teacher', 'sir', 'madam',
+]);
+
+/**
  * Every word of a name, short ones included, without honorifics.
  * "Mrs. Om Rao" gives ["Om", "Rao"]. Used to tell two people apart.
  */
@@ -67,7 +77,7 @@ export function nameWords(name: string): string[] {
   return name
     .split(/[\s.,]+/)
     .map((p) => p.trim())
-    .filter((p) => p.length > 0 && !HONORIFICS.has(p.toLowerCase()));
+    .filter((p) => p.length > 0 && !HONORIFICS.has(p.toLowerCase()) && !NOT_A_NAME.has(p.toLowerCase()));
 }
 
 /**

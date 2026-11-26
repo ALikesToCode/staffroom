@@ -33,70 +33,126 @@ export function appearsIn(note: string, text: string): boolean {
 }
 
 /**
- * Build the vault from everything the guard found. People who share a name
- * part ("Aarav" and "Aarav Sharma") become one entity. Later sources never
- * override an earlier one, so the class list and the rules take priority
- * over the model.
+ * Build the vault from everything the guard found.
+ *
+ * People: a short form and a full form of the same kind ("Aarav" and
+ * "Aarav Sharma", both students) become one entity. Two people of
+ * different kinds are never merged: an adult "Mrs. Sharma" stays apart
+ * from the student "Aarav Sharma". A name or part that more than one
+ * person could own (a bare "Sharma" beside two Sharmas) is given to none
+ * of them: it becomes a withheld item of its own.
+ *
+ * Later sources never override an earlier one, so the class list and the
+ * rules take priority over the model.
  */
 export function buildVault(note: string, candidates: Candidate[]): Entity[] {
-  const entities: Entity[] = [];
-  const counters: Partial<Record<Kind, number>> = {};
+  interface Draft {
+    kind: Kind;
+    source: Source;
+    surfaces: string[];
+    category?: string;
+    /** For people: each name as a candidate gave it, in full. */
+    given: string[];
+  }
   const isPerson = (k: Kind) => k === 'student' || k === 'adult';
+  const wordsOf = (d: Draft) => [...new Set(d.surfaces.flatMap((s) => nameWords(s).map(norm)))];
+  const within = (a: string[], b: string[]) => a.every((p) => b.includes(p));
 
-  const add = (c: Candidate): Entity | undefined => {
+  // The whole name is always a surface, however short. Only the parts are filtered.
+  const addSurfaces = (d: Draft, text: string) => {
+    const all = isPerson(d.kind) ? [text, ...nameParts(text)] : [text];
+    for (const s of all) {
+      if (!d.surfaces.some((x) => norm(x) === norm(s))) d.surfaces.push(s);
+    }
+  };
+
+  let drafts: Draft[] = [];
+  const addDraft = (c: Candidate): Draft | undefined => {
     const text = c.text.trim();
     if (!text || !appearsIn(note, text)) return undefined;
-
+    let same: Draft | undefined;
     if (isPerson(c.kind)) {
       // Every word counts here, short ones too: "Om" and "Jo" are two people.
-      const parts = nameWords(text).map(norm);
-      if (parts.length === 0) return undefined;
-      // "Aarav" and "Aarav Sharma" are one person. "Aarav Sharma" and
-      // "Diya Sharma" are two: neither name is contained in the other.
-      const within = (a: string[], b: string[]) => a.every((p) => b.includes(p));
-      const same = entities.find((e) => {
-        if (!isPerson(e.kind)) return false;
-        const theirs = [...new Set(e.surfaces.flatMap((s) => nameWords(s).map(norm)))];
-        return within(parts, theirs) || within(theirs, parts);
+      const words = nameWords(text).map(norm);
+      if (words.length === 0) return undefined;
+      // Only the same kind can be the same person. "Aarav" and "Aarav Sharma" are one;
+      // "Aarav Sharma" and "Diya Sharma" are two: neither name is contained in the other.
+      const matches = drafts.filter((d) => {
+        if (d.kind !== c.kind) return false;
+        const theirs = wordsOf(d);
+        return within(words, theirs) || within(theirs, words);
       });
-      if (same) {
-        addSurfaces(same, text);
-        // The longest form is the one we restore to.
-        same.surfaces.sort((a, b) => b.length - a.length);
-        return same;
-      }
+      // A name that fits more than one person is not handed to the first of them.
+      same =
+        matches.find((d) => wordsOf(d).length === words.length && within(words, wordsOf(d))) ??
+        (matches.length === 1 ? matches[0] : undefined);
     } else {
-      const same = entities.find((e) => e.kind === c.kind && e.surfaces.some((s) => norm(s) === norm(text)));
+      same = drafts.find((d) => d.kind === c.kind && d.surfaces.some((s) => norm(s) === norm(text)));
       if (same) return same;
     }
+    if (!same) {
+      same = { kind: c.kind, source: c.source, surfaces: [], category: c.category, given: [] };
+      drafts.push(same);
+    }
+    addSurfaces(same, text);
+    if (isPerson(c.kind)) {
+      same.given.push(norm(text));
+      // The longest form is the one we restore to.
+      same.surfaces.sort((a, b) => b.length - a.length);
+    }
+    return same;
+  };
 
-    const n = (counters[c.kind] = (counters[c.kind] ?? 0) + 1);
-    const entity: Entity = {
-      id: `${c.kind}-${n}`,
-      kind: c.kind,
-      token: c.kind === 'private' ? PRIVATE_TOKEN : `[${TOKEN_NAME[c.kind]} ${n}]`,
-      surfaces: [],
-      source: c.source,
-      withheld: true,
-      category: c.category,
-    };
-    addSurfaces(entity, text);
+  for (const c of candidates.filter((c) => c.kind !== 'private')) addDraft(c);
+
+  // A name or part claimed by more than one person belongs to none of them.
+  const claims = new Map<string, Draft[]>();
+  for (const d of drafts.filter((d) => isPerson(d.kind))) {
+    for (const s of d.surfaces) claims.set(norm(s), [...(claims.get(norm(s)) ?? []), d]);
+  }
+  const shared: Draft[] = [];
+  for (const [key, claimants] of claims) {
+    if (claimants.length < 2) continue;
+    const written = claimants[0].surfaces.find((s) => norm(s) === key)!;
+    for (const d of claimants) d.surfaces = d.surfaces.filter((s) => norm(s) !== key);
+    // Its kind is that of whoever was given exactly this name, or the kind they all share.
+    const owner = claimants.find((d) => d.given.includes(key));
+    const kind = owner?.kind ?? (claimants.every((d) => d.kind === claimants[0].kind) ? claimants[0].kind : 'adult');
+    shared.push({ kind, source: (owner ?? claimants[0]).source, surfaces: [written], given: [key] });
+  }
+  drafts = drafts.filter((d) => d.surfaces.length > 0);
+
+  const counters: Partial<Record<Kind, number>> = {};
+  const entities: Entity[] = [];
+  const toEntity = (d: Draft, n: number): Entity => ({
+    id: `${d.kind}-${n}`,
+    kind: d.kind,
+    token: d.kind === 'private' ? PRIVATE_TOKEN : `[${TOKEN_NAME[d.kind]} ${n}]`,
+    surfaces: d.surfaces,
+    source: d.source,
+    withheld: true,
+    category: d.category,
+  });
+  const number = (d: Draft): Entity => {
+    const entity = toEntity(d, (counters[d.kind] = (counters[d.kind] ?? 0) + 1));
     entities.push(entity);
     return entity;
   };
+  for (const d of drafts) number(d);
+  // A shared name is kept only where it stands alone in the note, outside every fuller name.
+  for (const d of shared) {
+    const probe = toEntity(d, 0);
+    if (segment(note, [...entities, probe]).some((s) => s.entity === probe)) number(d);
+  }
 
-  // The whole name is always a surface, however short. Only the parts are filtered.
-  const addSurfaces = (e: Entity, text: string) => {
-    const all = isPerson(e.kind) ? [text, ...nameParts(text)] : [text];
-    for (const s of all) {
-      if (!e.surfaces.some((x) => norm(x) === norm(s))) e.surfaces.push(s);
-    }
-  };
-
-  for (const c of candidates.filter((c) => c.kind !== 'private')) add(c);
+  // Private details come last. Each new one is numbered as it is first seen; a repeat finds its entity again.
+  drafts = [];
   for (const c of candidates.filter((c) => c.kind === 'private')) {
-    const e = add(c);
-    if (e && c.aboutName) {
+    const d = addDraft(c);
+    if (!d) continue;
+    let e = entities.find((x) => x.surfaces === d.surfaces);
+    if (!e) e = number(d);
+    if (c.aboutName && !e.about) {
       const parts = [norm(c.aboutName), ...nameWords(c.aboutName).map(norm)];
       const person = entities.find(
         (p) => p.kind === 'student' && p.surfaces.some((s) => parts.includes(norm(s))),
@@ -242,13 +298,17 @@ export function addByTeacher(note: string, entities: Entity[], text: string, kin
     category: e.category,
   }));
   const next = buildVault(note, [...candidates, { kind, text, source: 'teacher' }]);
-  // Keep the teacher's earlier choices.
+  // Keep the teacher's earlier choices, and who each private detail is about. Ids can shift when the
+  // vault is rebuilt, so the student is found again by name; a fresh guess never replaces what was known.
+  const sameItem = (a: Entity, b: Entity) => a.kind === b.kind && norm(a.surfaces[0]) === norm(b.surfaces[0]);
   for (const e of next) {
-    const old = entities.find((o) => o.kind === e.kind && norm(o.surfaces[0]) === norm(e.surfaces[0]));
-    if (old) {
-      e.withheld = old.withheld;
-      e.about = e.about ?? old.about;
-    }
+    const old = entities.find((o) => sameItem(o, e));
+    if (!old) continue;
+    e.withheld = old.withheld;
+    if (e.kind !== 'private') continue;
+    const wasAbout = entities.find((o) => o.id === old.about);
+    const nowAbout = wasAbout && next.find((n) => sameItem(n, wasAbout));
+    if (nowAbout) e.about = nowAbout.id;
   }
   return next;
 }

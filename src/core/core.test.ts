@@ -20,12 +20,32 @@ describe('pattern rules', () => {
     ]);
   });
 
+  it('finds a roll number written out in a sentence', () => {
+    expect(findByRule('Her roll number is 6B/23 and his roll no. was 14.').map((h) => [h.rule, h.text])).toEqual([
+      ['roll or admission number', 'roll number is 6B/23'],
+      ['roll or admission number', 'roll no. was 14'],
+    ]);
+    expect(findByRule('The roll was called at nine. The bread roll is 5 rupees.')).toEqual([]);
+  });
+
   it('leaves ordinary numbers and dates alone', () => {
     expect(findByRule('Class 6B scored 42 out of 50 on 16 November 2026. 4 days absent.')).toEqual([]);
   });
 
   it('drops honorifics from names', () => {
     expect(nameParts('Mrs. Kavita Rao')).toEqual(['Kavita', 'Rao']);
+  });
+
+  it('never treats a kinship word or a pronoun as part of a name', () => {
+    expect(nameParts('his mother Sunita')).toEqual(['Sunita']);
+    expect(nameParts('Their grandmother')).toEqual([]);
+    const note = 'His mother Sunita rang. His sister and her teacher came.';
+    const v = buildVault(note, [
+      { kind: 'adult', text: 'His mother Sunita', source: 'on-device model' },
+      { kind: 'adult', text: 'sister', source: 'on-device model' },
+    ]);
+    expect(v.map((e) => e.surfaces)).toEqual([['His mother Sunita', 'Sunita']]);
+    expect(redact(note, v)).toBe('[Adult 1] rang. His sister and her teacher came.');
   });
 });
 
@@ -162,6 +182,49 @@ describe('vault', () => {
     const note = 'Om Rao sits with Jo Rao.';
     const v = buildVault(note, deterministicCandidates(note, ['Om Rao', 'Jo Rao']));
     expect(redact(note, v)).toBe('[Student 1] sits with [Student 2].');
+  });
+
+  it('never merges an adult into a student who shares a surname', () => {
+    const note = 'Aarav Sharma was late. Mrs. Sharma rang at noon.';
+    const v = buildVault(note, [
+      { kind: 'student', text: 'Aarav Sharma', source: 'class list' },
+      { kind: 'adult', text: 'Mrs. Sharma', source: 'on-device model' },
+    ]);
+    expect(v.map((e) => [e.kind, e.surfaces[0]])).toEqual([['student', 'Aarav Sharma'], ['adult', 'Mrs. Sharma']]);
+    expect(redact(note, v)).toBe('[Student 1] was late. [Adult 1] rang at noon.');
+    expect(restore('[Adult 1] and [Student 1]', v)).toBe('Mrs. Sharma and Aarav Sharma');
+  });
+
+  it('gives a bare surname shared by two people a stand-in of its own', () => {
+    const note = 'Aarav Sharma sits with Diya Sharma. Sharma was late again.';
+    const v = buildVault(note, deterministicCandidates(note, ['Aarav Sharma', 'Diya Sharma']));
+    expect(v.map((e) => e.surfaces)).toEqual([['Aarav Sharma', 'Aarav'], ['Diya Sharma', 'Diya'], ['Sharma']]);
+    expect(redact(note, v)).toBe('[Student 1] sits with [Student 2]. [Student 3] was late again.');
+    expect(checkOutgoing(redact(note, v), v)).toEqual([]);
+    // With no bare use of the surname there is nothing extra to hold.
+    const plain = 'Aarav Sharma sits with Diya Sharma.';
+    expect(buildVault(plain, deterministicCandidates(plain, ['Aarav Sharma', 'Diya Sharma']))).toHaveLength(2);
+    // The same holds when a model reports the bare surname as a person.
+    const fromModel = buildVault(note, [
+      ...deterministicCandidates(note, ['Aarav Sharma', 'Diya Sharma']),
+      { kind: 'student', text: 'Sharma', source: 'on-device model' },
+    ]);
+    expect(redact(note, fromModel)).toBe('[Student 1] sits with [Student 2]. [Student 3] was late again.');
+  });
+
+  it('keeps who a private detail is about when the teacher marks something else', () => {
+    const note = 'Kabir and Ishaan fight most days. He cries at home. Rampur is far.';
+    const v = buildVault(note, [
+      ...deterministicCandidates(note, ['Kabir', 'Ishaan']),
+      { kind: 'private', text: 'He cries at home', source: 'on-device model', aboutName: 'Kabir' },
+    ]);
+    const about = (list: typeof v) => list.find((e) => e.id === list.find((d) => d.kind === 'private')?.about)?.surfaces[0];
+    expect(about(v)).toBe('Kabir');
+    const released = v.map((e) => (e.surfaces[0] === 'Ishaan' ? { ...e, withheld: false } : e));
+    const marked = addByTeacher(note, released, 'Rampur', 'place');
+    expect(about(marked)).toBe('Kabir');
+    expect(marked.find((e) => e.surfaces[0] === 'Ishaan')?.withheld).toBe(false);
+    expect(redact(note, marked)).toBe('[Student 1] and Ishaan fight most days. [withheld]. [Place 1] is far.');
   });
 
   it('still withholds a name inside a private detail the teacher released', () => {
