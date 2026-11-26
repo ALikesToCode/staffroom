@@ -10,7 +10,7 @@ export const ROUTES = [
     id: 'guard',
     job: 'Find names and private details in the raw note',
     mode: InferenceMode.ONLY_ON_DEVICE,
-    why: 'The raw note must never reach a server, so there is no cloud fallback. Without an on-device model the app drops to rules and your own review.',
+    why: 'The raw note must never reach a server, so there is no cloud fallback. The app refuses to start this request unless the on-device model is present, and stops if a response did not come from the device. Without an on-device model it drops to rules and your own review.',
   },
   {
     id: 'draft',
@@ -22,7 +22,7 @@ export const ROUTES = [
     id: 'check',
     job: 'Check the draft against the private details',
     mode: InferenceMode.ONLY_ON_DEVICE,
-    why: 'Only this device knows what was withheld, so only this device can check the draft against it.',
+    why: 'Only this device knows what was withheld, so only this device can check the draft against it. The same refusal applies: no on-device model, no request.',
   },
   {
     id: 'label',
@@ -45,29 +45,46 @@ interface Options {
   cloudModel?: string;
 }
 
-/** Build a Firebase AI Logic hybrid model for one route. */
+/** True when this browser has a built-in model the SDK can call. Asks nothing of any server. */
+export function onDeviceModelPresent(): boolean {
+  return typeof (globalThis as { LanguageModel?: unknown }).LanguageModel !== 'undefined';
+}
+
+/**
+ * Build a Firebase AI Logic hybrid model for one route.
+ *
+ * An ONLY_ON_DEVICE route fails closed here, before any request exists. The
+ * SDK itself calls the cloud when the browser has no built-in model,
+ * whatever the mode, so the mode alone is not a guarantee. This function
+ * refuses to build the model in that case, and it gives an ONLY_ON_DEVICE
+ * route no cloud parameters at all.
+ */
 export function modelFor(route: RouteId, { system, schema, cloudModel }: Options): GenerativeModel {
   const mode = ROUTES.find((r) => r.id === route)!.mode;
-  const inCloud = mode !== InferenceMode.ONLY_ON_DEVICE;
+  const onDevice = {
+    createOptions: {
+      expectedInputs: ENGLISH,
+      expectedOutputs: ENGLISH,
+      initialPrompts: [{ role: 'system' as const, content: [{ type: 'text' as const, value: system }] }],
+    },
+    promptOptions: schema ? { responseConstraint: schema } : undefined,
+  };
+  if (mode === InferenceMode.ONLY_ON_DEVICE) {
+    if (!onDeviceModelPresent()) {
+      throw new Error('This browser has no on-device model, so the request was not started. Nothing was sent.');
+    }
+    return getGenerativeModel(ai, { mode, onDeviceParams: onDevice });
+  }
   return getGenerativeModel(ai, {
     mode,
-    onDeviceParams: {
-      createOptions: {
-        expectedInputs: ENGLISH,
-        expectedOutputs: ENGLISH,
-        initialPrompts: [{ role: 'system', content: [{ type: 'text', value: system }] }],
-      },
-      promptOptions: schema ? { responseConstraint: schema } : undefined,
+    onDeviceParams: onDevice,
+    inCloudParams: {
+      model: cloudModel ?? 'gemini-3.5-flash-lite',
+      systemInstruction: system,
+      generationConfig: schema
+        ? { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0.4 }
+        : { temperature: 0.4 },
     },
-    inCloudParams: inCloud
-      ? {
-          model: cloudModel ?? 'gemini-3.5-flash-lite',
-          systemInstruction: system,
-          generationConfig: schema
-            ? { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0.4 }
-            : { temperature: 0.4 },
-        }
-      : undefined,
   });
 }
 

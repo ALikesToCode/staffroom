@@ -39,7 +39,8 @@ export function detailsFor(item: DraftItem, entities: Entity[]): { student: Enti
 /**
  * Check each draft item against what was withheld. The route is
  * ONLY_ON_DEVICE: the withheld details are in this prompt, so it must not
- * and cannot go to the cloud.
+ * go to the cloud. modelFor refuses to start without an on-device model, and
+ * a response from anywhere but the device stops the check.
  */
 export async function checkOnDevice(
   note: string,

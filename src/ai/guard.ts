@@ -78,7 +78,8 @@ function exactSlice(paragraph: string, text: string): string {
 
 /**
  * Read the raw note with the on-device model. The route is ONLY_ON_DEVICE:
- * if no on-device model can run, this throws and nothing is sent anywhere.
+ * if the browser has no on-device model, modelFor throws before a request
+ * is made, and nothing is sent anywhere.
  */
 export async function guardOnDevice(
   note: string,
@@ -91,7 +92,8 @@ export async function guardOnDevice(
     onProgress(i, parts.length);
     const result = await model.generateContent(`Paragraph:\n${parts[i]}`);
     if (result.response.inferenceSource !== 'on_device') {
-      // Cannot happen with ONLY_ON_DEVICE. Checked anyway: this is the one call that must not leave.
+      // modelFor already refused to start without an on-device model. This is the second check, after
+      // the fact: the SDK reports where each response came from, and anything but the device stops the run.
       throw new Error('The guard did not run on the device. Stopped.');
     }
     let answer: GuardAnswer;
