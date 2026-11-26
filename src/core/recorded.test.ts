@@ -4,6 +4,7 @@ import { buildVault, deterministicCandidates, possibleNameCandidates } from './v
 import { confirmConstraint, lockConstraints, proposeConstraints } from './constraints';
 import { outgoingOf } from './needs';
 import { DEFAULT_POLICY } from './policy';
+import { needOutcomes as outcomesOf, needsAccount } from './lessonNeeds';
 import { asRecordedRun, browserName, captureRun, RECORDED_FILE, replayBanner, replayNext, type RecordedRun, RECORDED_SOURCE, sourceOf } from './recorded';
 
 const vault = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
@@ -88,7 +89,8 @@ describe('a recorded lesson', () => {
     expect(back.needs).toEqual(needs);
     expect(back.needChildren).toEqual({ A: [student] });
     expect(back.variations).toEqual(variations);
-    expect(back.materials).toEqual(materials);
+    // The capture keeps which needs the class sheet suits and which got no sheet: here, none of either.
+    expect(back.materials).toEqual({ ...materials, same: [], missing: [] });
     expect(back.lesson?.language).toBe('Hindi');
     const json = () => JSON.parse(JSON.stringify(saved)) as Record<string, unknown>;
     for (const bad of [
@@ -114,6 +116,53 @@ describe('a recorded lesson', () => {
     expect(asRecordedRun({ ...(JSON.parse(JSON.stringify(run)) as object), materials })).toBeUndefined();
     expect(captureRun({ ...run, task: 'lesson', lesson, needs: [], variations: [] }, new Date(run.recordedAt), 'x')).not.toHaveProperty('needs');
   });
+  it('keeps what came of every need and the accounting of the materials, and reads a file recorded before it did', () => {
+    const student = entities.find((e) => e.kind === 'student')!.id;
+    const needs = [
+      { letter: 'A', line: 'cannot stay after the last bell' },
+      { letter: 'B', line: 'no phone or internet at home' },
+      { letter: 'G', line: 'finishes early and needs more to do' },
+    ];
+    const variations = [{ itemIndex: 0, need: 'G', text: 'adds a second paragraph' }];
+    const needOutcomes = { A: 'already suits', B: 'missing', G: 'for a stage' } as const;
+    const materials = {
+      board: ['A place'],
+      sheet: ['1', '2', '3', '4', '5'],
+      versions: [{ need: 'G', note: 'For the early finishers.', items: ['Write a second paragraph.', 'Use three sound words.', 'Underline your best sentence.'] }],
+      ticket: [1, 2, 3].map((n) => ({ question: `q${n}`, answer: `a${n}` })),
+      same: ['A'],
+      missing: ['B'],
+      dropped: 1,
+    };
+    const saved = captureRun({ ...run, task: 'lesson', lesson, needs, needChildren: { G: [student] }, variations, needOutcomes, materials }, new Date(run.recordedAt), 'x');
+    const back = asRecordedRun(JSON.parse(JSON.stringify(saved)))!;
+    expect(back.needOutcomes).toEqual(needOutcomes);
+    expect(needsAccount(back.needOutcomes!)).toBe('For each need: 1 written for a stage, 1 already suited, 1 missing');
+    expect(needOutcomes).toEqual(outcomesOf(['A', 'B', 'G'], variations, ['A']));
+    expect([back.materials!.same, back.materials!.missing]).toEqual([['A'], ['B']]);
+    expect(back.materials).not.toHaveProperty('dropped');
+    const json = () => JSON.parse(JSON.stringify(saved)) as Record<string, unknown>;
+    for (const bad of [
+      { needOutcomes: { A: 'already suits', B: 'missing' } },
+      { needOutcomes: { ...needOutcomes, Z: 'missing' } },
+      { needOutcomes: { ...needOutcomes, A: 'maybe' } },
+      // An entry for a stage exactly when there are lines for that need.
+      { needOutcomes: { ...needOutcomes, A: 'for a stage' } },
+      { needOutcomes: { ...needOutcomes, G: 'already suits' } },
+      { materials: { ...json().materials as object, same: ['G'] } },
+      { materials: { ...json().materials as object, missing: ['A'] } },
+      { materials: { ...json().materials as object, same: ['Z'] } },
+    ]) expect(asRecordedRun({ ...json(), ...bad }), JSON.stringify(bad).slice(0, 80)).toBeUndefined();
+    // A file recorded before: no outcomes and no accounting of the materials. It still reads.
+    const { needOutcomes: _o, ...before } = json();
+    const m = { ...(before.materials as Record<string, unknown>) };
+    delete m.same;
+    delete m.missing;
+    const old = asRecordedRun({ ...before, materials: m })!;
+    expect(old.needOutcomes).toBeUndefined();
+    expect(old.materials).not.toHaveProperty('same');
+  });
+
   const adjustment = { itemIndex: 0, constraintId: held.constraints[0].id, text: 'Uses chart paper from the class set.', source: 'rule starter' as const };
   const student = held.entities.find((e) => e.kind === 'student')!;
   const point = { itemIndex: 0, stage: 'Teach', childId: student.id, text: 'Seat her near the front for the demonstration.', source: 'on-device model' as const };

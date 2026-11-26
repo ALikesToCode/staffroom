@@ -46,7 +46,7 @@ import { keptAfterRecheck, modelSaid, recheckItems, rewriteStep, stepIndexOf, st
 import { canFit, FIT_CHILD_FAILED, FIT_FAILED, FIT_LABEL, fitForChild, fitInputFor, fitLessonForChild, fitStep } from './ai/fit';
 import { useInstall, useUpdate } from './ui/pwa';
 import { checkNeed, needIsTyped, needLine, notSentLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
-import { lessonNeedIsTyped, lessonNeedLine, askAgain, entryLine, lessonNeeds, needLabel, planWithNeeds, proposeLearning, secondAsk, splitVariations, variationLine, withSecondReading, type LessonNeed, type NeedsReading, type Variation } from './core/lessonNeeds';
+import { lessonNeedIsTyped, lessonNeedLine, askAgain, entryLine, lessonNeeds, needLabel, needOutcomes, needsAccount, planWithNeeds, proposeLearning, secondAsk, splitVariations, variationLine, withSecondReading, type LessonNeed, type NeedsReading, type Variation } from './core/lessonNeeds';
 import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, RECORDED_SOURCE, replayBanner, sourceOf, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyAfterRewrite, familyFor } from './core/family';
 import { REPEATS_NOTE, repeatsForChild, repeatsPrivate } from './core/repeats';
@@ -1620,7 +1620,14 @@ export function App() {
         lessonNeeds: (recordedNeeds ?? []).map((n) => ({ ...n, constraintIds: [], children: replay.needChildren?.[n.letter] ?? [], others: [], issues: [], sensitive: [] })),
       });
       setVariations(replay.variations ?? []);
-      setMaterials(replay.materials ? { materials: { ...replay.materials, sheet: replay.materials.sheet.map(unnumbered), versions: replay.materials.versions.map((v) => ({ ...v, items: v.items.map(unnumbered) })), ticket: replay.materials.ticket.map((t) => ({ ...t, question: unnumbered(t.question) })), dropped: 0, same: [], missing: [] }, where: replay.where.draft, model: replay.draftModel, text: '', issues: [] } : null);
+      // What came of each need, as recorded. A file recorded before this was kept has none, and no line accounts for the needs.
+      const outcomes = Object.entries(replay.needOutcomes ?? {});
+      setNeedsReply(
+        replay.needOutcomes
+          ? { section: '', none: outcomes.filter(([, o]) => o === 'already suits').map(([l]) => l), missing: outcomes.filter(([, o]) => o === 'missing').map(([l]) => l), second: null }
+          : null,
+      );
+      setMaterials(replay.materials ? { materials: { ...replay.materials, sheet: replay.materials.sheet.map(unnumbered), versions: replay.materials.versions.map((v) => ({ ...v, items: v.items.map(unnumbered) })), ticket: replay.materials.ticket.map((t) => ({ ...t, question: unnumbered(t.question) })), dropped: 0, same: replay.materials.same ?? [], missing: replay.materials.missing ?? [] }, where: replay.where.draft, model: replay.draftModel, text: '', issues: [] } : null);
       setResult({ draft: replay.draft, where: replay.where.draft, model: replay.draftModel });
       const replyText = [replay.draft.title, ...replay.draft.items.flatMap((i) => [i.heading, i.text]), ...(replay.variations ?? []).map(variationLine)].join('\n');
       // The return gate is plain code, so it is run again here on the recorded reply.
@@ -1684,6 +1691,7 @@ export function App() {
               needs: sent.lessonNeeds.map((n) => ({ letter: n.letter, line: n.line })),
               needChildren: Object.fromEntries(sent.lessonNeeds.map((n) => [n.letter, n.children])),
               variations,
+              needOutcomes: needOutcomes(sent.lessonNeeds.map((n) => n.letter), variations, needsReply?.none ?? []),
               ...(materials ? { materials: materials.materials } : {}),
             }
           : {}),
@@ -2437,6 +2445,7 @@ export function App() {
                       {NOT_ENGLISH}
                     </p>
                   )}
+                  {isLesson && needsReply && sent && sent.lessonNeeds.length > 0 && <p className="hint">{needsAccount(needOutcomes(sent.lessonNeeds.map((n) => n.letter), variations, needsReply.none))}.</p>}
                   {isLesson && needsReply && needsReply.none.length > 0 && (
                     <p className="hint">
                       The cloud says this lesson already suits {needsReply.none.map((l) => `Need ${l}${needNames(l).length > 0 ? ` (${needNames(l).join(', ')})` : ''}`).join('; ')}. Read it against what you know.

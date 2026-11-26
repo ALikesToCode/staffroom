@@ -3,7 +3,7 @@ import type { Constraint, Draft, Entity, ItemCheck, Kind, TaskId, Where } from '
 import type { Policy } from './policy';
 import { KINDS } from './policy';
 import { ALL_KINDS } from './constraints';
-import { NEED_LINE_MAX, type Variation } from './lessonNeeds';
+import { NEED_LINE_MAX, NEED_OUTCOMES, type NeedOutcome, type Variation } from './lessonNeeds';
 import { SUGGESTION_MAX } from './recheck';
 import { currentTicketKind } from './ticket';
 import { ADJUSTMENT_MAX, FIELD_MAX, LANGUAGE_MAX, LAST_TIME_MAX, type AdjustmentSource, type LessonFields } from './lesson';
@@ -93,11 +93,14 @@ export interface RecordedRun {
   needChildren?: Record<string, string[]>;
   /** For a lesson: the lines the cloud wrote for needs, taken out of the stages. Absent: none. */
   variations?: Variation[];
+  /** For a lesson: what came of every need that was told, by letter. Absent in a file recorded before it was kept. */
+  needOutcomes?: Record<string, NeedOutcome>;
   /** For a lesson: the materials the cloud wrote from the signed plan and the needs by letter. Letters only: no name is in them. Absent: none were made. */
   materials?: RecordedMaterials;
 }
 
-export type RecordedMaterials = Pick<Materials, 'board' | 'sheet' | 'versions' | 'ticket'>;
+/** The materials as the file holds them. `same` and `missing` are absent in a file recorded before they were kept. */
+export type RecordedMaterials = Pick<Materials, 'board' | 'sheet' | 'versions' | 'ticket'> & Partial<Pick<Materials, 'same' | 'missing'>>;
 
 const WHERES: Where[] = ['ON_DEVICE', 'IN_CLOUD', 'RULES_ONLY', 'NOT_RUN', 'SKIPPED'];
 const VERDICTS: ItemCheck['verdict'][] = ['fits', 'conflict', 'unsure', 'nothing withheld', 'not checked'];
@@ -241,6 +244,16 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
   ) {
     return undefined;
   }
+  // Every need told has one outcome, and a need has an entry for a stage exactly when there are lines for it.
+  const needOutcomes = d.needOutcomes;
+  if (needOutcomes !== undefined) {
+    const lines = new Set((variations as Variation[] | undefined)?.map((v) => v.need) ?? []);
+    const whole =
+      obj(needOutcomes) &&
+      Object.keys(needOutcomes).length === letters.size &&
+      [...letters].every((l) => NEED_OUTCOMES.includes(needOutcomes[l] as NeedOutcome) && (needOutcomes[l] === 'for a stage') === lines.has(l));
+    if (!whole) return undefined;
+  }
   const materials = d.materials;
   if (materials !== undefined) {
     const line = (v: unknown): v is string => str(v) && v.trim().length > 0 && v.length <= MATERIAL_LINE_MAX;
@@ -260,6 +273,16 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
       new Set(materials.versions.map((v) => v.need)).size === materials.versions.length &&
       list(materials.ticket, (t): t is { question: string; answer: string } => obj(t) && line(t.question) && line(t.answer)) && materials.ticket.length === TICKET_QUESTIONS;
     if (!whole) return undefined;
+    // The needs the class sheet suits and the needs with no sheet: told letters, each in one place only.
+    const m = materials as Record<string, unknown>;
+    const sheets = (m.versions as StoredVersion[]).map((v) => v.need);
+    const same = m.same;
+    const missing = m.missing;
+    const told = (v: unknown): v is string[] => list(v, letter) && v.every((l) => letters.has(l));
+    if (same !== undefined && !told(same)) return undefined;
+    if (missing !== undefined && !told(missing)) return undefined;
+    const all = [...sheets, ...((same as string[] | undefined) ?? []), ...((missing as string[] | undefined) ?? [])];
+    if (new Set(all).size !== all.length) return undefined;
   }
   return {
     recordedAt: d.recordedAt,
@@ -296,10 +319,20 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
     ...(needs ? { needs: (needs as RecordedNeed[]).map((n) => ({ letter: n.letter, line: n.line })) } : {}),
     ...(needChildren ? { needChildren: Object.fromEntries(Object.entries(needChildren as Record<string, string[]>).map(([k, v]) => [k, [...v]])) } : {}),
     ...(variations ? { variations: (variations as Variation[]).map((v) => ({ itemIndex: v.itemIndex, need: v.need, text: v.text })) } : {}),
+    ...(needOutcomes ? { needOutcomes: { ...(needOutcomes as Record<string, NeedOutcome>) } } : {}),
     ...(materials
       ? (() => {
           const m = materials as Omit<RecordedMaterials, 'versions'> & { versions: StoredVersion[] };
-          return { materials: { board: [...m.board], sheet: [...m.sheet], versions: m.versions.map(asVersion), ticket: m.ticket.map((t) => ({ question: t.question, answer: t.answer })) } };
+          return {
+            materials: {
+              board: [...m.board],
+              sheet: [...m.sheet],
+              versions: m.versions.map(asVersion),
+              ticket: m.ticket.map((t) => ({ question: t.question, answer: t.answer })),
+              ...(m.same ? { same: [...m.same] } : {}),
+              ...(m.missing ? { missing: [...m.missing] } : {}),
+            },
+          };
         })()
       : {}),
   };
@@ -318,7 +351,7 @@ export function browserName(userAgent: string): string {
  * An empty list of either is left out.
  */
 export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now: Date, userAgent: string): RecordedRun {
-  const { rewrites, fits, adjustments, needs, needChildren, variations, materials, ...rest } = run;
+  const { rewrites, fits, adjustments, needs, needChildren, variations, needOutcomes, materials, ...rest } = run;
   return {
     recordedAt: now.toISOString(),
     chrome: browserName(userAgent),
@@ -326,9 +359,20 @@ export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now:
     ...(rewrites && rewrites.length > 0 ? { rewrites } : {}),
     ...(fits && fits.length > 0 ? { fits } : {}),
     ...(adjustments && adjustments.length > 0 ? { adjustments } : {}),
-    ...(needs && needs.length > 0 ? { needs, ...(needChildren ? { needChildren } : {}) } : {}),
+    ...(needs && needs.length > 0 ? { needs, ...(needChildren ? { needChildren } : {}), ...(needOutcomes ? { needOutcomes } : {}) } : {}),
     ...(variations && variations.length > 0 ? { variations } : {}),
-    ...(materials ? { materials: { board: materials.board, sheet: materials.sheet, versions: materials.versions.map((v) => ({ need: v.need, note: v.note, items: v.items })), ticket: materials.ticket } } : {}),
+    ...(materials
+      ? {
+          materials: {
+            board: materials.board,
+            sheet: materials.sheet,
+            versions: materials.versions.map((v) => ({ need: v.need, note: v.note, items: v.items })),
+            ticket: materials.ticket,
+            same: materials.same ?? [],
+            missing: materials.missing ?? [],
+          },
+        }
+      : {}),
   };
 }
 

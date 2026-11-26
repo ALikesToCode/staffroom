@@ -294,6 +294,21 @@ export function splitVariations(draft: Draft, letters: readonly string[]): Needs
   };
 }
 
+/** What came of one need that was told: an entry for a stage, the cloud's word that the lesson already suits it, or nothing. */
+export type NeedOutcome = 'for a stage' | 'already suits' | 'missing';
+export const NEED_OUTCOMES: NeedOutcome[] = ['for a stage', 'already suits', 'missing'];
+
+/** The outcome of every need that was told, by its letter. */
+export function needOutcomes(letters: readonly string[], variations: readonly Pick<Variation, 'need'>[], none: readonly string[]): Record<string, NeedOutcome> {
+  return Object.fromEntries(letters.map((l) => [l, variations.some((v) => v.need === l) ? 'for a stage' : none.includes(l) ? 'already suits' : 'missing'] as const));
+}
+
+/** One line that accounts for every need told: "For each need: 7 written for a stage, 4 already suited, 0 missing". */
+export function needsAccount(outcomes: Record<string, NeedOutcome>): string {
+  const n = (o: NeedOutcome) => Object.values(outcomes).filter((x) => x === o).length;
+  return `For each need: ${n('for a stage')} written for a stage, ${n('already suits')} already suited, ${n('missing')} missing`;
+}
+
 /** True when so many needs went unanswered that the cloud is asked once more: over a third of those told. */
 export const askAgain = (missing: readonly string[], letters: readonly string[]) => missing.length * 3 > letters.length;
 
