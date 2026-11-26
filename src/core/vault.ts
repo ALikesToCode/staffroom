@@ -305,27 +305,32 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
  *   in the paragraph. Two or more named earlier is a guess: unassigned.
  */
 function attachPrivateDetails(note: string, entities: Entity[]) {
-  const students = entities.filter((e) => e.kind === 'student');
-  const named = (text: string): string[] =>
-    students.filter((s) => wholeWordMatcher(s.surfaces)!.test(text)).map((s) => s.id);
-  const all = sentences(note);
   for (const p of entities.filter((e) => e.kind === 'private')) {
     const at = p.span?.start ?? p.at ?? (wholeWordMatcher(p.surfaces)?.exec(note)?.index ?? -1);
     if (at < 0) continue;
-    const end = at + p.surfaces[0].length;
-    const claimed = p.about;
-    const around = all.filter((s) => s.start < end && at < s.end);
-    const inSentence = named(around.length > 0 ? note.slice(around[0].start, around[around.length - 1].end) : p.surfaces[0]);
-    const paragraphStart = note.lastIndexOf('\n', at) + 1;
-    const before = named(note.slice(paragraphStart, at));
-    let about: string | undefined;
-    if (inSentence.length >= 2) about = undefined;
-    else if (inSentence.length === 1) about = !claimed || claimed === inSentence[0] ? inSentence[0] : undefined;
-    else if (claimed) about = before.includes(claimed) ? claimed : undefined;
-    else about = before.length === 1 ? before[0] : undefined;
+    const about = ownerAt(note, entities, at, at + p.surfaces[0].length, p.about);
     if (about) p.about = about;
     else delete p.about;
   }
+}
+
+/**
+ * Whose the words between `at` and `end` are, by the rules above: the id of
+ * one student, or undefined when it is not plain. `claimed` is the student
+ * a model named, if any.
+ */
+export function ownerAt(note: string, entities: Entity[], at: number, end: number, claimed?: string): string | undefined {
+  const students = entities.filter((e) => e.kind === 'student');
+  const named = (text: string): string[] =>
+    students.filter((s) => wholeWordMatcher(s.surfaces)!.test(text)).map((s) => s.id);
+  const around = sentences(note).filter((s) => s.start < end && at < s.end);
+  const inSentence = named(around.length > 0 ? note.slice(around[0].start, around[around.length - 1].end) : note.slice(at, end));
+  const paragraphStart = note.lastIndexOf('\n', at) + 1;
+  const before = named(note.slice(paragraphStart, at));
+  if (inSentence.length >= 2) return undefined;
+  if (inSentence.length === 1) return !claimed || claimed === inSentence[0] ? inSentence[0] : undefined;
+  if (claimed) return before.includes(claimed) ? claimed : undefined;
+  return before.length === 1 ? before[0] : undefined;
 }
 
 /**

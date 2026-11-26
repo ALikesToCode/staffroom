@@ -1502,3 +1502,40 @@ footer {
 .vault .parts-held {
   color: var(--seal);
 }
+
+/* ---------------------------------------------------------------- constraints */
+
+.constraint-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.constraint {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d8cfba);
+  border-radius: 8px;
+}
+
+.constraint.confirmed {
+  border-left-width: 4px;
+}
+
+.constraint q {
+  font-weight: 600;
+}
+
+.constraint input[type='text'],
+.constraint-add input[type='text'] {
+  width: 100%;
+}
+
+.constraint-add {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}

@@ -125,3 +125,50 @@ export interface Receipt {
   };
   signOff: { kept: number; struck: number; at: string };
 }
+
+/** What a constraint rules out. `other` is free text: only the model can check it. */
+export type ConstraintKind =
+  | 'time-after'
+  | 'time-before'
+  | 'days-away'
+  | 'money'
+  | 'no-phone-internet'
+  | 'contact'
+  | 'health'
+  | 'other';
+
+/**
+ * A private fact that rules something out for one student, or for the
+ * class. It is proposed by rule or by the on-device model, or added by the
+ * teacher, and counts only once the teacher has confirmed it. It lives
+ * with the note, on the device. It never goes to a receipt or a record:
+ * those get counts.
+ */
+export interface Constraint {
+  id: string;
+  kind: ConstraintKind;
+  /** The id of the student it is about. Absent: it is about the class, or it is not plain whose it is. */
+  about?: string;
+  /** That student's name as written. The vault is rebuilt when the guard runs again, and the name finds the student in it. */
+  aboutName?: string;
+  /** The teacher's words: the quote from the note, or what the teacher typed. */
+  text: string;
+  /** Where `text` stands in the note, when it does. */
+  at?: number;
+  /** The withheld private item that holds these words back, once confirmed. */
+  detailId?: string;
+  /** days-away: the weekdays, in full ("Friday"). */
+  days?: string[];
+  /** contact: the adult, as a role ("father", "mother", "parents"). */
+  who?: string;
+  /** contact: the adult who looks after the child instead ("grandmother"). */
+  guardian?: string;
+  /** contact: true when the adult is not there to contact (died, left, the child lives elsewhere); absent when the adult must not be contacted. */
+  away?: boolean;
+  /** health: words that, in a step, go against it ("flashing lights"). */
+  triggers?: string[];
+  source: 'rule' | 'on-device model' | 'teacher';
+  /** True when a rule found it and the on-device model found it too. */
+  alsoModel?: boolean;
+  confirmed: boolean;
+}

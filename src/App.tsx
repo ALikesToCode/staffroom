@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Entity, ItemCheck, Kind, LabelWhere, Receipt, TaskId, Where } from './core/types';
+import type { Constraint, ConstraintKind, Entity, ItemCheck, Kind, LabelWhere, Receipt, TaskId, Where } from './core/types';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './core/samples';
 import {
   addByTeacher,
@@ -18,6 +18,19 @@ import {
 import { checkOutgoing, checkReply, safeTitle, type Violation } from './core/gate';
 import { draftLine, loadReceipts, makeReceipt, recordIdTail, storeReceipts, type ReceiptRecord } from './core/receipts';
 import { approvalKey } from './core/policy';
+import {
+  addConstraint,
+  confirmConstraint,
+  heldByConstraints,
+  lockConstraints,
+  proposeConstraints,
+  removeConstraint,
+  restoreConstraints,
+  setConstraintKind,
+  setTriggers,
+  unconfirmConstraint,
+} from './core/constraints';
+import { ConstraintsPanel } from './ui/Constraints';
 import { familyFor } from './core/family';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
@@ -66,6 +79,8 @@ const session = () => sessionStorage;
 const local = () => localStorage;
 const NOTE_KEY = 'staffroom.note';
 const CLASS_LIST_KEY = 'staffroom.classList';
+// The constraints live with the note: in this tab only, and only for the note they were made for.
+const CONSTRAINTS_KEY = 'staffroom.constraints';
 
 // Earlier versions kept the raw note and the class list in local storage. Remove what they left.
 try {
@@ -111,6 +126,14 @@ export function App() {
 
   /** The vault as the guard and the teacher left it. Read `entities` below, which has the school's locks applied. */
   const [rawEntities, setEntities] = useState<Entity[]>([]);
+  /** The constraints of this note: proposed, confirmed, or added by hand. They never leave the device. */
+  const [constraints, setConstraints] = useState<Constraint[]>(
+    () => read(session, CONSTRAINTS_KEY, { note: '', constraints: [] as Constraint[] }).constraints,
+  );
+  /** The note the constraints were made for. They are kept across a new guard run only while the note is the same. */
+  const constraintsNote = useRef(read(session, CONSTRAINTS_KEY, { note: '', constraints: [] as Constraint[] }).note);
+  /** The vault item whose release was asked for while a confirmed constraint holds it. */
+  const [unconfirmAsk, setUnconfirmAsk] = useState<string | null>(null);
   const [guardWhere, setGuardWhere] = useState<Where>('NOT_RUN');
   const [guardGaps, setGuardGaps] = useState<Gaps>(NO_GAPS);
   const [progress, setProgress] = useState('');
@@ -137,6 +160,8 @@ export function App() {
     online: boolean;
     /** The policy the approval was given under. */
     policy: Policy;
+    /** The constraints as they stood at approval. The check is made against these. */
+    constraints: Constraint[];
   } | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
   const [replyIssues, setReplyIssues] = useState<Violation[]>([]);
@@ -201,6 +226,10 @@ export function App() {
   useEffect(() => write(session, NOTE_KEY, note, note === ''), [note]);
   useEffect(() => write(session, CLASS_LIST_KEY, classList, classList.length === 0), [classList]);
   useEffect(() => write(local, 'staffroom.keepCopies', keepCopies, false), [keepCopies]);
+  useEffect(
+    () => write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints }, constraints.length === 0),
+    [constraints],
+  );
 
   /** Read the records kept in the teacher's account. They hold no text, so there is none to show. */
   const refreshRecords = useCallback(async (user: string) => {
@@ -224,8 +253,8 @@ export function App() {
   // an item of a locked kind is withheld even if the vault says released (the policy can arrive late).
   // After approval the vault is the one that was approved, so the record matches what was sent.
   const entities = useMemo(
-    () => sent?.entities ?? applyLocks(rawEntities, policy.lockedKinds),
-    [sent, rawEntities, policy.lockedKinds],
+    () => sent?.entities ?? lockConstraints(applyLocks(rawEntities, policy.lockedKinds), constraints),
+    [sent, rawEntities, policy.lockedKinds, constraints],
   );
   const redaction = useMemo(() => redactWithTokens(note, entities), [note, entities]);
   const outgoing = redaction.text;
@@ -323,7 +352,12 @@ export function App() {
     if (where === 'RULES_ONLY') candidates.push(...possibleNameCandidates(note, classList));
     // The model read some parts and not others: the same rule covers the parts it did not read.
     else if (gaps.unread.length > 0) candidates.push(...possibleNameCandidates(unreadText(note, gaps.unread), classList));
-    setEntities(buildVault(note, candidates));
+    const vault = buildVault(note, candidates);
+    // Constraints the teacher confirmed or added for this same note are kept; the rest are proposed afresh.
+    const held = restoreConstraints(note, vault, constraintsNote.current === note ? constraints : [], proposeConstraints(note, vault));
+    constraintsNote.current = note;
+    setEntities(held.entities);
+    setConstraints(held.constraints);
     setGuardWhere(where);
     setGuardGaps(gaps);
     setStage('review');
@@ -339,7 +373,12 @@ export function App() {
    * allows, so releasing is asked about first: see the question under the item.
    */
   const toggle = (e: Entity) => {
-    if (e.withheld && policyRef.current.origin === 'defaults') setReleaseAsk(e.id);
+    setUnconfirmAsk(null);
+    // A confirmed constraint holds its words back. They are released only after it is unconfirmed.
+    if (e.withheld && heldByConstraints(constraints).has(e.id)) {
+      setReleaseAsk(null);
+      setUnconfirmAsk(e.id);
+    } else if (e.withheld && policyRef.current.origin === 'defaults') setReleaseAsk(e.id);
     else {
       setReleaseAsk(null);
       flip(e.id);
@@ -409,6 +448,29 @@ export function App() {
     window.getSelection()?.removeAllRanges();
   };
 
+  // ---------------------------------------------------------------- constraints
+
+  /** The vault and the constraints change together: confirming a constraint withholds its words. */
+  const hold = (held: { entities: Entity[]; constraints: Constraint[] }) => {
+    if (stage !== 'review') return;
+    setEntities(held.entities);
+    setConstraints(held.constraints);
+  };
+
+  const constraintActions = {
+    onConfirm: (id: string) => hold(confirmConstraint(note, rawEntities, constraints, id)),
+    onUnconfirm: (id: string) => hold({ entities: rawEntities, constraints: unconfirmConstraint(constraints, id) }),
+    onRemove: (id: string) => hold({ entities: rawEntities, constraints: removeConstraint(constraints, id) }),
+    onKind: (id: string, kind: ConstraintKind) => hold({ entities: rawEntities, constraints: setConstraintKind(constraints, id, kind) }),
+    onTriggers: (id: string, typed: string) => hold({ entities: rawEntities, constraints: setTriggers(constraints, id, typed) }),
+    onAdd: (by: { kind: ConstraintKind; about?: string; text: string }) => {
+      // Words taken from the selection are withheld at the place they were selected.
+      const span = selectionSpan.current;
+      const at = span && note.slice(span.start, span.end) === by.text.trim() ? span.start : undefined;
+      hold(addConstraint(note, rawEntities, constraints, { ...by, at }));
+    },
+  };
+
   // ---------------------------------------------------------------- steps 3 to 5: approve, draft, check
 
   const approveAndSend = async () => {
@@ -416,7 +478,7 @@ export function App() {
     // and the gate on exactly that text. It is sent only if it is the text the teacher ticked as read.
     if (!policyReadyRef.current || sendingRef.current) return;
     const sentPolicy = policyRef.current;
-    const current = applyLocks(rawEntities, sentPolicy.lockedKinds);
+    const current = lockConstraints(applyLocks(rawEntities, sentPolicy.lockedKinds), constraints);
     const { text, tokens } = redactWithTokens(note, current);
     const stopped = checkOutgoing(text, current, note);
     // The tick was for one text, one set of locks and one drafting model. Any of them changed: no send.
@@ -450,7 +512,7 @@ export function App() {
     const sentOnline = navigator.onLine;
     setError(null);
     const approvedAt = new Date().toISOString();
-    setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy });
+    setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy, constraints });
     setStage('drafting');
     let drafted: DraftResult;
     try {
@@ -630,6 +692,7 @@ export function App() {
     setSelection('');
     setSelectionNote('');
     setReleaseAsk(null);
+    setUnconfirmAsk(null);
     setReadKey(null);
     setAsWrittenKey(null);
     setUnreadKey(null);
@@ -663,7 +726,10 @@ export function App() {
     }
     setNote('');
     setClassList([]);
+    setConstraints([]);
+    constraintsNote.current = '';
     try {
+      sessionStorage.removeItem(CONSTRAINTS_KEY);
       sessionStorage.removeItem(NOTE_KEY);
       sessionStorage.removeItem(CLASS_LIST_KEY);
       localStorage.removeItem(NOTE_KEY);
@@ -781,6 +847,28 @@ export function App() {
                 Release it
               </button>
               <button className="link" onClick={() => setReleaseAsk(null)}>
+                Keep it withheld
+              </button>
+            </div>
+          </div>
+        )}
+        {unconfirmAsk === e.id && e.withheld && stage === 'review' && (
+          <div className="confirm release-ask" role="group" aria-label={`Release ${e.surfaces[0]}`}>
+            <p>
+              You confirmed a constraint in these words. While it is confirmed, the words stay withheld. Unconfirm the constraint
+              first; then you can release them.
+            </p>
+            <div className="actions">
+              <button
+                className="secondary"
+                onClick={() => {
+                  setUnconfirmAsk(null);
+                  setConstraints((list) => list.map((c) => (c.detailId === e.id ? { ...c, confirmed: false } : c)));
+                }}
+              >
+                Unconfirm the constraint
+              </button>
+              <button className="link" onClick={() => setUnconfirmAsk(null)}>
                 Keep it withheld
               </button>
             </div>
@@ -1088,6 +1176,36 @@ export function App() {
                   <summary>The vault: {withheld.length} withheld</summary>
                   <RouteChip route="guard" where={guardWhere} />
                   {vaultBody}
+                </details>
+              )}
+
+              {stage === 'review' && (
+                <article className="card">
+                  <div className="card-head">
+                    <h3>
+                      Constraints <small>{constraints.filter((c) => c.confirmed).length} confirmed</small>
+                    </h3>
+                  </div>
+                  <ConstraintsPanel
+                    constraints={constraints}
+                    students={entities.filter((e) => e.kind === 'student')}
+                    editable
+                    selection={selection}
+                    actions={constraintActions}
+                  />
+                </article>
+              )}
+
+              {!editing && stage !== 'guarding' && stage !== 'review' && (
+                <details className="card vault-fold">
+                  <summary>Constraints: {(sent?.constraints ?? constraints).filter((c) => c.confirmed).length} confirmed</summary>
+                  <ConstraintsPanel
+                    constraints={sent?.constraints ?? constraints}
+                    students={entities.filter((e) => e.kind === 'student')}
+                    editable={false}
+                    selection=""
+                    actions={constraintActions}
+                  />
                 </details>
               )}
 

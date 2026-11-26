@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildVault } from '../core/vault';
 import { CloudText, DeviceText } from './parts';
+import { ConstraintsPanel } from './Constraints';
+import type { Constraint } from '../core/types';
 
 describe('CloudText', () => {
   it('shows each stand-in literally, square brackets included', () => {
@@ -27,5 +29,33 @@ describe('DeviceText', () => {
     expect(html.replace(/<[^>]+>/g, '')).toBe('Pair Aarav with [Student 2] and [Student 9].');
     expect(html).toContain('<span class="unknown-token"');
     expect(html).not.toContain('Diya');
+  });
+});
+
+describe('ConstraintsPanel', () => {
+  const vault = buildVault('Meenal reads well.', [{ kind: 'student', text: 'Meenal', source: 'class list' }]);
+  const actions = { onConfirm() {}, onUnconfirm() {}, onRemove() {}, onKind() {}, onTriggers() {}, onAdd() {} };
+  const constraints: Constraint[] = [
+    { id: 'a', kind: 'time-after', about: vault[0].id, text: 'has to leave at the last bell', source: 'rule', alsoModel: true, confirmed: false },
+    { id: 'b', kind: 'contact', text: 'lives with his grandmother', who: 'parents', guardian: 'grandmother', away: true, source: 'teacher', confirmed: true },
+  ];
+
+  it('shows each constraint with its words, whose it is, who found it and whether it is confirmed', () => {
+    const text = renderToStaticMarkup(
+      <ConstraintsPanel constraints={constraints} students={vault} editable selection="" actions={actions} />,
+    ).replace(/<[^>]+>/g, ' ');
+    expect(text).toContain('has to leave at the last bell');
+    expect(text).toMatch(/About Meenal · found by rule and model · not confirmed/);
+    expect(text).toMatch(/About the class · added by you · confirmed by you/);
+    expect(text).toContain('Adult: parents, not there to contact. Looked after by: grandmother');
+    expect(text).toContain('Add a constraint');
+  });
+
+  it('offers nothing to change once the text is approved', () => {
+    const html = renderToStaticMarkup(
+      <ConstraintsPanel constraints={constraints} students={vault} editable={false} selection="" actions={actions} />,
+    );
+    expect(html).not.toContain('<button');
+    expect(html).not.toContain('Add a constraint');
   });
 });
