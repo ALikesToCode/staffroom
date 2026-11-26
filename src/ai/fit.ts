@@ -237,7 +237,7 @@ export async function fitForChild(input: ChildFitInput, ask?: FitAsk): Promise<F
 
 /** Kept short, like FIT_SYSTEM. The lesson stays as it is for the class; the answer is for the teacher, about one child. */
 export const FIT_LESSON_SYSTEM =
-  'A teacher has a lesson plan for the whole class and private notes about one child. Say what the teacher should do differently for this child in this lesson. At most two points. Each point names one stage of the lesson and gives one short instruction for the teacher. Use only what the notes say. If the lesson already suits the child, give no points. No diagnosis.';
+  'A teacher has a lesson plan for the whole class and private notes about one child. Write at most two points for the teacher. Each point names one stage of the lesson and gives one sentence of at most 25 words. The sentence begins with a verb and says exactly what the teacher does for this child in that stage. Base each point on one specific thing the notes say and on what that stage asks pupils to do. No general advice such as "offer encouragement" or "pair with a supportive classmate". If nothing in the notes matters for this lesson, give no points. No diagnosis.';
 export const FIT_LESSON_CHILD = 'Child: ';
 export const FIT_LESSON_NOTES = 'Notes about the child:';
 export const FIT_LESSON_PLAN = 'Lesson plan:';

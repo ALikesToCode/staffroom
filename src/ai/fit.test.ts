@@ -188,8 +188,9 @@ describe('what one child needs in a lesson', () => {
   const rule = (p: FitPoint) => fitHits(p.text, { constraint: leave, studentName: 'Meenal' }).map((h) => h.matched);
 
   it('asks with a short instruction, the child, the notes and one line for each stage, and an answer of two points at most', () => {
-    expect(FIT_LESSON_SYSTEM.length).toBeLessThan(420);
-    expect(FIT_LESSON_SYSTEM).toContain('If the lesson already suits the child, give no points.');
+    expect(FIT_LESSON_SYSTEM.length).toBeLessThan(620);
+    expect(FIT_LESSON_SYSTEM).toContain('gives one sentence of at most 25 words');
+    expect(FIT_LESSON_SYSTEM).toContain('If nothing in the notes matters for this lesson, give no points.');
     expect(fitLessonPrompt(child)).toBe(
       'Child: Meenal\nNotes about the child:\nMeenal reads well aloud but freezes in written tests. She has to leave school at the last bell.\nLesson plan:\nStarter (5 minutes): Show a picture of a market.\nPractise (15 minutes): Pupils write a description in pairs.\nHomework: Pupils finish the description at home.\nWhat should the teacher do differently for this child in this lesson?',
     );
