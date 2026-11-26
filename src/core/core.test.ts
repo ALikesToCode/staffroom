@@ -953,13 +953,21 @@ describe('check and receipt', () => {
 
   it('keeps two details about different children even when one is inside the other', () => {
     const text = 'Tanvi was told that Meenal has epilepsy. Meenal reads well.';
-    const v = buildVault(text, [
+    const built = buildVault(text, [
       { kind: 'student', text: 'Meenal', source: 'class list' },
       { kind: 'student', text: 'Tanvi', source: 'class list' },
       { kind: 'private', text: 'Tanvi was told that Meenal has epilepsy', source: 'on-device model', aboutName: 'Tanvi' },
       { kind: 'private', text: 'Meenal has epilepsy', source: 'on-device model', aboutName: 'Meenal' },
     ]);
-    const meenal = v.find((e) => e.surfaces[0] === 'Meenal')!;
+    const meenal = built.find((e) => e.surfaces[0] === 'Meenal')!;
+    const tanvi = built.find((e) => e.surfaces[0] === 'Tanvi')!;
+    // A sentence that names two students leaves its details unassigned, so the shorter is listed inside the longer.
+    expect(built.filter((e) => e.kind === 'private').map((e) => e.about)).toEqual([undefined, undefined]);
+    expect(detailsFor({ heading: meenal.token, text: 'Give a timed quiz.' }, built).map((g) => [g.student, g.details.map((d) => d.surfaces[0])])).toEqual([
+      [undefined, ['Tanvi was told that Meenal has epilepsy']],
+    ]);
+    // Were each known to be about a different child, both would be kept.
+    const v = built.map((e) => (e.kind !== 'private' ? e : { ...e, about: e.surfaces[0].startsWith('Tanvi') ? tanvi.id : meenal.id }));
     const groups = detailsFor({ heading: meenal.token, text: 'Give a timed quiz.' }, v);
     expect(groups.map((g) => [g.student?.surfaces[0], g.details.map((d) => d.surfaces[0])])).toEqual([['Meenal', ['Meenal has epilepsy']]]);
     expect(detailsFor({ heading: 'Seating', text: 'Move desks.' }, v)[0].details.map((d) => d.surfaces[0])).toEqual([
@@ -1808,5 +1816,58 @@ describe('sensitive words, second round', () => {
   it('leaves the ordinary word "fits" alone, and the sample note as it was', () => {
     expect(findSensitive('This plan fits the class. The desk fits by the door.')).toEqual([]);
     expect(findSensitive(SAMPLE_NOTE)).toHaveLength(3);
+  });
+});
+
+describe('whose fact a private detail is', () => {
+  const about = (note: string, list: string[], extra: Parameters<typeof buildVault>[1] = []) => {
+    const v = buildVault(note, [...deterministicCandidates(note, list), ...extra]);
+    return v.filter((e) => e.kind === 'private').map((e) => [e.surfaces[0], v.find((s) => s.id === e.about)?.surfaces[0]]);
+  };
+
+  it('is left unassigned when its sentence names two students, whatever the model said', () => {
+    const note = 'Asha knows Mira has epilepsy.\n\nTanvi is shy. Her father is unemployed.';
+    const v = buildVault(note, [
+      ...deterministicCandidates(note, ['Asha', 'Mira', 'Tanvi']),
+      { kind: 'private', text: 'Mira has epilepsy', source: 'on-device model', aboutName: 'Mira' },
+    ]);
+    const facts = v.filter((e) => e.kind === 'private').map((e) => [e.surfaces[0], v.find((s) => s.id === e.about)?.surfaces[0]]);
+    expect(facts).toEqual([
+      ['Asha knows Mira has epilepsy', undefined],
+      ['Her father is unemployed', 'Tanvi'],
+      ['Mira has epilepsy', undefined],
+    ]);
+    // The unassigned fact is in the check of every item: for Asha, for Mira and for Tanvi.
+    for (const name of ['Asha', 'Mira', 'Tanvi']) {
+      const token = v.find((e) => e.surfaces[0] === name)!.token;
+      const checkedAgainst = detailsFor({ heading: token, text: 'Give a timed quiz.' }, v).flatMap((g) => g.details.map((d) => d.surfaces[0]));
+      expect(checkedAgainst, name).toContain('Asha knows Mira has epilepsy');
+    }
+  });
+
+  it('is left unassigned when the only clue is two students named earlier in the paragraph', () => {
+    expect(about('Asha and Mira share a desk. She has epilepsy.', ['Asha', 'Mira'])).toEqual([['She has epilepsy', undefined]]);
+  });
+
+  it('goes to the one student named in its sentence, or the only one named before it', () => {
+    expect(about('Asha and Mira share a desk. Mira has epilepsy.', ['Asha', 'Mira'])).toEqual([['Mira has epilepsy', 'Mira']]);
+    expect(about('Mira reads well. She has epilepsy.', ['Asha', 'Mira'])).toEqual([['She has epilepsy', 'Mira']]);
+    expect(about('The hostel children are hungry.', ['Asha'])).toEqual([['The hostel children are hungry', undefined]]);
+  });
+
+  it("does not take a model's word for a student who is not named near the detail", () => {
+    const note = 'Mira reads well.\n\nShe has epilepsy.';
+    expect(about(note, ['Asha', 'Mira'], [{ kind: 'private', text: 'She has epilepsy', source: 'on-device model', aboutName: 'Mira' }])).toEqual([
+      ['She has epilepsy', undefined],
+    ]);
+    const near = 'Mira reads well. Asha helps her. She has epilepsy.';
+    expect(about(near, ['Asha', 'Mira'], [{ kind: 'private', text: 'She has epilepsy', source: 'on-device model', aboutName: 'Mira' }])).toEqual([
+      ['She has epilepsy', 'Mira'],
+    ]);
+  });
+
+  it('attaches the facts of the sample note as before', () => {
+    const v = buildVault(SAMPLE_NOTE, deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST));
+    expect(v.filter((e) => e.kind === 'private').map((e) => v.find((s) => s.id === e.about)?.surfaces[0])).toEqual(['Aarav Sharma', 'Meenal Joshi', 'Kabir Qureshi']);
   });
 });

@@ -1,5 +1,5 @@
 import type { Draft, Entity, Kind, Source } from './types';
-import { findByRule, findPossibleNames, findSensitive, isWordChar, listedParts, nameParts, nameWords, patternFor, sameForm, wholeWordMatcher } from './rules';
+import { findByRule, findPossibleNames, findSensitive, sentences, isWordChar, listedParts, nameParts, nameWords, patternFor, sameForm, wholeWordMatcher } from './rules';
 
 const TOKEN_NAME: Record<Kind, string> = {
   student: 'Student',
@@ -291,28 +291,40 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
 }
 
 /**
- * A private detail with no known subject is attached to the student named
- * inside it, or else to the student named nearest before it in the same
- * paragraph. Names are matched as whole words.
+ * Decide which student each private detail is about, and leave it
+ * unassigned when that is not plain. An unassigned detail is checked
+ * against every item of a draft, so nothing is lost by not guessing; a
+ * wrong guess would keep a fact out of the check of the child it is really
+ * about.
+ *
+ * - The sentence the detail stands in names two or more students ("Asha
+ *   knows Mira has epilepsy"): unassigned, whatever a model said.
+ * - It names exactly one: that student, unless a model named another.
+ * - It names none: the student a model named, if that student is named
+ *   earlier in the same paragraph; or else the only student named earlier
+ *   in the paragraph. Two or more named earlier is a guess: unassigned.
  */
 function attachPrivateDetails(note: string, entities: Entity[]) {
-  const lower = note.toLowerCase();
   const students = entities.filter((e) => e.kind === 'student');
-  const mentions = (text: string, last: boolean) => {
-    let best: { id: string; pos: number } | undefined;
-    for (const s of students) {
-      for (const m of text.matchAll(wholeWordMatcher(s.surfaces)!)) {
-        if (!best || (last ? m.index > best.pos : m.index < best.pos)) best = { id: s.id, pos: m.index };
-      }
-    }
-    return best;
-  };
-  for (const p of entities.filter((e) => e.kind === 'private' && !e.about)) {
-    const at = p.at ?? lower.indexOf(p.surfaces[0].toLowerCase());
+  const named = (text: string): string[] =>
+    students.filter((s) => wholeWordMatcher(s.surfaces)!.test(text)).map((s) => s.id);
+  const all = sentences(note);
+  for (const p of entities.filter((e) => e.kind === 'private')) {
+    const at = p.span?.start ?? p.at ?? (wholeWordMatcher(p.surfaces)?.exec(note)?.index ?? -1);
     if (at < 0) continue;
-    const paragraphStart = lower.lastIndexOf('\n', at) + 1;
-    const best = mentions(p.surfaces[0], false) ?? mentions(note.slice(paragraphStart, at), true);
-    if (best) p.about = best.id;
+    const end = at + p.surfaces[0].length;
+    const claimed = p.about;
+    const around = all.filter((s) => s.start < end && at < s.end);
+    const inSentence = named(around.length > 0 ? note.slice(around[0].start, around[around.length - 1].end) : p.surfaces[0]);
+    const paragraphStart = note.lastIndexOf('\n', at) + 1;
+    const before = named(note.slice(paragraphStart, at));
+    let about: string | undefined;
+    if (inSentence.length >= 2) about = undefined;
+    else if (inSentence.length === 1) about = !claimed || claimed === inSentence[0] ? inSentence[0] : undefined;
+    else if (claimed) about = before.includes(claimed) ? claimed : undefined;
+    else about = before.length === 1 ? before[0] : undefined;
+    if (about) p.about = about;
+    else delete p.about;
   }
 }
 
