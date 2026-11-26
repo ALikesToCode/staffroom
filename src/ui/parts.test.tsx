@@ -34,7 +34,8 @@ describe('DeviceText', () => {
 
 describe('ConstraintsPanel', () => {
   const vault = buildVault('Meenal reads well.', [{ kind: 'student', text: 'Meenal', source: 'class list' }]);
-  const actions = { onConfirm() {}, onUnconfirm() {}, onRemove() {}, onKind() {}, onTriggers() {}, onAdd() {} };
+  const actions = { onConfirm() {}, onUnconfirm() {}, onRemove() {}, onKind() {}, onTriggers() {}, onAdd() {}, onShare() {}, onNeed() {} };
+  const needOf = (c: Constraint) => (c.id === 'a' ? { typed: false, line: '[Student 1] cannot stay after the last bell.', issues: [] } : { typed: false, issues: [] });
   const constraints: Constraint[] = [
     { id: 'a', kind: 'time-after', about: vault[0].id, text: 'has to leave at the last bell', source: 'rule', alsoModel: true, confirmed: false },
     { id: 'b', kind: 'contact', text: 'lives with his grandmother', who: 'parents', guardian: 'grandmother', away: true, source: 'teacher', confirmed: true },
@@ -42,18 +43,38 @@ describe('ConstraintsPanel', () => {
 
   it('shows each constraint with its words, whose it is, who found it and whether it is confirmed', () => {
     const text = renderToStaticMarkup(
-      <ConstraintsPanel constraints={constraints} students={vault} editable selection="" actions={actions} />,
+      <ConstraintsPanel constraints={constraints} students={vault} editable selection="" actions={actions} needOf={needOf} />,
     ).replace(/<[^>]+>/g, ' ');
     expect(text).toContain('has to leave at the last bell');
     expect(text).toMatch(/About Meenal · found by rule and model · not confirmed/);
     expect(text).toMatch(/About the class · added by you · confirmed by you/);
     expect(text).toContain('Adult: parents, not there to contact. Looked after by: grandmother');
     expect(text).toContain('Add a constraint');
+    // The need line that would be sent is shown beside the switch, before it is switched on.
+    expect(text).toContain('Tell the cloud the need (not the reason)');
+    expect(text).toMatch(/If you switch this on, the cloud will be told:\s+\[Student 1\] cannot stay after the last bell\./);
+    expect(text).toContain('There is no need line for this constraint, so there is nothing to tell the cloud.');
+  });
+
+  it('says what a health need can give away, and why a typed line is stopped', () => {
+    const health: Constraint = { id: 'h', kind: 'health', text: 'has epilepsy', source: 'rule', confirmed: true, share: true, need: 'No strobe, she has epilepsy' };
+    const text = renderToStaticMarkup(
+      <ConstraintsPanel
+        constraints={[health]}
+        students={vault}
+        editable
+        selection=""
+        actions={actions}
+        needOf={() => ({ typed: true, line: 'No strobe, she has epilepsy', issues: [{ what: 'epilepsy', why: 'a word that gives the reason, in a need line' }] })}
+      />,
+    ).replace(/<[^>]+>/g, ' ');
+    expect(text).toContain('A health need can hint at the condition.');
+    expect(text).toMatch(/This line cannot be sent:\s+epilepsy\s+a word that gives the reason, in a need line\s*\./);
   });
 
   it('offers nothing to change once the text is approved', () => {
     const html = renderToStaticMarkup(
-      <ConstraintsPanel constraints={constraints} students={vault} editable={false} selection="" actions={actions} />,
+      <ConstraintsPanel constraints={constraints} students={vault} editable={false} selection="" actions={actions} needOf={needOf} />,
     );
     expect(html).not.toContain('<button');
     expect(html).not.toContain('Add a constraint');

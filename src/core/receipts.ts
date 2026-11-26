@@ -81,7 +81,7 @@ interface Run {
   replyFlagged: boolean;
   checks: ItemCheck[];
   /** Counts of the confirmed constraints. The constraints themselves are never given to a receipt. */
-  constraints?: { confirmed: number; byKind: Partial<Record<ConstraintKind, number>> };
+  constraints?: { confirmed: number; byKind: Partial<Record<ConstraintKind, number>>; shared?: number };
   kept: number;
   struck: number;
 }
@@ -174,6 +174,8 @@ export interface ReceiptRecord {
   doubtsByModel: number;
   /** How many constraints the teacher had confirmed. A count: no kind, no words. */
   constraintsConfirmed: number;
+  /** How many needs were told to the cloud, without their reasons. */
+  needsShared: number;
 }
 
 /** Reduce a receipt to the record that may leave the device. Every field is listed here by hand, so nothing else can ride along. */
@@ -210,6 +212,7 @@ export function receiptRecord(r: Receipt): ReceiptRecord {
     conflictsByRule: r.check.conflictsByRule ?? 0,
     doubtsByModel: r.check.doubtsByModel ?? 0,
     constraintsConfirmed: r.constraints?.confirmed ?? 0,
+    needsShared: r.constraints?.shared ?? 0,
   };
 }
 
@@ -239,8 +242,8 @@ export function asReceiptRecord(data: unknown): ReceiptRecord | undefined {
   const strings = [d.id, d.createdAt, d.task, d.approvedAt, d.guardWhere, d.draftWhere, d.draftModel, d.checkWhere, d.labelWhere];
   if (!withheld || !verdicts || !flags || typeof flags !== 'object' || !strings.every(str)) return undefined;
   if (![d.released, d.approvedChars, d.kept, d.struck, flags.unreadParagraphs, flags.droppedDetails].every(count)) return undefined;
-  // A record written before these three counts were kept does not have them: they read as 0.
-  const later = [d.conflictsByRule, d.doubtsByModel, d.constraintsConfirmed].map((v) => (v === undefined ? 0 : v));
+  // A record written before these counts were kept does not have them: they read as 0.
+  const later = [d.conflictsByRule, d.doubtsByModel, d.constraintsConfirmed, d.needsShared].map((v) => (v === undefined ? 0 : v));
   if (!later.every(count)) return undefined;
   // The same forms the Firestore rules insist on.
   const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
@@ -272,5 +275,6 @@ export function asReceiptRecord(data: unknown): ReceiptRecord | undefined {
     conflictsByRule: later[0] as number,
     doubtsByModel: later[1] as number,
     constraintsConfirmed: later[2] as number,
+    needsShared: later[3] as number,
   };
 }

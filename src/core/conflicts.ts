@@ -16,6 +16,8 @@ export interface RuleHit {
   reason: string;
   /** The sentences of the outgoing text around the constraint, as the cloud saw them. */
   cloudSaw?: string;
+  /** The need line the cloud was told for this constraint, when it was told one. */
+  told?: string;
 }
 
 export interface RuleContext {
@@ -23,6 +25,8 @@ export interface RuleContext {
   name?: string;
   /** Things the note itself says meet after the last bell ("remedial writing club"). */
   afterBell?: string[];
+  /** Whether the cloud was told this constraint as a need. Said in the reason when given. */
+  told?: boolean;
 }
 
 const BEFORE = '(?<![\\p{L}\\p{N}])';
@@ -179,6 +183,10 @@ function activityForms(names: string[]): string[] {
   });
 }
 
+/** Said of a rule hit on a constraint whose need the cloud was told, and on one it was not. The cloud can ignore a need. */
+export const TOLD = 'The cloud was told this need and the step still goes against it.';
+export const NOT_TOLD = 'The cloud was not told this.';
+
 const quote = (text: string) => `“${text}”`;
 
 /**
@@ -194,7 +202,7 @@ export function ruleConflicts(step: string, c: Constraint, context: RuleContext 
     by: 'rule',
     constraintId: c.id,
     matched,
-    reason: `${says} You confirmed: ${quote(c.text)}.`,
+    reason: `${says} You confirmed: ${quote(c.text)}.${context.told === undefined ? '' : context.told ? ` ${TOLD}` : ` ${NOT_TOLD}`}`,
   });
   switch (c.kind) {
     case 'time-after': {
@@ -269,7 +277,15 @@ export function cloudSawAround(note: string, entities: Entity[], c: Constraint):
  * class or names nobody, and any constraint about the class. A conflict
  * wins over a query; otherwise the first found is kept.
  */
-export function ruleCheckItem(item: DraftItem, constraints: Constraint[], entities: Entity[], allowed: readonly string[], note: string): RuleCheck {
+export function ruleCheckItem(
+  item: DraftItem,
+  constraints: Constraint[],
+  entities: Entity[],
+  allowed: readonly string[],
+  note: string,
+  /** The need lines that were sent, by constraint id. The step is compared with every confirmed constraint, told or not. */
+  told: ReadonlyMap<string, string> = new Map(),
+): RuleCheck {
   const named = studentsNamed(item, entities).map((e) => e.id);
   const everyone = named.length === 0 || speaksToClass(`${item.heading} ${item.text}`);
   const applies = constraints.filter((c) => c.confirmed && (!c.about || everyone || named.includes(c.about)));
@@ -281,8 +297,10 @@ export function ruleCheckItem(item: DraftItem, constraints: Constraint[], entiti
     for (const c of applies) {
       const student = entities.find((e) => e.id === c.about);
       const name = student ? nameInNote(note, student) : undefined;
-      const hit = ruleConflicts(step, c, { name, afterBell });
-      if (!hit) continue;
+      const line = told.get(c.id);
+      const said = ruleConflicts(step, c, { name, afterBell, told: line !== undefined });
+      if (!said) continue;
+      const hit = line === undefined ? said : { ...said, told: line };
       if (hit.verdict === 'conflict') {
         const cloudSaw = cloudSawAround(note, entities, c);
         return { hit: cloudSaw ? { ...hit, cloudSaw } : hit, compared: applies.length };
@@ -320,7 +338,7 @@ export function combineChecks(rule: RuleCheck, model: ItemCheck | undefined, unc
   const answered = model && model.verdict !== 'not checked' ? model : undefined;
   const doubt = answered?.verdict === 'unsure' && answered.by === 'model' ? answered.reason : undefined;
   if (rule.hit) {
-    const { verdict, constraintId, matched, reason, cloudSaw } = rule.hit;
+    const { verdict, constraintId, matched, reason, cloudSaw, told } = rule.hit;
     return {
       verdict,
       reason,
@@ -328,6 +346,7 @@ export function combineChecks(rule: RuleCheck, model: ItemCheck | undefined, unc
       constraintId,
       matched,
       ...(cloudSaw ? { cloudSaw } : {}),
+      ...(told ? { told } : {}),
       ...(doubt ? { also: doubt } : {}),
       rules: rule.compared,
     };

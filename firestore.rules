@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // The teacher's own record of each receipt, written by the teacher's browser. It holds counts, times,
     // where each step ran, the length of the approved text, and how many constraints the teacher confirmed
-    // (a count, with no kind and no words): no text. A user can add and read their own;
+    // and how many needs were told to the cloud (counts, with no kind and no words): no text. A user can add and read their own;
     // nobody can edit or delete one. These rules fix the form of a record. They cannot tell whether what a
     // record says is true: whoever is signed in to the account can write one.
     // The id has the form the app generates: the time in base 36, a hyphen, six characters. It is the same
@@ -64,10 +64,10 @@ service cloud.firestore {
     function validRecord(d, receiptId) {
       return d.keys().hasOnly(['id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars',
           'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
-          'kept', 'struck', 'flags', 'conflictsByRule', 'doubtsByModel', 'constraintsConfirmed'])
+          'kept', 'struck', 'flags', 'conflictsByRule', 'doubtsByModel', 'constraintsConfirmed', 'needsShared'])
         && d.keys().hasAll(['id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars',
           'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
-          'kept', 'struck', 'flags', 'conflictsByRule', 'doubtsByModel', 'constraintsConfirmed'])
+          'kept', 'struck', 'flags', 'conflictsByRule', 'doubtsByModel', 'constraintsConfirmed', 'needsShared'])
         && d.id is string && d.id == receiptId
         && isTime(d.createdAt) && isTime(d.approvedAt)
         && d.task in ['plan', 'parents', 'handover']
@@ -82,7 +82,8 @@ service cloud.firestore {
         && validVerdicts(d.verdicts)
         && isCount(d.kept) && isCount(d.struck)
         && validFlags(d.flags)
-        && isCount(d.conflictsByRule) && isCount(d.doubtsByModel) && isCount(d.constraintsConfirmed);
+        && isCount(d.conflictsByRule) && isCount(d.doubtsByModel) && isCount(d.constraintsConfirmed)
+        && isCount(d.needsShared);
     }
   }
 }

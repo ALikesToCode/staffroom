@@ -1097,7 +1097,7 @@ describe('check and receipt', () => {
       [
         'id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars', 'guardWhere',
         'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts', 'kept', 'struck', 'flags',
-        'conflictsByRule', 'doubtsByModel', 'constraintsConfirmed',
+        'conflictsByRule', 'doubtsByModel', 'constraintsConfirmed', 'needsShared',
       ].sort(),
     );
     const json = JSON.stringify(record);
@@ -1158,6 +1158,7 @@ describe('check and receipt', () => {
     // Every key of a record is in both key lists of the rules, and the three later counts are validated.
     for (const key of Object.keys(record)) expect(firestoreRules.split(`'${key}'`).length, key).toBeGreaterThanOrEqual(3);
     expect(firestoreRules).toContain('isCount(d.conflictsByRule) && isCount(d.doubtsByModel) && isCount(d.constraintsConfirmed)');
+    expect(firestoreRules).toContain('&& isCount(d.needsShared);');
     expect(['ON_DEVICE', 'IN_CLOUD', 'FALLBACK']).toContain(record.labelWhere);
   });
 
@@ -1176,8 +1177,8 @@ describe('check and receipt', () => {
     expect(asReceiptRecord({ ...record, draftModel: 'gemini<script>' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, createdAt: 'yesterday' })).toBeUndefined();
     // A record written before the three later counts were kept reads them as 0; a bad count is refused.
-    const { conflictsByRule: _c, doubtsByModel: _d, constraintsConfirmed: _n, ...earlier } = record;
-    expect(asReceiptRecord(earlier)).toEqual({ ...record, conflictsByRule: 0, doubtsByModel: 0, constraintsConfirmed: 0 });
+    const { conflictsByRule: _c, doubtsByModel: _d, constraintsConfirmed: _n, needsShared: _s, ...earlier } = record;
+    expect(asReceiptRecord(earlier)).toEqual({ ...record, conflictsByRule: 0, doubtsByModel: 0, constraintsConfirmed: 0, needsShared: 0 });
     expect(asReceiptRecord({ ...record, constraintsConfirmed: 'three' })).toBeUndefined();
     // A record written before the digest was dropped is still listed, without it.
     expect(asReceiptRecord({ ...record, approvedSha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' })).toEqual(record);

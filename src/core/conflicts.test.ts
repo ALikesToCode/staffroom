@@ -172,7 +172,7 @@ describe('the rule layer on an item of a draft', () => {
     expect(r.compared).toBe(2);
     expect(r.hit).toMatchObject({ verdict: 'conflict', matched: 'remedial writing club' });
     expect(r.hit!.reason).toBe(
-      'This step sends Meenal to the remedial writing club, which your note says meets after the last bell. You confirmed: “has to leave school at the last bell to reach home before dark”.',
+      'This step sends Meenal to the remedial writing club, which your note says meets after the last bell. You confirmed: “has to leave school at the last bell to reach home before dark”. The cloud was not told this.',
     );
     expect(r.hit!.cloudSaw).toBe('She walks six kilometres home to [Place 1] and [withheld]');
   });
@@ -303,15 +303,15 @@ describe('what a receipt keeps of the constraints and the two layers', () => {
       checkWhere: 'RULES_ONLY',
       replyFlagged: false,
       checks,
-      constraints: constraintCounts(constraints),
+      constraints: { ...constraintCounts(constraints), shared: 1 },
       kept: 1,
       struck: 2,
     });
     expect(receipt.check).toMatchObject({ conflict: 1, unsure: 1, fits: 1, conflictsByRule: 1, doubtsByModel: 1 });
-    expect(receipt.constraints).toEqual({ confirmed: 2, byKind: { 'time-after': 1, health: 1 } });
+    expect(receipt.constraints).toEqual({ confirmed: 2, byKind: { 'time-after': 1, health: 1 }, shared: 1 });
     expect(JSON.stringify(receipt)).not.toMatch(/last bell|epilepsy|strobe|Meenal|Rule reason|after school/);
     const record = receiptRecord(receipt);
-    expect(record).toMatchObject({ checkWhere: 'RULES_ONLY', conflictsByRule: 1, doubtsByModel: 1, constraintsConfirmed: 2 });
+    expect(record).toMatchObject({ checkWhere: 'RULES_ONLY', conflictsByRule: 1, doubtsByModel: 1, constraintsConfirmed: 2, needsShared: 1 });
     expect(JSON.stringify(record)).not.toMatch(/time-after|health/);
   });
 });

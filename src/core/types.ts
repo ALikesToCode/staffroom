@@ -72,6 +72,8 @@ export interface ItemCheck {
   matched?: string;
   /** For a rule conflict: the sentences around that constraint as the cloud saw them, stand-ins and all. */
   cloudSaw?: string;
+  /** For a rule hit on a constraint whose need the cloud was told: that need line, as it was sent. */
+  told?: string;
   /** When a rule and the model both spoke: the model's reason. The rule's is `reason`. */
   also?: string;
   /** How many confirmed constraints the rules compared this item's steps with. */
@@ -143,7 +145,7 @@ export interface Receipt {
     doubtsByModel?: number;
   };
   /** Counts of the constraints the teacher confirmed. Counts only: no words of any constraint. */
-  constraints?: { confirmed: number; byKind: Partial<Record<ConstraintKind, number>> };
+  constraints?: { confirmed: number; byKind: Partial<Record<ConstraintKind, number>>; /** Need lines told to the cloud. */ shared?: number };
   signOff: { kept: number; struck: number; at: string };
 }
 
@@ -192,4 +194,11 @@ export interface Constraint {
   /** True when a rule found it and the on-device model found it too. */
   alsoModel?: boolean;
   confirmed: boolean;
+  /**
+   * True when the teacher chose to tell the cloud the need, without its reason. Absent or false: the
+   * cloud is told nothing. Only a confirmed constraint can be shared.
+   */
+  share?: boolean;
+  /** health and other: the need line as the teacher typed it. The other kinds have a fixed line and never use the teacher's words. */
+  need?: string;
 }

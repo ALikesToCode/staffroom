@@ -236,7 +236,18 @@ export function confirmConstraint(note: string, entities: Entity[], constraints:
 
 /** Take the confirmation back. The words stay withheld until the teacher releases them. */
 export function unconfirmConstraint(constraints: Constraint[], id: string): Constraint[] {
-  return constraints.map((c) => (c.id === id ? { ...c, confirmed: false } : c));
+  // Only a confirmed constraint can be told to the cloud as a need, so the switch goes off with it.
+  return constraints.map((c) => (c.id === id ? { ...c, confirmed: false, share: false } : c));
+}
+
+/** Tell the cloud the need of a confirmed constraint, or stop telling it. An unconfirmed constraint is never shared. */
+export function setShare(constraints: Constraint[], id: string, share: boolean): Constraint[] {
+  return constraints.map((c) => (c.id === id ? { ...c, share: share && c.confirmed } : c));
+}
+
+/** Set the need line the teacher typed, for a health or "other" constraint. */
+export function setNeed(constraints: Constraint[], id: string, typed: string): Constraint[] {
+  return constraints.map((c) => (c.id === id ? { ...c, need: typed.slice(0, 200) } : c));
 }
 
 export function removeConstraint(constraints: Constraint[], id: string): Constraint[] {
@@ -247,8 +258,9 @@ export function removeConstraint(constraints: Constraint[], id: string): Constra
 export function setConstraintKind(constraints: Constraint[], id: string, kind: ConstraintKind): Constraint[] {
   return constraints.map((c) => {
     if (c.id !== id) return c;
-    const { days: _days, who: _who, guardian: _guardian, away: _away, triggers: _triggers, ...rest } = c;
-    return { ...rest, kind, ...defaultsFor(kind, c.text) };
+    const { days: _days, who: _who, guardian: _guardian, away: _away, triggers: _triggers, need: _need, ...rest } = c;
+    // Another kind has another need line, so the need is not told until the teacher switches it on again.
+    return { ...rest, kind, share: false, ...defaultsFor(kind, c.text) };
   });
 }
 

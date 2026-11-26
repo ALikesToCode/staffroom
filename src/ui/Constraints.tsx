@@ -10,6 +10,16 @@ export interface ConstraintActions {
   onKind: (id: string, kind: ConstraintKind) => void;
   onTriggers: (id: string, typed: string) => void;
   onAdd: (by: { kind: ConstraintKind; about?: string; text: string }) => void;
+  onShare: (id: string, share: boolean) => void;
+  onNeed: (id: string, typed: string) => void;
+}
+
+/** What the panel shows of a constraint's need: the line as it would be sent, and what the exit gate stops in it. */
+export interface NeedView {
+  /** True when the line is the teacher's own (health, other): there is no fixed line for the kind. */
+  typed: boolean;
+  line?: string;
+  issues: { what: string; why: string }[];
 }
 
 const FOUND_BY: Record<Constraint['source'], string> = {
@@ -39,6 +49,7 @@ export function ConstraintsPanel({
   editable,
   selection,
   actions,
+  needOf,
 }: {
   constraints: Constraint[];
   students: Entity[];
@@ -46,6 +57,8 @@ export function ConstraintsPanel({
   /** The words selected in the note, offered as the words of a new constraint. */
   selection: string;
   actions: ConstraintActions;
+  /** The need line of a constraint, as it would be sent. */
+  needOf: (c: Constraint) => NeedView;
 }) {
   const [about, setAbout] = useState('');
   const [kind, setKind] = useState<ConstraintKind>('time-after');
@@ -103,6 +116,7 @@ export function ConstraintsPanel({
                   />
                 </label>
               )}
+              <NeedRow c={c} need={needOf(c)} editable={editable} actions={actions} />
               {editable && (
                 <span className="actions">
                   {c.confirmed ? (
@@ -187,10 +201,72 @@ export function Caught({ check, constraint }: { check: ItemCheck; constraint?: C
     <dl className="caught">
       <dt>The cloud was shown</dt>
       <dd>{check.cloudSaw ? <CloudText text={check.cloudSaw} /> : 'Nothing of this: the words are not in the text that was sent.'}</dd>
+      {check.told && (
+        <>
+          <dt>The cloud was told</dt>
+          <dd>
+            <CloudText text={check.told} />
+          </dd>
+        </>
+      )}
       <dt>Your device knows</dt>
       <dd>
         <q>{constraint.text}</q>
       </dd>
     </dl>
+  );
+}
+
+/** The switch that tells the cloud a need without its reason, with the exact line that would be sent. */
+function NeedRow({ c, need, editable, actions }: { c: Constraint; need: NeedView; editable: boolean; actions: ConstraintActions }) {
+  const nothingToTell = !need.typed && !need.line;
+  return (
+    <div className="need">
+      <label className="read-it">
+        <input
+          type="checkbox"
+          checked={Boolean(c.share)}
+          disabled={!editable || !c.confirmed || nothingToTell}
+          onChange={(e) => actions.onShare(c.id, e.target.checked)}
+        />
+        Tell the cloud the need (not the reason)
+      </label>
+      {need.typed && (
+        <label>
+          The need, in your words{' '}
+          <input
+            type="text"
+            defaultValue={c.need ?? ''}
+            maxLength={200}
+            disabled={!editable}
+            onBlur={(e) => actions.onNeed(c.id, e.target.value)}
+            placeholder={c.kind === 'health' ? 'For example: No flashing lights for [Student 2]' : 'Say what the school must do, not why'}
+            spellCheck={false}
+            autoComplete="off"
+          />
+        </label>
+      )}
+      {c.kind === 'health' && (
+        <small>A health need can hint at the condition. There is no fixed line for it: it is told only if you type one.</small>
+      )}
+      {need.line ? (
+        <small>
+          {c.share && c.confirmed ? 'The cloud will be told:' : 'If you switch this on, the cloud will be told:'} <code className="need-line">{need.line}</code>
+        </small>
+      ) : (
+        <small>
+          {nothingToTell
+            ? 'There is no need line for this constraint, so there is nothing to tell the cloud.'
+            : 'Nothing is typed, so there is nothing to tell the cloud.'}
+        </small>
+      )}
+      {!c.confirmed && !nothingToTell && <small>Confirm the constraint before you tell the cloud its need.</small>}
+      {need.line &&
+        need.issues.map((v, i) => (
+          <small className="caution" key={i}>
+            This line cannot be sent: <b>{v.what}</b> {v.why}.
+          </small>
+        ))}
+    </div>
   );
 }

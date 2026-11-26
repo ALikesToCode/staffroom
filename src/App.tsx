@@ -10,12 +10,11 @@ import {
   deterministicCandidates,
   insidePrivate,
   possibleNameCandidates,
-  redactWithTokens,
   RESERVED,
   restore,
   segment,
 } from './core/vault';
-import { checkOutgoing, checkReply, safeTitle, type Violation } from './core/gate';
+import { checkReply, safeTitle, type Violation } from './core/gate';
 import { draftLine, loadReceipts, makeReceipt, recordIdTail, storeReceipts, type ReceiptRecord } from './core/receipts';
 import { approvalKey } from './core/policy';
 import {
@@ -29,11 +28,14 @@ import {
   removeConstraint,
   restoreConstraints,
   CONSTRAINT_LABEL,
+  setNeed,
+  setShare,
   setConstraintKind,
   setTriggers,
   unconfirmConstraint,
 } from './core/constraints';
 import { Caught, ConstraintsPanel } from './ui/Constraints';
+import { checkNeed, needIsTyped, needLine, outgoingOf, type Need } from './core/needs';
 import { familyFor } from './core/family';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
@@ -169,6 +171,8 @@ export function App() {
     policy: Policy;
     /** The constraints as they stood at approval. The check is made against these. */
     constraints: Constraint[];
+    /** The needs that were told to the cloud, as lines of the approved text. */
+    needs: Need[];
   } | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
   const [replyIssues, setReplyIssues] = useState<Violation[]>([]);
@@ -263,11 +267,12 @@ export function App() {
     () => sent?.entities ?? lockConstraints(applyLocks(rawEntities, policy.lockedKinds), constraints),
     [sent, rawEntities, policy.lockedKinds, constraints],
   );
-  const redaction = useMemo(() => redactWithTokens(note, entities), [note, entities]);
-  const outgoing = redaction.text;
+  // The redacted note, with the needs the teacher chose to tell under it. The gate runs on both.
+  const going = useMemo(() => outgoingOf(note, entities, sent?.constraints ?? constraints), [note, entities, sent, constraints]);
+  const outgoing = going.text;
   /** True when not one stand-in was written: the outgoing text is the note as the teacher wrote it. */
-  const nothingWithheld = redaction.tokens.length === 0;
-  const violations = useMemo(() => checkOutgoing(outgoing, entities, note), [outgoing, entities, note]);
+  const nothingWithheld = going.noteAsWritten;
+  const violations = going.violations;
   const approval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel);
   const asWrittenApproval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel, true);
   const readIt = readKey !== null && readKey === approval;
@@ -487,12 +492,20 @@ export function App() {
     onRemove: (id: string) => hold({ entities: rawEntities, constraints: removeConstraint(constraints, id) }),
     onKind: (id: string, kind: ConstraintKind) => hold({ entities: rawEntities, constraints: setConstraintKind(constraints, id, kind) }),
     onTriggers: (id: string, typed: string) => hold({ entities: rawEntities, constraints: setTriggers(constraints, id, typed) }),
+    onShare: (id: string, share: boolean) => hold({ entities: rawEntities, constraints: setShare(constraints, id, share) }),
+    onNeed: (id: string, typed: string) => hold({ entities: rawEntities, constraints: setNeed(constraints, id, typed) }),
     onAdd: (by: { kind: ConstraintKind; about?: string; text: string }) => {
       // Words taken from the selection are withheld at the place they were selected.
       const span = selectionSpan.current;
       const at = span && note.slice(span.start, span.end) === by.text.trim() ? span.start : undefined;
       hold(addConstraint(note, rawEntities, constraints, { ...by, at }));
     },
+  };
+
+  /** The need line of a constraint as it would be sent, and what the exit gate stops in it. */
+  const needOf = (c: Constraint) => {
+    const line = needLine(c, entities);
+    return { typed: needIsTyped(c), line, issues: line ? checkNeed(line, entities) : [] };
   };
 
   // ---------------------------------------------------------------- steps 3 to 5: approve, draft, check
@@ -503,13 +516,14 @@ export function App() {
     if (!policyReadyRef.current || sendingRef.current) return;
     const sentPolicy = policyRef.current;
     const current = lockConstraints(applyLocks(rawEntities, sentPolicy.lockedKinds), constraints);
-    const { text, tokens } = redactWithTokens(note, current);
-    const stopped = checkOutgoing(text, current, note);
+    const approved = outgoingOf(note, current, constraints);
+    const { text, tokens } = approved;
+    const stopped = approved.violations;
     // The tick was for one text, one set of locks and one drafting model. Any of them changed: no send.
     const read = readKey !== null && readKey === approvalKey(text, sentPolicy.lockedKinds, sentPolicy.cloudModel);
     // With nothing withheld the note goes out as written, and that needs its own tick for this same text.
     const written =
-      tokens.length > 0 ||
+      !approved.noteAsWritten ||
       (asWrittenKey !== null && asWrittenKey === approvalKey(text, sentPolicy.lockedKinds, sentPolicy.cloudModel, true));
     // Parts no model read need their own tick too, for this same text.
     const unreadOk =
@@ -536,7 +550,7 @@ export function App() {
     const sentOnline = navigator.onLine;
     setError(null);
     const approvedAt = new Date().toISOString();
-    setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy, constraints });
+    setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy, constraints, needs: approved.needs });
     setStage('drafting');
     let drafted: DraftResult;
     try {
@@ -577,7 +591,9 @@ export function App() {
       where = 'SKIPPED';
     } else {
       // Layer A: each step against each confirmed constraint, by rule. No model, so it runs in every browser.
-      const byRule = items.map((item) => ruleCheckItem(item, constraints, entities, tokens, note));
+      // Every confirmed constraint is compared, whether or not the cloud was told its need: the cloud can ignore a need.
+      const told = new Map(approved.needs.map((n) => [n.id, n.line]));
+      const byRule = items.map((item) => ruleCheckItem(item, constraints, entities, tokens, note, told));
       const ruleRan = byRule.some((r) => r.compared > 0);
       const unchecked = (reason: string): ItemCheck => ({ verdict: 'not checked', reason });
       // Layer B: the on-device model, against every withheld private detail. Its "no" is a doubt, never a conflict.
@@ -657,7 +673,7 @@ export function App() {
       checkRequests: checkRequests ?? undefined,
       replyFlagged: replyIssues.length > 0,
       checks,
-      constraints: constraintCounts(sent.constraints),
+      constraints: { ...constraintCounts(sent.constraints), shared: sent.needs.length },
       kept: signed.filter((k) => k === true).length,
       struck: signed.filter((k) => k === false).length,
     });
@@ -1247,6 +1263,7 @@ export function App() {
                     editable
                     selection={selection}
                     actions={constraintActions}
+                    needOf={needOf}
                   />
                 </article>
               )}
@@ -1260,6 +1277,7 @@ export function App() {
                     editable={false}
                     selection=""
                     actions={constraintActions}
+                    needOf={needOf}
                   />
                 </details>
               )}
@@ -1880,7 +1898,7 @@ function Receipts({
                     <span>
                       Guard {RECORD_WHERE[r.guardWhere]} · draft {RECORD_WHERE[r.draftWhere]} ({r.draftModel}) · check{' '}
                       {RECORD_WHERE[r.checkWhere]}
-                      {r.flags.replyFlagged ? ' · reply flagged' : ''} · {r.constraintsConfirmed} constraints confirmed,{' '}
+                      {r.flags.replyFlagged ? ' · reply flagged' : ''} · {r.constraintsConfirmed} constraints confirmed, {r.needsShared} told as needs,{' '}
                       {r.conflictsByRule} in conflict by rule, {r.doubtsByModel} doubted by the model · record id {recordIdTail(r.id)}
                     </span>
                   </li>
@@ -1959,7 +1977,7 @@ function Receipts({
                                     .map(([k, n]) => `${n} ${CONSTRAINT_LABEL[k as ConstraintKind].toLowerCase()}`)
                                     .join(', ')})`
                                 : ''
-                            }. ${r.check.conflictsByRule ?? 0} ${(r.check.conflictsByRule ?? 0) === 1 ? 'item' : 'items'} found in conflict by rule, ${r.check.doubtsByModel ?? 0} doubted by the on-device model only. The words of a constraint are not kept here.`
+                            }. ${r.constraints.shared ?? 0} told to the cloud as a need, without the reason. ${r.check.conflictsByRule ?? 0} ${(r.check.conflictsByRule ?? 0) === 1 ? 'item' : 'items'} found in conflict by rule, ${r.check.doubtsByModel ?? 0} doubted by the on-device model only. The words of a constraint are not kept here.`
                           : 'Not recorded for this receipt'}
                       </dd>
                       <dt>Sign-off</dt>
