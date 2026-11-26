@@ -119,6 +119,32 @@ describe('vault', () => {
     expect(redact(note, v)).toBe('[Student 1] sits with [Student 2].');
   });
 
+  it('still withholds a name inside a private detail the teacher released', () => {
+    const note = "Kabir's parents are separating and he is tired. Ring 98765 43210.";
+    const v = buildVault(note, [
+      ...deterministicCandidates(note, ['Kabir']),
+      { kind: 'private', text: "Kabir's parents are separating and he is tired. Ring 98765 43210", source: 'teacher' },
+    ]);
+    expect(redact(note, v)).toBe('[withheld].');
+    const released = v.map((e) => (e.kind === 'private' ? { ...e, withheld: false } : e));
+    const out = redact(note, released);
+    expect(out).toBe("[Student 1]'s parents are separating and he is tired. Ring [Contact 1].");
+    expect(checkOutgoing(out, released)).toEqual([]);
+    expect(segment(note, released).map((s) => s.text).join('')).toBe(note);
+  });
+
+  it('withholds all of two private details that overlap, whichever is released', () => {
+    const note = 'His father lost his job at the mill last month.';
+    const v = buildVault(note, [
+      { kind: 'private', text: 'father lost his job', source: 'on-device model' },
+      { kind: 'private', text: 'lost his job at the mill', source: 'teacher' },
+    ]);
+    expect(redact(note, v)).toBe('His [withheld] last month.');
+    const oneReleased = v.map((e, i) => (i === 0 ? { ...e, withheld: false } : e));
+    expect(redact(note, oneReleased)).toBe('His father [withheld] last month.');
+    expect(checkOutgoing(redact(note, oneReleased), oneReleased)).toEqual([]);
+  });
+
   describe('exit gate', () => {
     it('passes the redacted text', () => {
       expect(checkOutgoing(redacted, vault)).toEqual([]);

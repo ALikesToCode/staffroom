@@ -157,28 +157,61 @@ export interface Segment {
   entity?: Entity;
 }
 
-/** Split the note into plain text and found items, for display. */
+/**
+ * Split the note into plain text and found items. Every item is searched for
+ * on its own, as whole words, so one item can never hide another.
+ * Where items overlap, a withheld item always wins over a released one, and
+ * a longer withheld item wins over a shorter one. Releasing a private detail
+ * therefore never releases a name or a number written inside it.
+ */
 export function segment(note: string, entities: Entity[]): Segment[] {
-  const lookup = new Map<string, Entity>();
-  for (const e of entities) for (const s of e.surfaces) lookup.set(norm(s), e);
-  const matcher = wholeWordMatcher([...entities.flatMap((e) => e.surfaces)]);
-  if (!matcher) return [{ text: note }];
-  const out: Segment[] = [];
-  let at = 0;
-  for (const m of note.matchAll(matcher)) {
-    if (m.index > at) out.push({ text: note.slice(at, m.index) });
-    out.push({ text: m[0], entity: lookup.get(norm(m[0])) });
-    at = m.index + m[0].length;
+  const ranges: { start: number; end: number; entity: Entity }[] = [];
+  for (const entity of entities) {
+    const matcher = wholeWordMatcher(entity.surfaces);
+    if (!matcher) continue;
+    for (const m of note.matchAll(matcher)) ranges.push({ start: m.index, end: m.index + m[0].length, entity });
   }
-  if (at < note.length) out.push({ text: note.slice(at) });
+  if (ranges.length === 0) return [{ text: note }];
+  // Painted in this order, so the last to paint a character owns it:
+  // released before withheld, short before long, later items before earlier ones.
+  const order = new Map(entities.map((e, i) => [e, i]));
+  ranges.sort(
+    (a, b) =>
+      Number(a.entity.withheld) - Number(b.entity.withheld) ||
+      a.end - a.start - (b.end - b.start) ||
+      order.get(b.entity)! - order.get(a.entity)! ||
+      a.start - b.start,
+  );
+  const owner: (Entity | undefined)[] = new Array(note.length).fill(undefined);
+  for (const r of ranges) owner.fill(r.entity, r.start, r.end);
+
+  const out: Segment[] = [];
+  let from = 0;
+  for (let i = 1; i <= note.length; i++) {
+    if (i === note.length || owner[i] !== owner[from]) {
+      out.push({ text: note.slice(from, i), entity: owner[from] });
+      from = i;
+    }
+  }
   return out;
 }
 
 /** The text that may leave the device: every withheld item replaced by its stand-in. */
 export function redact(note: string, entities: Entity[]): string {
-  return segment(note, entities)
-    .map((s) => (s.entity && s.entity.withheld ? s.entity.token : s.text))
-    .join('');
+  const out: string[] = [];
+  let lastWasPrivate = false;
+  for (const s of segment(note, entities)) {
+    if (!s.entity || !s.entity.withheld) {
+      out.push(s.text);
+      lastWasPrivate = false;
+      continue;
+    }
+    // Two private details that run into each other are written as one stand-in.
+    const isPrivate = s.entity.token === PRIVATE_TOKEN;
+    if (!(isPrivate && lastWasPrivate)) out.push(s.entity.token);
+    lastWasPrivate = isPrivate;
+  }
+  return out.join('');
 }
 
 /** Put real names back into text that came from the cloud. Runs on the device. */
