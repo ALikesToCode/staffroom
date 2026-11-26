@@ -4,6 +4,7 @@ import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './core/samples';
 import {
   addByTeacher,
   applyLocks,
+  bracketDraft,
   buildVault,
   CAPITALISED,
   deterministicCandidates,
@@ -390,7 +391,9 @@ export function App() {
       return;
     }
     setResult(drafted);
-    setKept(drafted.draft.items.map(() => true));
+    // A stand-in the model wrote without its brackets is read as that stand-in, if it was one that was sent.
+    const items = bracketDraft(drafted.draft, tokens).items;
+    setKept(items.map(() => true));
     const replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
     setReplyIssues(checkReply(replyText, entities, tokens));
     setReplyRead(false);
@@ -398,21 +401,21 @@ export function App() {
     setStage('checking');
     let itemChecks: ItemCheck[];
     let where: Where = 'NOT_RUN';
-    if (!anythingToCheck(drafted.draft.items, entities)) {
+    if (!anythingToCheck(items, entities)) {
       // No private detail was withheld: there is nothing to check, so no model is asked.
-      itemChecks = drafted.draft.items.map(() => NOTHING_WITHHELD);
+      itemChecks = items.map(() => NOTHING_WITHHELD);
       where = 'SKIPPED';
     } else {
       try {
         if ((await deviceStatus()) !== 'available') throw new Error('no on-device model was available.');
-        itemChecks = await checkOnDevice(note, drafted.draft.items, entities, (done, total) =>
+        itemChecks = await checkOnDevice(note, items, entities, (done, total) =>
           setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`),
         );
         where = 'ON_DEVICE';
       } catch (e) {
         // Say what happened. The draft stays; every item that had something to be checked against is marked unchecked.
         setError(`The on-device check stopped: ${message(e)} The items below are not checked.`);
-        itemChecks = drafted.draft.items.map((item) =>
+        itemChecks = items.map((item) =>
           detailsFor(item, entities).length > 0
             ? { verdict: 'not checked', reason: 'The on-device check did not run. Read this item against the private details yourself.' }
             : NOTHING_WITHHELD,
@@ -477,11 +480,14 @@ export function App() {
     }
   };
 
+  /** The draft as it is read on this device: a bare stand-in that was sent has its brackets back. `result.draft` is the reply as it came. */
+  const draft = useMemo(() => (result ? bracketDraft(result.draft, sent?.tokens ?? []) : null), [result, sent]);
+
   const finalText = useMemo(() => {
-    if (!result) return '';
-    const items = result.draft.items.filter((_, i) => kept[i]);
-    return restore([result.draft.title, '', ...items.map((i) => `${i.heading}\n${i.text}\n`)].join('\n'), entities, sent?.tokens).trim();
-  }, [result, kept, entities, sent]);
+    if (!draft) return '';
+    const items = draft.items.filter((_, i) => kept[i]);
+    return restore([draft.title, '', ...items.map((i) => `${i.heading}\n${i.text}\n`)].join('\n'), entities, sent?.tokens).trim();
+  }, [draft, kept, entities, sent]);
 
   /** Copy to the clipboard and say plainly whether it worked. The browser can refuse. */
   const copy = async (what: 'all' | number, text: string) => {
@@ -899,10 +905,10 @@ export function App() {
                 </article>
               )}
 
-              {(stage === 'result' || stage === 'signed') && result && (
+              {(stage === 'result' || stage === 'signed') && result && draft && (
                 <article className="card result">
                   <div className="card-head">
-                    <h3>{restore(result.draft.title, entities, sent?.tokens)}</h3>
+                    <h3>{restore(draft.title, entities, sent?.tokens)}</h3>
                   </div>
                   <div className="result-chips">
                     <span className={`route route-${result.where.toLowerCase()}`}>
@@ -932,7 +938,7 @@ export function App() {
                     </p>
                   )}
                   <ol className="items">
-                    {result.draft.items.map((item, i) => {
+                    {draft.items.map((item, i) => {
                       const c = checks[i];
                       const facts = detailsFor(item, entities);
                       return (

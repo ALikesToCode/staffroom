@@ -1,4 +1,4 @@
-import type { Entity, Kind, Source } from './types';
+import type { Draft, Entity, Kind, Source } from './types';
 import { findByRule, findPossibleNames, findSensitive, isWordChar, listedParts, nameParts, nameWords, patternFor, sameForm, wholeWordMatcher } from './rules';
 
 const TOKEN_NAME: Record<Kind, string> = {
@@ -22,6 +22,37 @@ export const TOKEN_RE = /\[(?:Student|Adult|Place|Contact|ID) \d+\]/g;
  * one a reply invents.
  */
 export const LOOKALIKE_RE = /\[\s*(?:student|adult|place|contact|id)\s*\d+\s*\]|\[\s*withheld\s*\]/gi;
+
+/**
+ * A stand-in written without its square brackets: "Student 1", "ID 2". A
+ * model asked for "[Student 1]" sometimes writes it this way, most often in
+ * a heading.
+ */
+export const BARE_RE = /(?<![[\p{L}\p{N}])(?:Student|Adult|Place|Contact|ID)[ \u00A0]\d+(?![\p{L}\p{N}\]])/gu;
+
+const bracketed = (bare: string) => `[${bare.replace('\u00A0', ' ')}]`;
+
+/**
+ * Put the brackets back on a bare stand-in, when the bracketed form is one
+ * the redactor wrote into the approved text (`sent`). Any other is left as
+ * it came: it is flagged by the return gate and never turned into a name.
+ */
+export function bracketBare(text: string, sent: readonly string[]): string {
+  return text.replace(BARE_RE, (bare) => (sent.includes(bracketed(bare)) ? bracketed(bare) : bare));
+}
+
+/** The bare stand-ins in a text whose bracketed form was not in the approved text, once each. */
+export function bareNotSent(text: string, sent: readonly string[]): string[] {
+  return [...new Set([...text.matchAll(BARE_RE)].map((m) => m[0]).filter((bare) => !sent.includes(bracketed(bare))))];
+}
+
+/** A draft with the brackets put back on every bare stand-in that was sent. The reply as it came is kept apart, for the cloud lane. */
+export function bracketDraft(draft: Draft, sent: readonly string[]): Draft {
+  return {
+    title: bracketBare(draft.title, sent),
+    items: draft.items.map((i) => ({ heading: bracketBare(i.heading, sent), text: bracketBare(i.text, sent) })),
+  };
+}
 
 /** The category of a stand-in look-alike found in the raw note. It is always withheld and cannot be released. */
 export const RESERVED = 'stand-in';
@@ -287,6 +318,8 @@ export function deterministicCandidates(note: string, classList: string[]): Cand
   for (const hit of findSensitive(note)) out.push({ kind: 'private', text: hit.text, source: 'rule', category: hit.category });
   // Text typed into the note that looks like one of the app's own stand-ins must not go out looking like one.
   for (const m of note.matchAll(LOOKALIKE_RE)) out.push({ kind: 'private', text: m[0], source: 'rule', category: RESERVED });
+  // The same without brackets ("Student 2"): a reply that echoed it would be read as that stand-in.
+  for (const m of note.matchAll(BARE_RE)) out.push({ kind: 'private', text: m[0], source: 'rule', category: RESERVED });
   return out;
 }
 

@@ -1,6 +1,6 @@
 import type { Entity } from './types';
 import { findByRule, sameForm, wholeWordMatcher } from './rules';
-import { covered, LOOKALIKE_RE, RESERVED } from './vault';
+import { bareNotSent, covered, LOOKALIKE_RE, RESERVED } from './vault';
 
 export interface Violation {
   what: string;
@@ -67,6 +67,9 @@ export function checkOutgoing(text: string, entities: Entity[], note?: string): 
  * wrote into the text the teacher approved; or when it contains anything
  * the exit gate would have stopped.
  *
+ * A stand-in written without its brackets ("Student 9") is treated the
+ * same way.
+ *
  * `sentTokens` is the set recorded at approval (see redactWithTokens), not
  * the vault and not a search of the approved text. A stand-in the vault
  * holds but the cloud was never sent, and a malformed one such as
@@ -79,6 +82,11 @@ export function checkReply(text: string, entities: Entity[], sentTokens: readonl
     if (sentTokens.includes(m[0]) || seen.has(m[0])) continue;
     seen.add(m[0]);
     violations.push({ what: m[0], why: 'a stand-in that was not in the text you approved' });
+  }
+  // A stand-in written without brackets counts as one too. If its bracketed form was sent it is read as that
+  // stand-in (see bracketBare); if not, it is flagged like any other the cloud was never given.
+  for (const bare of bareNotSent(text, sentTokens)) {
+    violations.push({ what: bare, why: 'a stand-in that was not in the text you approved' });
   }
   return violations;
 }

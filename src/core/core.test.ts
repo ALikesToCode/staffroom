@@ -4,6 +4,8 @@ import { findByRule, findSensitive, nameParts, sentences } from './rules';
 import {
   addByTeacher,
   applyLocks,
+  bracketBare,
+  bracketDraft,
   buildVault,
   deterministicCandidates,
   possibleNameCandidates,
@@ -1155,5 +1157,46 @@ describe('capitalised words that open a sentence, when no model read the note', 
 
   it('leaves a class-list name to the class list', () => {
     expect(guess('Kabir was late.', ['Kabir Khan'])).toEqual([]);
+  });
+});
+
+describe('a stand-in written without its brackets', () => {
+  const note = 'Aarav reads well. Meenal is shy. Tanvi helps.';
+  const v = buildVault(note, deterministicCandidates(note, ['Aarav', 'Meenal', 'Tanvi']));
+  const sentTokens = ['[Student 1]', '[Student 2]'];
+
+  it('is asked for with brackets in the fixed instructions', () => {
+    expect(DRAFT_FORMAT).toContain('with its square brackets');
+    expect(DRAFT_FORMAT).toContain('[Student 1], never Student 1');
+  });
+
+  it('is read as the stand-in when its bracketed form was sent, in a heading and in a text', () => {
+    expect(bracketBare('Student 1', sentTokens)).toBe('[Student 1]');
+    expect(bracketBare("Seat Student 1 by [Student 2]. Student 2's desk is free.", sentTokens)).toBe("Seat [Student 1] by [Student 2]. [Student 2]'s desk is free.");
+    const draft = bracketDraft({ title: 'Plan for Student 1', items: [{ heading: 'Student 2', text: 'Pair Student 2 with [Student 1].' }] }, sentTokens);
+    expect(draft).toEqual({ title: 'Plan for [Student 1]', items: [{ heading: '[Student 2]', text: 'Pair [Student 2] with [Student 1].' }] });
+    expect(restore(draft.items[0].heading, v, sentTokens)).toBe('Meenal');
+    expect(restore(draft.items[0].text, v, sentTokens)).toBe('Pair Meenal with Aarav.');
+    expect(studentsNamed(draft.items[0], v).map((e) => e.surfaces[0])).toEqual(['Aarav', 'Meenal']);
+  });
+
+  it('is left alone when its bracketed form was not sent, or when it is part of a longer word or number', () => {
+    expect(bracketBare('Student 3 and Student 12 and MyStudent 1 and Student 1a.', sentTokens)).toBe('Student 3 and Student 12 and MyStudent 1 and Student 1a.');
+    expect(restore(bracketBare('Student 3', sentTokens), v, sentTokens)).toBe('Student 3');
+  });
+
+  it('is flagged by the return gate when its bracketed form was not sent', () => {
+    expect(checkReply('Student 1\nPair Student 2 with [Student 1].', v, sentTokens)).toEqual([]);
+    expect(checkReply('Student 3\nPair Student 3 with Adult 1.', v, sentTokens)).toEqual([
+      { what: 'Student 3', why: 'a stand-in that was not in the text you approved' },
+      { what: 'Adult 1', why: 'a stand-in that was not in the text you approved' },
+    ]);
+  });
+
+  it('typed into the note is held back, so it cannot come back as somebody else', () => {
+    const typed = 'Student 2 in my register is Aarav. Meenal is shy.';
+    const tv = buildVault(typed, deterministicCandidates(typed, ['Aarav', 'Meenal']));
+    expect(redact(typed, tv)).toBe('[withheld] in my register is [Student 1]. [Student 2] is shy.');
+    expect(checkOutgoing(redact(typed, tv), tv, typed)).toEqual([]);
   });
 });

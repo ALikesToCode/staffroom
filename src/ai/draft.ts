@@ -10,7 +10,8 @@ The teacher's notes have been redacted before they reached you. Text in square b
 Write plainly, in plain text with no markdown: no asterisks, no # headings. No diagnosis, no labels for children, nothing that costs money.`;
 
 /** The fixed sentence that follows the task instruction in every draft prompt. */
-export const DRAFT_FORMAT = 'Return a title and a list of items. Each item has a short heading and the text.';
+export const DRAFT_FORMAT =
+  'Return a title and a list of items. Each item has a short heading and the text. In the title, in every heading and in every text, write each stand-in exactly as it is in the notes, with its square brackets: [Student 1], never Student 1.';
 
 /** The fixed line written above the approved text in every draft prompt. */
 export const DRAFT_NOTES_HEADING = "The teacher's redacted notes:";
@@ -32,7 +33,13 @@ const SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        properties: { heading: { type: 'string' }, text: { type: 'string' } },
+        properties: {
+          heading: {
+            type: 'string',
+            description: 'A short heading. A stand-in in it keeps its square brackets: [Student 1], never Student 1.',
+          },
+          text: { type: 'string', description: 'The text. Every stand-in keeps its square brackets.' },
+        },
         required: ['heading', 'text'],
       },
     },
