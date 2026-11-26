@@ -283,3 +283,31 @@ describe('the needs set: the parser and the placing, no model', () => {
     expect([got.right, got.cases]).toEqual([12, 12]);
   });
 });
+
+describe('the guard set: what the on-device model adds to the rules', () => {
+  it('has twelve fresh notes of two to five sentences, every label written out in the words of its note', async () => {
+    const { GUARD_CASES } = await import('./guard');
+    const { CONSTRAINT_KINDS } = await import('../core/constraints');
+    const { sentences } = await import('../core/rules');
+    const { SAMPLE_CLASS_LIST, SAMPLE_NOTE } = await import('../core/samples');
+    expect(GUARD_CASES).toHaveLength(12);
+    expect(new Set(GUARD_CASES.map((c) => c.id)).size).toBe(12);
+    for (const c of GUARD_CASES) {
+      const n = sentences(c.note).length;
+      expect(n >= 2 && n <= 5, `${c.id}: ${n} sentences`).toBe(true);
+      for (const d of [...c.details.map((x) => x.text), ...c.harmless]) expect(c.note, `${c.id}: “${d}”`).toContain(d);
+      // A harmless span is no part of a private detail, and no private detail is part of it.
+      for (const h of c.harmless) for (const d of c.details) expect(h.includes(d.text) || d.text.includes(h), `${c.id}: “${h}” / “${d.text}”`).toBe(false);
+      expect(c.constraints.every((k) => CONSTRAINT_KINDS.includes(k))).toBe(true);
+      expect(new Set(c.constraints).size).toBe(c.constraints.length);
+      // Fresh: no pupil of the sample class, and no sentence of the sample note.
+      for (const name of c.classList) expect(SAMPLE_CLASS_LIST).not.toContain(name);
+      for (const s of sentences(c.note)) expect(SAMPLE_NOTE).not.toContain(s.text);
+    }
+    // Details the lists should catch and details only a reader would see; and harmless words that look private.
+    const all = GUARD_CASES.flatMap((c) => c.details);
+    expect(all.filter((d) => !d.easy).length).toBeGreaterThanOrEqual(15);
+    expect(all.filter((d) => d.easy && d.kind === 'private').length).toBeGreaterThanOrEqual(3);
+    expect(GUARD_CASES.flatMap((c) => c.harmless).length).toBeGreaterThanOrEqual(6);
+  });
+});
