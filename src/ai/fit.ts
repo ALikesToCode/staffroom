@@ -1,6 +1,6 @@
-import type { Constraint, TaskId } from '../core/types';
-import { ruleConflicts, type RuleHit } from '../core/conflicts';
-import { SUGGESTION_MAX } from '../core/recheck';
+import type { Constraint, DraftItem, Entity, ItemCheck, TaskId } from '../core/types';
+import { afterBellActivities, nameInNote, ruleConflicts, type RuleHit } from '../core/conflicts';
+import { stepToRewrite, SUGGESTION_MAX } from '../core/recheck';
 import { modelFor } from './routes';
 
 // The device fits a step to the child. The cloud wrote the step without the private fact; the on-device
@@ -46,6 +46,42 @@ export interface FitInput {
   constraints?: Constraint[];
   /** Things the note says meet after the last bell, for the rule that compares the suggestion. */
   afterBell?: string[];
+}
+
+/** True for an item the device can try to fit: a rule found it in conflict with a constraint that is still confirmed. */
+export function canFit(check: ItemCheck | undefined, constraints: readonly Constraint[]): boolean {
+  return check?.verdict === 'conflict' && check.constraintId !== undefined && constraints.some((c) => c.id === check.constraintId && c.confirmed);
+}
+
+/**
+ * What to ask for one item in conflict: the step the rule matched, the
+ * constraint it goes against, and every confirmed constraint about the
+ * same student or about the class, which the suggestion must pass too.
+ * Undefined when the item is not one the device can fit.
+ */
+export function fitInputFor(
+  item: DraftItem,
+  check: ItemCheck | undefined,
+  constraints: readonly Constraint[],
+  entities: Entity[],
+  allowed: readonly string[],
+  note: string,
+  task: TaskId,
+): (FitInput & { whole: boolean }) | undefined {
+  if (!canFit(check, constraints)) return undefined;
+  const constraint = constraints.find((c) => c.id === check!.constraintId)!;
+  const { step, whole } = stepToRewrite(item, entities, allowed, check!.matched);
+  const student = entities.find((e) => e.id === constraint.about);
+  return {
+    step,
+    whole,
+    itemText: item.text,
+    constraint,
+    studentName: student ? nameInNote(note, student) : undefined,
+    task,
+    constraints: constraints.filter((c) => c.confirmed && (!c.about || c.about === constraint.about)),
+    afterBell: afterBellActivities(note),
+  };
 }
 
 export type FitResult =

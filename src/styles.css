@@ -2516,6 +2516,16 @@ mark.hit {
   font-weight: 400;
 }
 
+.rewrite .fit-note {
+  font-weight: 400;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.rewrite.fit-recorded b {
+  font-size: 0.92rem;
+}
+
 .receipt-line {
   font-size: 0.95rem;
   color: var(--ink-soft);

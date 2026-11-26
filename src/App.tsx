@@ -38,10 +38,11 @@ import { Caught, ConstraintsPanel } from './ui/Constraints';
 import { Hero, PROMISE } from './ui/Hero';
 import { DevicePill, How, Inspect, Receipts, WHERE_RAN, type Records } from './ui/pages';
 import { draftFailure, resultOrder, summaryLine } from './ui/say';
-import { keptAfterRecheck, modelSaid, recheckItems, rewriteStep, stepToRewrite } from './core/recheck';
+import { keptAfterRecheck, modelSaid, recheckItems, rewriteStep, stepIndexOf, stepToRewrite } from './core/recheck';
+import { canFit, FIT_FAILED, FIT_LABEL, fitInputFor, fitStep } from './ai/fit';
 import { useInstall, useUpdate } from './ui/pwa';
 import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
-import { asRecordedRun, captureRun, RECORDED_FILE, replayBanner, replayNext, type RecordedRun, type ReplayStage } from './core/recorded';
+import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, replayBanner, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyFor } from './core/family';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
@@ -199,8 +200,20 @@ export function App() {
   const [offIds, setOffIds] = useState<string[]>([]);
   /** True once the draft has been checked again on the device after the first check. */
   const [rechecked, setRechecked] = useState(false);
-  /** The item whose step is being rewritten, and the words in the box. */
-  const [rewriting, setRewriting] = useState<{ item: number; step: string; whole: boolean; text: string } | null>(null);
+  /** The items whose step is being rewritten, and the words in each box. `suggested`: the words began as a suggestion of the on-device model. */
+  const [rewriting, setRewriting] = useState<Record<number, { step: string; whole: boolean; text: string; suggested?: boolean }>>({});
+  /** The item the on-device model is fitting now, and whether it is going through all of them. */
+  const [fitting, setFitting] = useState<number | null>(null);
+  const [fittingAll, setFittingAll] = useState(false);
+  const fitBusy = useRef(false);
+  /** What is said under an item the on-device model could not fit. */
+  const [fitSaid, setFitSaid] = useState<Record<number, string>>({});
+  /** The suggestions the on-device model made in this run, the latest for each item. */
+  const [fits, setFits] = useState<RecordedFit[]>([]);
+  /** The items whose saved rewrite began as a suggestion of the on-device model. */
+  const [fitted, setFitted] = useState<number[]>([]);
+  /** Where the fit ran in this run. NOT_RUN until the on-device model has answered once. */
+  const [fitWhere, setFitWhere] = useState<Where>('NOT_RUN');
   const [checkWhere, setCheckWhere] = useState<Where>('NOT_RUN');
   /** How many requests the check made to the on-device model and how many failed. Null when it made none. */
   const [checkRequests, setCheckRequests] = useState<{ asked: number; failed: number } | null>(null);
@@ -692,7 +705,13 @@ export function App() {
     setEdits({});
     setOffIds([]);
     setRechecked(false);
-    setRewriting(null);
+    setRewriting({});
+    setFitting(null);
+    setFittingAll(false);
+    setFitSaid({});
+    setFits([]);
+    setFitted([]);
+    setFitWhere('NOT_RUN');
     // An item in conflict starts struck. Every other item starts undecided: nothing is kept until the teacher keeps it.
     setKept(startsKept(itemChecks));
     setCheckWhere(where);
@@ -742,6 +761,7 @@ export function App() {
       // The constraints in force at sign-off: one switched off on the result screen is not counted as confirmed.
       constraints: { ...constraintCounts(liveConstraints), shared: sent.needs.length },
       rewritten: signed.filter((k, i) => k === true && i in edits).length,
+      fittedOnDevice: signed.filter((k, i) => k === true && i in edits && fitted.includes(i)).length,
       kept: signed.filter((k) => k === true).length,
       struck: signed.filter((k) => k === false).length,
     });
@@ -819,20 +839,76 @@ export function App() {
   const startRewrite = (i: number) => {
     if (!draft || !sent || replay || stage !== 'result') return;
     const { step, whole } = stepToRewrite(draft.items[i], sent.entities, sent.tokens, checks[i]?.matched);
-    setRewriting({ item: i, step, whole, text: step });
+    setRewriting((r) => ({ ...r, [i]: { step, whole, text: step } }));
   };
 
-  /** Put the teacher's words in place of that step, on this device only, and check the item again by rule. */
-  const saveRewrite = () => {
-    if (!rewriting || !draft || !sent) return;
-    const typed = rewriting.text.trim();
-    if (typed.length === 0 || typed === rewriting.step) {
-      setRewriting(null);
-      return;
+  const closeRewrite = (i: number) => setRewriting(({ [i]: _closed, ...rest }) => rest);
+
+  /** What the fit reads when it runs: the screen as it stands then, not as it stood when a run of several began. */
+  const liveRef = useRef({ draft, checks, liveConstraints, stage });
+  liveRef.current = { draft, checks, liveConstraints, stage };
+
+  /**
+   * Ask the on-device model for other words for the step of item `i` that a rule found in conflict. The
+   * suggestion only fills the rewrite box: nothing in the draft changes until the teacher saves it, and
+   * saving goes through the same check by rule and the same return gate as the teacher's own words.
+   */
+  const fitOne = async (i: number) => {
+    const now = liveRef.current;
+    if (fitBusy.current || signingRef.current || replay || !sent || !now.draft || now.stage !== 'result' || device !== 'available') return;
+    const item = now.draft.items[i];
+    const input = fitInputFor(item, now.checks[i], now.liveConstraints, sent.entities, sent.tokens, note, task);
+    if (!input) return;
+    const run = runRef.current;
+    fitBusy.current = true;
+    setFitting(i);
+    setFitSaid(({ [i]: _old, ...rest }) => rest);
+    try {
+      const got = await fitStep(input);
+      if (runRef.current !== run) return;
+      // fitStep reads an answer only when it came from the device, so an answer read is one that ran here.
+      setFitWhere('ON_DEVICE');
+      // The item was rewritten, or the run signed off, while the model was answering: the suggestion is for words that are gone.
+      if (liveRef.current.stage !== 'result' || liveRef.current.draft?.items[i]?.text !== item.text) return;
+      if (got.ok) {
+        setRewriting((r) => ({ ...r, [i]: { step: input.step, whole: input.whole, text: got.suggestion, suggested: true } }));
+        const stepIndex = input.whole ? 0 : stepIndexOf(item, input.step, sent.entities, sent.tokens);
+        setFits((f) => [...f.filter((x) => x.itemIndex !== i), { itemIndex: i, stepIndex, suggestion: got.suggestion }].sort((a, b) => a.itemIndex - b.itemIndex));
+      } else {
+        setFitSaid((said) => ({ ...said, [i]: got.say }));
+      }
+    } catch {
+      // No on-device model, a request that failed, or an answer from somewhere else: nothing is offered.
+      if (runRef.current === run) setFitSaid((said) => ({ ...said, [i]: FIT_FAILED }));
+    } finally {
+      fitBusy.current = false;
+      if (runRef.current === run) setFitting(null);
     }
-    const next = rewriteStep(draft.items[rewriting.item], rewriting.step, typed, sent.entities, sent.tokens);
-    setRewriting(null);
-    checkAgain({ ...edits, [rewriting.item]: next.text }, offIds);
+  };
+
+  /** Fit every item a rule found in conflict, one after another. Each suggestion waits in its own box. */
+  const fitAll = async () => {
+    if (fitBusy.current || fittingAll) return;
+    const run = runRef.current;
+    setFittingAll(true);
+    for (const i of fittable) {
+      if (runRef.current !== run || liveRef.current.stage !== 'result') break;
+      await fitOne(i);
+    }
+    if (runRef.current === run) setFittingAll(false);
+  };
+
+  /** Put the words in the box in place of that step, on this device only, and check the item again by rule. */
+  const saveRewrite = (i: number) => {
+    const box = rewriting[i];
+    if (!box || !draft || !sent) return;
+    const typed = box.text.trim();
+    closeRewrite(i);
+    if (typed.length === 0 || typed === box.step) return;
+    const next = rewriteStep(draft.items[i], box.step, typed, sent.entities, sent.tokens);
+    // Counted as fitted on the device when the words began as its suggestion, changed by the teacher or not.
+    if (box.suggested) setFitted((f) => (f.includes(i) ? f : [...f, i]));
+    checkAgain({ ...edits, [i]: next.text }, offIds);
   };
 
   /** Confirm every constraint that is not yet confirmed. Each one withholds its words, as a single confirm does. */
@@ -894,7 +970,13 @@ export function App() {
     setEdits({});
     setOffIds([]);
     setRechecked(false);
-    setRewriting(null);
+    setRewriting({});
+    setFitting(null);
+    setFittingAll(false);
+    setFitSaid({});
+    setFits([]);
+    setFitted([]);
+    setFitWhere('NOT_RUN');
     setDraftFail(null);
     setCheckWhere('NOT_RUN');
     setReplyIssues([]);
@@ -995,6 +1077,21 @@ export function App() {
       setKept(startsKept(replay.checks));
       setCheckWhere(replay.where.check);
     }
+    if (to === 'signed' && sent && replay.rewrites && replay.rewrites.length > 0) {
+      // The last screen shows the run as it stood when it was saved: the rewritten items in place of the
+      // cloud's, checked again here by rule. No model is asked.
+      const came = bracketDraft(replay.draft, sent.tokens).items;
+      const nextEdits = Object.fromEntries(replay.rewrites.map((r) => [r.itemIndex, r.text]));
+      const items = came.map((item, i) => (i in nextEdits ? { ...item, text: nextEdits[i] } : item));
+      const told = new Map(sent.needs.map((n) => [n.id, n.line]));
+      const after = recheckItems(items, replay.constraints, replay.entities, sent.tokens, replay.note, told, modelChecks, items.map((_, i) => i in nextEdits));
+      setKept((k) => keptAfterRecheck(k, checks, after));
+      setChecks(after);
+      setEdits(nextEdits);
+      setRechecked(true);
+      const replyText = [replay.draft.title, ...items.flatMap((i) => [i.heading, i.text])].join('\n');
+      setReplyIssues(checkReply(replyText, replay.entities, sent.tokens, replay.outgoing));
+    }
     setStage(to);
   };
 
@@ -1011,10 +1108,12 @@ export function App() {
         outgoing: sent.text,
         policy: sent.policy,
         draft: result.draft,
-        // The run as it was first checked, whatever was switched or rewritten on the result screen since.
+        // The reply and the verdicts as they first came. What was rewritten or suggested since goes beside them, as it stands now.
         checks: firstChecks,
         where: { guard: guardWhere, draft: result.where, check: checkWhere },
         draftModel: result.model,
+        rewrites: Object.entries(edits).map(([i, text]) => ({ itemIndex: Number(i), text })),
+        fits,
       },
       new Date(),
       navigator.userAgent,
@@ -1070,6 +1169,10 @@ export function App() {
   const order = resultOrder(checks, draft?.items.length ?? 0);
   const flagged = order.filter((i) => checks[i]?.verdict === 'conflict' || checks[i]?.verdict === 'unsure');
   const unflagged = order.filter((i) => !flagged.includes(i));
+  /** The on-device model can be asked to fit a step: it is here, and this is a live run. */
+  const canFitHere = stage === 'result' && !replay && device === 'available';
+  /** Items a rule found in conflict that have no suggestion or rewrite waiting in a box. */
+  const fittable = canFitHere ? order.filter((i) => canFit(checks[i], liveConstraints) && !(i in rewriting)) : [];
   const install = useInstall();
   const update = useUpdate();
 
@@ -1350,6 +1453,9 @@ export function App() {
     const family = task === 'parents' ? familyFor(item, note, entities, sent?.tokens ?? [], classList) : null;
     const live = stage === 'result' && !replay;
     const whole = live && (conflict || doubt) && sent ? stepToRewrite(item, sent.entities, sent.tokens, c?.matched).whole : true;
+    const box = rewriting[i];
+    /** In a replay: what the on-device model suggested for this item in the recorded run. Read-only. */
+    const recordedFit = replay?.fits?.find((f) => f.itemIndex === i);
     return (
       <li
         key={i}
@@ -1357,7 +1463,7 @@ export function App() {
       >
         <h4>
           <DeviceText text={item.heading} entities={entities} allowed={sent?.tokens} />
-          {edited && <span className="edited-chip">Rewritten by you</span>}
+          {edited && <span className="edited-chip">{replay ? 'Rewritten in the recorded run' : 'Rewritten by you'}</span>}
         </h4>
         <p className="item-text">
           <DeviceText text={item.text} entities={entities} allowed={sent?.tokens} mark={conflict || (doubt && c?.constraintId) ? c?.matched : undefined} />
@@ -1409,15 +1515,27 @@ export function App() {
             <p>{facts.flatMap((f) => f.details.map((d) => `“${d.surfaces[0]}”`)).join(', ')}</p>
           </details>
         )}
-        {rewriting?.item === i && live && (
+        {fitSaid[i] && live && !box && (
+          <p className="caution fit-said" role="status">
+            {fitSaid[i]}
+          </p>
+        )}
+        {recordedFit && (
+          <div className="rewrite fit-recorded">
+            <b>{RECORDED_FIT_LABEL}</b>
+            <p>{recordedFit.suggestion}</p>
+          </div>
+        )}
+        {box && live && (
           <div className="rewrite">
             <label>
-              {rewriting.whole ? 'Rewrite this item' : 'Rewrite this step'}
+              {box.whole ? 'Rewrite this item' : 'Rewrite this step'}
+              {box.suggested && <span className="fit-note">{FIT_LABEL}</span>}
               <textarea
                 rows={3}
-                value={rewriting.text}
+                value={box.text}
                 maxLength={600}
-                onChange={(e) => setRewriting({ ...rewriting, text: e.target.value })}
+                onChange={(e) => setRewriting((r) => ({ ...r, [i]: { ...box, text: e.target.value } }))}
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
@@ -1425,13 +1543,15 @@ export function App() {
               />
             </label>
             <div className="actions">
-              <button className="secondary small" disabled={signing || rewriting.text.trim().length === 0} onClick={saveRewrite}>
+              <button className="secondary small" disabled={signing || box.text.trim().length === 0} onClick={() => saveRewrite(i)}>
                 Save and check by rule
               </button>
-              <button className="link" onClick={() => setRewriting(null)}>
+              <button className="link" onClick={() => closeRewrite(i)}>
                 Cancel
               </button>
-              <span className="hint">Your words stay on this device. No model is asked.</span>
+              <span className="hint">
+                {box.suggested ? 'Change it or save it as it is. Nothing changes until you save.' : 'Your words stay on this device. No model is asked.'}
+              </span>
             </div>
           </div>
         )}
@@ -1450,7 +1570,7 @@ export function App() {
             )}
           </div>
         )}
-        {stage === 'result' && rewriting?.item !== i && (
+        {stage === 'result' && !(box && live) && (
           <div className="decide" role="group" aria-label="Keep or strike this item">
             <button
               className={kept[i] === true ? 'choice on' : 'choice'}
@@ -1470,8 +1590,13 @@ export function App() {
             >
               Strike
             </button>
+            {canFitHere && canFit(c, liveConstraints) && (
+              <button className="primary small" disabled={signing || fitting !== null || fittingAll} onClick={() => void fitOne(i)}>
+                {fitting === i ? 'Fitting on this device…' : 'Fit this step on this device'}
+              </button>
+            )}
             {live && (conflict || doubt) && (
-              <button className="link" disabled={signing} onClick={() => startRewrite(i)}>
+              <button className="link" disabled={signing || fitting === i} onClick={() => startRewrite(i)}>
                 {whole ? 'Rewrite this item' : 'Rewrite this step'}
               </button>
             )}
@@ -1481,6 +1606,7 @@ export function App() {
                 disabled={signing}
                 onClick={() => {
                   const { [i]: _dropped, ...rest } = edits;
+                  setFitted((f) => f.filter((x) => x !== i));
                   checkAgain(rest, offIds);
                 }}
               >
@@ -1622,6 +1748,14 @@ export function App() {
                 <article className="card result">
                   <p className="eyebrow">{restore(draft.title, entities, sent?.tokens)}</p>
                   <h3 className="summary">{summaryLine(checks)}</h3>
+                  {canFitHere && (fittable.length > 1 || fittingAll) && (
+                    <div className="actions fit-all">
+                      <button className="primary small" disabled={signing || fitting !== null || fittingAll} onClick={() => void fitAll()}>
+                        {fittingAll ? 'Fitting on this device…' : `Fit all ${fittable.length} conflicts on this device`}
+                      </button>
+                      <span className="hint">One after another. Each suggestion waits for you to save it.</span>
+                    </div>
+                  )}
                   {!replay && stage === 'signed' && (
                     <div className="signed">
                       <span className="stamp">{keptCount === 0 ? 'Whole draft rejected by teacher' : 'Signed off by teacher'}</span>
@@ -1748,7 +1882,10 @@ export function App() {
                       <button className="secondary small" onClick={downloadRun}>
                         Download this run as JSON
                       </button>
-                      <span className="hint">For the recorded run: the file holds this note, the vault, the constraints, the draft and the verdicts.</span>
+                      <span className="hint">
+                        For the recorded run: the file holds this note, the vault, the constraints, the draft and the verdicts as first checked,
+                        and any rewrites and on-device suggestions as they stand now.
+                      </span>
                     </div>
                   )}
 
@@ -2200,6 +2337,17 @@ export function App() {
             guard: stage === 'write' || stage === 'guarding' ? undefined : WHERE_RAN[guardWhere],
             draft: result && after ? `${WHERE_RAN[result.where]}: ${result.model}` : undefined,
             check: stage === 'result' || stage === 'signed' ? WHERE_RAN[checkWhere] : undefined,
+            // Listed once the on-device model has answered a fit in this run, or the recorded run holds a suggestion.
+            fit:
+              stage !== 'result' && stage !== 'signed'
+                ? undefined
+                : replay
+                  ? (replay.fits ?? []).length > 0
+                    ? `${WHERE_RAN.ON_DEVICE}, in the recorded run`
+                    : undefined
+                  : fitWhere === 'NOT_RUN'
+                    ? undefined
+                    : WHERE_RAN[fitWhere],
             label:
               (stage === 'result' || stage === 'signed') && label && !replay
                 ? label.where === 'FALLBACK'

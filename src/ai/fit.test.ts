@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Constraint } from '../core/types';
-import { factWordsIn, FIT_FAILED, FIT_MAX, FIT_SCHEMA, FIT_SYSTEM, fitHits, fitPrompt, fitStep, readFit, type FitAsk } from './fit';
+import { canFit, factWordsIn, FIT_FAILED, FIT_MAX, FIT_SCHEMA, FIT_SYSTEM, fitHits, fitInputFor, fitPrompt, fitStep, readFit, type FitAsk } from './fit';
+import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from '../core/samples';
+import { buildVault, deterministicCandidates, possibleNameCandidates, redactWithTokens } from '../core/vault';
+import { confirmConstraint, proposeConstraints } from '../core/constraints';
+import { ruleCheckItem, combineChecks } from '../core/conflicts';
 import { ROUTES } from './routes';
 
 const leave: Constraint = { id: 'c1', kind: 'time-after', text: 'has to leave school at the last bell to reach home before dark', source: 'rule', confirmed: true, about: 's2' };
@@ -101,6 +105,45 @@ describe('fitting a step on the device', () => {
       throw new Error('the model stopped');
     };
     await expect(fitStep(input, ask)).rejects.toThrow('the model stopped');
+  });
+});
+
+describe('what is asked for an item in conflict', () => {
+  const vault = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
+  let held = { entities: vault, constraints: proposeConstraints(SAMPLE_NOTE, vault) };
+  for (const c of held.constraints) held = confirmConstraint(SAMPLE_NOTE, held.entities, held.constraints, c.id);
+  const { entities, constraints } = held;
+  const { tokens } = redactWithTokens(SAMPLE_NOTE, entities);
+  const meenal = entities.find((e) => e.surfaces.includes('Meenal'))!;
+  const item = { heading: meenal.token, text: `First, seat ${meenal.token} at the front. Second, enrol her in the remedial writing club. Third, praise her.` };
+  const check = combineChecks(ruleCheckItem(item, constraints, entities, tokens, SAMPLE_NOTE), undefined, { verdict: 'not checked', reason: 'x' });
+
+  it('is the step the rule matched, the constraint, and every confirmed constraint about that student', () => {
+    const asked = fitInputFor(item, check, constraints, entities, tokens, SAMPLE_NOTE, 'plan')!;
+    expect(asked.step).toBe('Second, enrol her in the remedial writing club.');
+    expect(asked.whole).toBe(false);
+    expect(asked.constraint.kind).toBe('time-after');
+    expect(asked.studentName).toBe('Meenal');
+    expect(asked.afterBell).toEqual(['remedial writing club']);
+    expect(asked.constraints!.map((c) => c.about)).toEqual([meenal.id, meenal.id]);
+    expect(asked.constraints!.map((c) => c.kind).sort()).toEqual(['health', 'time-after']);
+  });
+
+  it('is nothing for an item with no rule conflict, or whose constraint was switched off', () => {
+    const off = constraints.map((c) => (c.id === check.constraintId ? { ...c, confirmed: false } : c));
+    expect(canFit(check, constraints)).toBe(true);
+    expect(canFit(check, off)).toBe(false);
+    expect(fitInputFor(item, check, off, entities, tokens, SAMPLE_NOTE, 'plan')).toBeUndefined();
+    expect(canFit({ verdict: 'unsure', reason: 'r', by: 'model' }, constraints)).toBe(false);
+    expect(canFit({ verdict: 'conflict', reason: 'r' }, constraints)).toBe(false);
+    expect(canFit(undefined, constraints)).toBe(false);
+  });
+
+  it('a suggestion that still sends her to the club is asked for again, then given up', async () => {
+    const asked = fitInputFor(item, check, constraints, entities, tokens, SAMPLE_NOTE, 'plan')!;
+    const model = fake([says('Second, send her to the remedial writing club with a friend.'), says('Second, give her the same writing task in the lunch break.')]);
+    expect(await fitStep(asked, model.ask)).toMatchObject({ ok: true, asked: 2 });
+    expect(model.prompts[1]).toMatch(/It must not involve: remedial writing club$/);
   });
 });
 
