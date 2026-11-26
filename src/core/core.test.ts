@@ -803,6 +803,13 @@ describe('check and receipt', () => {
     expect(run).toBe(conflict);
   });
 
+  it("reads the model's answer to \"can the child do this?\" as a verdict", () => {
+    expect(readVerdict('{"advice_requires":"stay late","can_do":"no","reason":"She must leave before dark."}').verdict).toBe('conflict');
+    expect(readVerdict('{"advice_requires":"read aloud","can_do":"yes","reason":"Nothing in the facts rules it out."}').verdict).toBe('fits');
+    expect(readVerdict('{"advice_requires":"x","can_do":"not sure","reason":"Hard to tell."}').verdict).toBe('unsure');
+    expect(readVerdict('{"advice_requires":"x","can_do":"maybe","reason":"?"}').verdict).toBe('unsure');
+  });
+
   it('gives a warning with no reason a reason the teacher can act on', () => {
     expect(readVerdict('{"verdict":"conflict","reason":""}').reason).toMatch(/gave no reason/);
     expect(readVerdict('{"verdict":"unsure"}').reason).toMatch(/gave no reason/);

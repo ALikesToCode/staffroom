@@ -4,28 +4,45 @@ import { RESERVED, restore } from '../core/vault';
 import { paragraphs } from './guard';
 import { modelFor } from './routes';
 
-const SYSTEM = `You check advice for a teacher. The advice was written by a planner who did not know the private facts about the child. You know them. Decide whether the advice still makes sense for this child.
+const QUESTION = `You help a teacher. You are given private facts about a child and advice from a plan. The person who wrote the advice did not know the facts.
 
-verdict "fits": the advice is sensible given the private facts, or does not touch them.
-verdict "conflict": the advice would be unkind, unsafe or impossible for this child given the private facts.
-verdict "unsure": the advice touches on the private facts and the teacher should think before using it.
+Question: can this child follow the advice exactly as it is written, without harm, given the facts?
 
-Most advice fits. Choose "fits" unless you can point to one private fact that the advice runs against. A hard home life alone is not a reason to doubt kind, ordinary advice.
-Choose "conflict" only when a fact makes the advice impossible or harmful as written: for example, advice to stay after school for a child who must leave early, or advice to phone a parent who is not at home.
-Read every step of the advice, one at a time. If any single step asks the child to be somewhere, stay somewhere or do something at a time or place that a private fact rules out, the verdict is "conflict", even when the other steps are fine. Name that step in the reason.
-When the first line is "Private facts about" one child's name, judge only that child. Do not judge the advice for other children.
-When the first line is "Private facts about children in this class", each fact says which child it is about, when that is known. The advice conflicts only if it runs against a fact about a child the advice applies to. Advice for the whole class applies to every child.
+Answer "yes" when the advice does not require what a fact rules out. Most advice is like this. Advice that is about a different time, a different place or a different thing from the facts is "yes". Advice that already avoids the problem is "yes".
+Answer "no" only when the advice itself requires the very thing a fact rules out.
+Answer "not sure" when you cannot tell.
 
-reason is one short sentence for the teacher. Name the private fact that matters.`;
+Do not imagine risks the advice does not mention. Judge only the words of the advice.
+The advice may have several steps. If one step requires the very thing a fact rules out, answer "no" and name that step.
+`;
 
+const ANSWER = `
+First write advice_requires: what the advice needs from the child, in a few words taken from the advice. Then can_do. Then reason: one short sentence for the teacher that names the fact.`;
+
+const CLASS_FIRST_LINE = 'Private facts about children in this class:';
+
+/** The instructions for a prompt about one child. Kept short: each added rule made the on-device model find more false conflicts. */
+const SYSTEM = QUESTION + ANSWER;
+
+/** The instructions for a prompt about the class. Only this one explains whose fact is whose. */
+const SYSTEM_CLASS = `${QUESTION}The first line is "${CLASS_FIRST_LINE}". Each fact says which child it is about, when that is known. Answer "no" only for a fact about a child the advice applies to. Advice for the whole class applies to every child.
+${ANSWER}`;
+
+// The order matters. The model writes what the advice requires before it answers, so the answer
+// follows from the advice as written. Asked for a verdict first, the on-device model found a
+// conflict in most harmless advice (see the measurement in the README).
 const SCHEMA = {
   type: 'object',
   properties: {
-    verdict: { type: 'string', enum: ['fits', 'conflict', 'unsure'] },
+    advice_requires: { type: 'string' },
+    can_do: { type: 'string', enum: ['yes', 'no', 'not sure'] },
     reason: { type: 'string' },
   },
-  required: ['verdict', 'reason'],
+  required: ['advice_requires', 'can_do', 'reason'],
 };
+
+/** The model answers "can the child do this?". The teacher is shown a verdict. */
+const VERDICT_OF: Record<string, 'fits' | 'conflict' | 'unsure'> = { yes: 'fits', no: 'conflict', 'not sure': 'unsure' };
 
 const NO_CLEAR_ANSWER = 'The on-device check gave no clear answer. Read this item yourself.';
 
@@ -51,18 +68,20 @@ export const UNCLEAR: ItemCheck = { verdict: 'unsure', reason: NO_CLEAR_ANSWER }
  * is not clear either: the reason is what shows the model read the facts.
  */
 export function readVerdict(raw: string): ItemCheck {
-  let parsed: { verdict?: unknown; reason?: unknown } | null;
+  let parsed: { verdict?: unknown; can_do?: unknown; reason?: unknown } | null;
   try {
-    parsed = JSON.parse(raw) as { verdict?: unknown; reason?: unknown } | null;
+    parsed = JSON.parse(raw) as { verdict?: unknown; can_do?: unknown; reason?: unknown } | null;
   } catch {
     return { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
   }
   if (!parsed || typeof parsed !== 'object') return { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
   const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
-  if (parsed.verdict === 'fits') return reason ? { verdict: 'fits', reason } : { verdict: 'unsure', reason: FITS_NO_REASON };
+  // The model's own answer is to "can the child do this?"; a verdict spelled out directly is read too.
+  const verdict = typeof parsed.can_do === 'string' ? VERDICT_OF[parsed.can_do] : parsed.verdict;
+  if (verdict === 'fits') return reason ? { verdict: 'fits', reason } : { verdict: 'unsure', reason: FITS_NO_REASON };
   // A warning with no reason still has to tell the teacher what to do.
-  if (parsed.verdict === 'conflict' || parsed.verdict === 'unsure') {
-    return { verdict: parsed.verdict, reason: reason || NO_REASON };
+  if (verdict === 'conflict' || verdict === 'unsure') {
+    return { verdict, reason: reason || NO_REASON };
   }
   return { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
 }
@@ -186,7 +205,7 @@ export function checkPrompt(group: CheckGroup, item: DraftItem, paras: string[],
   const about = (d: Entity) => entities.find((e) => e.id === d.about)?.surfaces[0];
   const holds = (p: string, d: Entity) => p.toLowerCase().replace(/\s+/g, ' ').includes(flat(d));
   return [
-    'Private facts about children in this class:',
+    CLASS_FIRST_LINE,
     ...group.details.map((d) => `- ${about(d) ? `(about ${about(d)}) ` : ''}${d.surfaces[0]}`),
     '',
     'What the teacher wrote:',
@@ -222,9 +241,10 @@ export async function checkOnDevice(
  * route. Throws before any request when the browser has no on-device model.
  */
 export function onDeviceAsk(): (prompt: string) => Promise<{ text: string; onDevice: boolean }> {
-  const model = modelFor('check', { system: SYSTEM, schema: SCHEMA });
+  const one = modelFor('check', { system: SYSTEM, schema: SCHEMA });
+  const all = modelFor('check', { system: SYSTEM_CLASS, schema: SCHEMA });
   return async (prompt) => {
-    const result = await model.generateContent(prompt);
+    const result = await (prompt.startsWith(CLASS_FIRST_LINE) ? all : one).generateContent(prompt);
     const onDevice = result.response.inferenceSource === 'on_device';
     // The text is read only when the answer came from the device.
     return { text: onDevice ? result.response.text() : '', onDevice };
