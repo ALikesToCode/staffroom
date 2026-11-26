@@ -247,7 +247,7 @@ export function App() {
     let itemChecks: ItemCheck[];
     let where: Where = 'NOT_RUN';
     if (!anythingToCheck(drafted.draft.items, entities)) {
-      // No item names a student with a withheld private detail: there is nothing to check, so no model is asked.
+      // No private detail was withheld: there is nothing to check, so no model is asked.
       itemChecks = drafted.draft.items.map(() => NOTHING_WITHHELD);
       where = 'SKIPPED';
     } else {
@@ -631,7 +631,7 @@ export function App() {
                   )}
                   {checkWhere === 'SKIPPED' && (
                     <p className="hint">
-                      No item names a student with a withheld private detail, so there was nothing to check and no model was asked.
+                      No private detail was withheld, so there was nothing to check and no model was asked.
                     </p>
                   )}
                   {checkWhere === 'NOT_RUN' && (

@@ -46,8 +46,9 @@ export interface DraftItem {
 
 /**
  * fits, conflict and unsure come from the on-device check. 'nothing withheld'
- * means there was nothing to check the item against. 'not checked' means no
- * on-device model was available.
+ * means no private detail was withheld at all, so there was nothing to check
+ * against. 'not checked' means there was, and no on-device model was
+ * available to do it.
  */
 export type Verdict = 'fits' | 'conflict' | 'unsure' | 'nothing withheld' | 'not checked';
 

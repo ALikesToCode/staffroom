@@ -327,7 +327,7 @@ describe('vault', () => {
 });
 
 import { anchorQuote, paragraphs, readGuardAnswer } from '../ai/guard';
-import { anythingToCheck, detailsFor, readVerdict } from '../ai/check';
+import { anythingToCheck, checkPrompt, contextParagraphs, detailsFor, readVerdict, studentsNamed } from '../ai/check';
 import { makeReceipt, receiptRecord, sha256Hex } from './receipts';
 
 describe('guard helpers', () => {
@@ -391,9 +391,63 @@ describe('check and receipt', () => {
     expect(detailsFor({ heading: '[Student 1]', text: 'timed quiz' }, v)[0].details.map((d) => d.surfaces[0])).toEqual(['She has epilepsy']);
   });
 
-  it('gives each item only the details about the students it names', () => {
-    expect(detailsFor({ heading: '[Student 1]', text: 'timed quiz' }, vault)[0].details).toHaveLength(1);
-    expect(detailsFor({ heading: '[Student 2]', text: 'pair work' }, vault)).toEqual([]);
+  it('checks an item against the details about the students it names', () => {
+    const groups = detailsFor({ heading: '[Student 1]', text: 'timed quiz' }, vault);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].student?.surfaces[0]).toBe('Meenal');
+    expect(groups[0].details.map((d) => d.surfaces[0])).toEqual(['She has epilepsy']);
+  });
+
+  it('finds a student whose name was released, as a whole word', () => {
+    const released = vault.map((e) => (e.surfaces[0] === 'Meenal' ? { ...e, withheld: false } : e));
+    expect(studentsNamed({ heading: 'Meenal', text: 'timed quiz' }, released).map((e) => e.surfaces[0])).toEqual(['Meenal']);
+    expect(detailsFor({ heading: 'Reading', text: "Give meenal's group a timed quiz" }, released)[0].student?.surfaces[0]).toBe('Meenal');
+    expect(studentsNamed({ heading: 'Meenalben', text: 'timed quiz' }, released)).toEqual([]);
+    // A name that is still withheld is matched by its stand-in only.
+    expect(studentsNamed({ heading: 'Meenal', text: 'timed quiz' }, vault)).toEqual([]);
+  });
+
+  it('checks an item that names no student with a detail against every withheld detail', () => {
+    for (const item of [
+      { heading: 'Whole class', text: 'Hold a timed written test.' },
+      { heading: '[Student 2]', text: 'pair work' },
+    ]) {
+      const groups = detailsFor(item, vault);
+      expect(groups).toHaveLength(1);
+      expect(groups[0].student).toBeUndefined();
+      expect(groups[0].details.map((d) => d.surfaces[0])).toEqual(['She has epilepsy']);
+    }
+    const prompt = checkPrompt(detailsFor({ heading: 'Whole class', text: 'Timed test for [Student 2].' }, vault)[0], { heading: 'Whole class', text: 'Timed test for [Student 2].' }, ['Meenal reads well. She has epilepsy.', 'Tanvi is shy.'], vault);
+    expect(prompt).toContain('Private facts about children in this class:\n- (about Meenal) She has epilepsy');
+    expect(prompt).toContain('What the teacher wrote:\nMeenal reads well. She has epilepsy.\n');
+    expect(prompt).toContain('Whole class. Timed test for Tanvi.');
+  });
+
+  it('never leaves out a withheld detail that is about nobody in particular', () => {
+    const text = 'The hostel children get no dinner.\n\nMeenal reads well. She has epilepsy.';
+    const v = buildVault(text, [
+      { kind: 'student', text: 'Meenal', source: 'class list' },
+      { kind: 'private', text: 'She has epilepsy', source: 'on-device model' },
+      { kind: 'private', text: 'The hostel children get no dinner', source: 'teacher' },
+    ]);
+    const groups = detailsFor({ heading: '[Student 1]', text: 'Stay late for practice.' }, v);
+    expect(groups.map((g) => [g.student?.surfaces[0], g.details.map((d) => d.surfaces[0])])).toEqual([
+      ['Meenal', ['She has epilepsy']],
+      [undefined, ['The hostel children get no dinner']],
+    ]);
+  });
+
+  it('says nothing was withheld only when no private detail is withheld', () => {
+    const none = vault.map((e) => (e.kind === 'private' ? { ...e, withheld: false } : e));
+    expect(detailsFor({ heading: 'Whole class', text: 'x' }, none)).toEqual([]);
+    expect(anythingToCheck([{ heading: '[Student 1]', text: 'quiz' }], none)).toBe(false);
+    expect(anythingToCheck([{ heading: 'Whole class', text: 'x' }], vault)).toBe(true);
+  });
+
+  it('collects context paragraphs by whole word', () => {
+    const paras = ['Some children join late.', 'Om has missed school.', 'Ask OM again.', 'Tomorrow is a holiday.'];
+    expect(contextParagraphs(paras, ['Om'])).toEqual(['Om has missed school.', 'Ask OM again.']);
+    expect(contextParagraphs(paras, [])).toEqual([]);
   });
 
   it('reads a clear verdict and treats anything else as unsure', () => {
@@ -404,11 +458,6 @@ describe('check and receipt', () => {
       expect(readVerdict(raw).verdict).toBe('unsure');
       expect(readVerdict(raw).reason).toMatch(/no clear answer/);
     }
-  });
-
-  it('knows when no item has anything to be checked against', () => {
-    expect(anythingToCheck([{ heading: '[Student 2]', text: 'pair work' }], vault)).toBe(false);
-    expect(anythingToCheck([{ heading: '[Student 2]', text: 'pair work' }, { heading: '[Student 1]', text: 'quiz' }], vault)).toBe(true);
   });
 
   const sentText = redact(note, vault);
