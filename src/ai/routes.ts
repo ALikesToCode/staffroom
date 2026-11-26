@@ -16,7 +16,7 @@ export const ROUTES = [
     id: 'draft',
     job: 'Write the draft from the redacted text',
     mode: InferenceMode.PREFER_IN_CLOUD,
-    why: 'The larger cloud model writes better. The text is already redacted and approved by you. When the cloud model cannot be reached or does not answer, the on-device model writes it instead.',
+    why: 'The larger cloud model writes better. The text is already redacted and approved by you. If the cloud call fails with a network error or an error response and the on-device model is ready, the draft is written on the device.',
   },
   {
     id: 'check',

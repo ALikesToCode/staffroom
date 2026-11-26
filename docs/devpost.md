@@ -16,7 +16,7 @@ Teachers keep the most useful notes about a class in their heads or in a noteboo
 
 A teacher writes a note about their class in plain words and picks a task: a support plan for next week, messages to parents, or a handover note.
 
-1. **Guard (on the device).** Chrome's built-in model reads the raw note and finds names, places, contact details, identity numbers and private details. A class list, pattern rules and a short list of sensitive words run beside it and need no model. Each item is replaced by a stand-in such as `[Student 1]`, and private details by `[withheld]`.
+1. **Guard (on the device).** The on-device model finds names, places and private details; pattern rules find contact details and identity numbers; the class list finds listed names. A short list of sensitive words withholds the sentence around each one. The rules and the list need no model. Each item is replaced by a stand-in such as `[Student 1]`, and private details by `[withheld]`.
 2. **Approve.** The teacher sees the exact text that would leave, can withhold more by selecting it, and can release an item unless school policy locks that kind. An exit gate re-checks the outgoing text for every withheld item and for the phone, email and ID patterns; it catches redaction mistakes, it cannot find a private detail nobody marked. If it finds anything, sending is blocked. Nothing is sent until the teacher ticks "I have read this text", and the tick holds only for that exact text.
 3. **Draft (in the cloud).** A Gemini model writes from the redacted text only.
 4. **Check (on the device).** The reply comes back with stand-ins. The device puts the names back and the on-device model compares each piece of advice with the private details the cloud never saw, and marks it as fitting, in conflict, or worth a second thought. A return gate flags a reply that uses a stand-in that was not in the approved text, and blocks sign-off until the teacher has read a flagged reply.
@@ -29,7 +29,7 @@ Every model call goes through the Firebase AI Logic web SDK (`firebase/ai`), and
 | Step | Input | Mode | Why |
 |---|---|---|---|
 | Guard | The raw note | `ONLY_ON_DEVICE` | The raw note must not be able to reach a server |
-| Draft | Redacted, approved text | `PREFER_IN_CLOUD` | The heavy writing; falls back to the device when the cloud cannot be reached |
+| Draft | Redacted, approved text | `PREFER_IN_CLOUD` | The heavy writing; if the cloud call fails with a network error or an error response and the on-device model is ready, the draft is written on the device |
 | Check | The draft and the withheld details | `ONLY_ON_DEVICE` | The withheld details are in the prompt |
 | Receipt label | Redacted text | `PREFER_ON_DEVICE` | A small job that is free and needs no network when it runs on the device |
 
@@ -49,7 +49,7 @@ React, TypeScript and Vite. The redaction vault, the two gates and the receipts 
 ## Challenges
 
 - The on-device model is small. It reads the note one paragraph at a time with a strict JSON schema, and its findings are merged with the class list and the rules.
-- A guard that misses something must fail safe. The exit gate catches redaction mistakes, and it cannot find a private detail nobody marked, which is why the teacher reads the outgoing text before it leaves. A paragraph the on-device model could not read is named on screen, not passed over.
+- The exit gate enforces what has been marked and the patterns it knows. It cannot find a private detail nobody marked, which is why the teacher reads the exact text before it leaves. A part of the note the on-device model could not read is named on screen, not passed over.
 - When no on-device model is available, the app says so plainly: only the class list, the pattern rules and the list of sensitive words are applied, and the teacher is told to select private details by hand.
 
 ## What I learned
@@ -66,7 +66,6 @@ Hybrid inference is more than a cost or latency choice. Routing by the sensitivi
 
 - The on-device model needs Chrome on a desktop that supports the built-in model, and English.
 - The guard and the check are a small model's judgement. They can miss a detail or doubt good advice. The teacher's read and the gates are the safeguard.
-- The exit gate cannot find a private detail nobody marked. It catches redaction mistakes.
 - The demo uses invented data only. Before use with real pupils a school would need its own data agreement and the paid Gemini backend, because the free Gemini Developer API tier is not meant for personal data.
 - "Offline" means the guard, the check and the fallback draft keep working once the page and the on-device model have loaded. The page itself is not installed for an offline start.
 - Sign-off is by the person using the browser. Anonymous sign-in gives the browser an account; it does not prove who that person is.

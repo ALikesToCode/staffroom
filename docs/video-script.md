@@ -1,23 +1,26 @@
-# Staffroom: demo video voice-over
+# Staffroom: demo video shot list and voice-over
 
-The screen recording is made (2:48, silent, 1920×1080, recorded on the hosted app). Read each line when its time starts and finish before the next one. Speak at an easy pace; every line fits its slot with room to spare.
+Record the shots in this order. Say each line while its shot is on screen. Every line states only what that shot shows. The lines come to about 270 words.
 
-| Starts | Lasts | On screen | Say |
+All data in the sample is invented.
+
+| # | Shot | What must be on screen | Say |
 |---|---|---|---|
-| 0:00 | 8 s | The empty desk, two lanes | "A teacher's most useful notes are the ones that should never be pasted into a chatbot. This is Staffroom." |
-| 0:08 | 12 s | The sample note appears | "Here is an invented note about five students. It has names, a phone number, a roll number, a health condition and family trouble." |
-| 0:20 | 17 s | Run the guard; the on-device model reads the note | "The guard is a model inside this browser. It runs through Firebase AI Logic in only-on-device mode, so the raw note cannot go to a server." |
-| 0:37 | 13 s | The vault, and the outgoing text on the right | "Each name becomes a stand-in and each private detail is withheld. On the right is the exact text that would leave, word for word." |
-| 0:50 | 13 s | One item released and withheld again; a locked item | "I can release an item or withhold more. A phone number is locked: a setting the school publishes in Remote Config, and the app enforces it." |
-| 1:03 | 17 s | Tick, approve, the cloud drafts | "An exit gate re-checks the text for every withheld item, and nothing is sent until I say I have read it. Now Gemini writes the plan in the cloud, behind App Check." |
-| 1:20 | 16 s | The plan with real names and a verdict under each item | "The reply comes back with stand-ins. My device puts the names back, and the on-device model checks each piece of advice against the details the cloud never saw." |
-| 1:36 | 10 s | Strike one item, sign off | "I strike what I do not want, and sign off the rest." |
-| 1:46 | 14 s | The receipt | "The receipt records what was withheld, the text I approved and which model ran where. The copy in Firestore holds the record only, no text." |
-| 2:00 | 36 s | Offline; a new run; the draft is written on the device (sped up) | "Now the network is off. The guard still runs, because it never needed the network. I approve the text, and this time the cloud cannot be reached, so Firebase AI Logic falls back and the on-device model writes the draft. The screen says so plainly." |
-| 2:36 | 12 s | How it works: four routes | "Four routes, chosen by how sensitive the data is. The cloud does the heavy work, under a guard and a person." |
+| 1 | The empty desk | Two lanes; the pill reads "On-device model: ready" | "A teacher's most useful notes are the ones that should never be pasted into a chatbot. This is Staffroom." |
+| 2 | The sample note | Press "Use the sample class"; the note and class list fill in | "This invented note has names, a phone number, a roll number, a health condition and family trouble." |
+| 3 | Receipts, then back | Tick "Keep a copy of each receipt's record (no text) in my account (Firestore)."; return to Desk | "First I ask for a record of each receipt to be kept in my account. It holds no text." |
+| 4 | Run the guard | Progress line; the `ONLY_ON_DEVICE` chip on the vault | "The guard is a model inside this browser, called through Firebase AI Logic in only-on-device mode." |
+| 5 | Vault and outgoing text | The vault list; on the right the text with `[Student 1]` and `[withheld]`; open "Fixed instructions sent with every draft" | "Each name becomes a stand-in and each private detail is withheld. On the right is everything the cloud model will be shown, word for word, instructions included." |
+| 6 | A locked item | A contact detail with a locked switch; the line "Policy: school policy (Remote Config). Drafting model: …" | "The phone number is locked. That is a setting the school publishes through Remote Config, and the app enforces it." |
+| 7 | Approve and draft | Tick the box, press "Approve and send"; the result shows "Draft: … in the cloud" | "An exit gate re-checks the text for everything marked, and nothing goes until I tick that I have read it. Gemini writes the plan in the cloud, behind App Check." |
+| 8 | The result | Names restored; one item marked "Conflicts with what you know", struck to begin with; its line "Checked against, on this device only" | "The names are put back on my device. The on-device model checked each item against what the cloud never saw. This one conflicts with a detail I withheld, so it starts struck." |
+| 9 | Sign off | Press "Sign off"; the line "The receipt's record (no text) was saved to your account." | "I sign off the rest. The record is saved to my account." |
+| 10 | Receipts | The local receipt opened; below, "Records kept in your account" with the same digest prefix | "The receipt here holds the text I approved. The record in Firestore holds counts, where each model ran and a digest, and the digests match." |
+| 11 | Offline | The pill reads "Network: offline"; run again; the caution "The cloud could not be reached, so the on-device model wrote this draft"; the draft text | "Now the network is off. The guard still runs. The cloud cannot be reached, so the on-device model writes the draft from the same approved text, and the screen says so." |
+| 12 | How it works | The table of four routes | "Four routes, chosen by how sensitive the data is. The cloud does the heavy writing, under a guard and a person." |
 
-## Recording your voice
+## Notes for recording
 
-1. Play the silent video and read along, or record the lines one by one; either works.
-2. Any phone voice recorder is fine. A quiet room matters more than the microphone.
-3. Send the audio file. It is then laid over the video, and you watch the result before it goes to YouTube.
+- Shot 8 needs a real conflict. The sample note is written to make one likely (extra writing practice for a child who must leave before dark), but the cloud model's plan varies. Run again if no item conflicts.
+- Shot 11 needs the page and the on-device model already loaded before the network is switched off.
+- Any phone voice recorder is fine for the voice. A quiet room matters more than the microphone.
