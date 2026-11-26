@@ -843,7 +843,11 @@ export function App() {
             Desk
           </button>
           <button className={view === 'receipts' ? 'tab on' : 'tab'} onClick={() => setView('receipts')}>
-            Receipts{receipts.length > 0 && <span className="count">{receipts.length}</span>}
+            Receipts
+            {/* The badge keeps its place when there is nothing to count, so the header does not shift when it appears. */}
+            <span className={receipts.length > 0 ? 'count' : 'count none'} aria-hidden={receipts.length === 0}>
+              {receipts.length}
+            </span>
           </button>
           <button className={view === 'how' ? 'tab on' : 'tab'} onClick={() => setView('how')}>
             How it works
@@ -1307,7 +1311,10 @@ export function App() {
             <section className="lane cloud" aria-label="The cloud">
               <h2 className="lane-title">
                 <span>The cloud</span>
-                <small>Everything the cloud model is shown appears here, word for word.</small>
+                <small>
+                  The note text and the instructions sent to the cloud model appear here, word for word. The reply format is
+                  described, not quoted.
+                </small>
               </h2>
 
               {(editing || stage === 'guarding') && (

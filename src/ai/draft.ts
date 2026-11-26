@@ -19,8 +19,10 @@ export const DRAFT_NOTES_HEADING = "The teacher's redacted notes:";
 
 /**
  * The whole prompt for a draft: the task instruction, the two fixed lines
- * and the approved text. Nothing else is added anywhere, so what the
- * approval card shows is everything the cloud model is sent.
+ * and the approved text. No other text is added, so the approval card
+ * shows, word for word, the note text and the instructions the cloud model
+ * is sent. The shape of the reply (a schema) is sent too; the card
+ * describes it and does not quote it.
  */
 export function draftPrompt(redacted: string, task: Task): string {
   return `${task.instruction}\n\n${DRAFT_FORMAT}\n\n${DRAFT_NOTES_HEADING}\n${redacted}`;

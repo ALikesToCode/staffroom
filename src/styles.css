@@ -127,12 +127,20 @@ nav {
 }
 
 .count {
+  display: inline-block;
+  min-width: 2.2em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
   margin-left: 6px;
   font-size: 0.75rem;
   background: var(--ink);
   color: var(--paper);
   border-radius: 999px;
   padding: 1px 7px;
+}
+
+.count.none {
+  visibility: hidden;
 }
 
 .status {
@@ -415,7 +423,10 @@ summary:focus-visible {
   white-space: pre-wrap;
   font: 1.02rem/1.74 var(--serif);
   max-height: 420px;
-  overflow: auto;
+  /* Long words and marked spans wrap; the note scrolls down only, never sideways. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   padding-right: 6px;
 }
 
