@@ -24,3 +24,24 @@ All data in the sample is invented.
 - Shot 8 needs a real conflict. The sample note is written to make one likely (extra writing practice for a child who must leave before dark), but the cloud model's plan varies. Run again if no item conflicts.
 - Shot 11 needs the page and the on-device model already loaded before the network is switched off.
 - Any phone voice recorder is fine for the voice. A quiet room matters more than the microphone.
+
+## The recording, and when to speak
+
+The screen recording is made: 2:54, silent, 1920×1080, on the hosted app with the real on-device model. Start each shot's line at its time and finish before the next.
+
+| Shot | Starts |
+|---|---|
+| 1 | 0:00 |
+| 2 | 0:07 |
+| 3 | 0:20 |
+| 4 | 0:33 |
+| 5 | 0:47 |
+| 6 | 1:01 |
+| 7 | 1:14 |
+| 8 | 1:28 |
+| 9 | 1:49 |
+| 10 | 1:59 |
+| 11 | 2:19 (this part is sped up 2.3 times and says so on screen) |
+| 12 | 2:46 |
+
+The take shown is one where the on-device check caught the conflict. It does not catch it every time: see the limits in the README.

@@ -88,6 +88,7 @@ pnpm typecheck
 - "Offline" means the guard, the check and the fallback draft keep working once the page and the on-device model have loaded. The page itself is not installed for an offline start.
 - Sign-off is by the person using the browser. Anonymous sign-in gives the browser an account; it does not prove who that person is.
 - A small model can miss a private detail, and the exit gate cannot find a private detail nobody marked. That is why the teacher reads the outgoing text and why the class list and rules do not depend on the model.
+- The on-device check is a small model too. In nine runs of the sample note on 26 November 2026 (Chrome 158) it flagged a conflict with the after-school club in four. A conflict it flags is worth reading; a "fits" is not a guarantee.
 - The on-device check is advice to the teacher, not a verdict. The teacher signs off.
 
 ## Licence
