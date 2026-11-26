@@ -59,6 +59,21 @@
       them: what it shows now is that the fixes hold.
     </p>
     <p>
+      <code>?set=needs</code>: five lesson replies written by hand as the cloud returns them, with lines for needs in them
+      ("For Need A: ..."), read against the sample class with every need confirmed and told. Plain code, no model: the page
+      counts the lines placed beside the right child, beside a wrong child or missing, the lines left out because their letter
+      was not sent or they had no words, and the placed lines a rule fires on for that child. As first measured: 26 of 26
+      lines beside the right child, 4 of 4 left out, 5 of 5 rule hits found and none unlabelled. The replies were written by
+      the people who wrote the code, so this shows the code does what it is meant to, not how it does on replies it has not
+      seen.
+    </p>
+    <p>
+      <code>?set=learning</code>: twelve invented paragraphs about one child each, for the proposer of learning needs, labelled
+      with the kinds of need in them (three have none). The rule's answer is scored against the labels. Where there is an
+      on-device model it is asked too; it writes a free line, so the page shows each line for a person to read and counts only
+      whether its quote is in the paragraph and its line passes the gate for a need line.
+    </p>
+    <p>
       One fact at a time is the default, as in the app; add <code>perFact=0</code> to ask about all of a child's facts in one
       prompt. For example <code>eval.html?set=full&amp;runs=3</code>.
     </p>

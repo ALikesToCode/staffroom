@@ -258,3 +258,21 @@ describe('the fit set: what each child needs in each lesson', () => {
     expect(lessonFitTotals([stopped])).toMatchObject({ calls: 1, read: 0, errors: 1, points: 0 });
   });
 });
+
+describe('the needs set: the parser and the placing, no model', () => {
+  it('places every labelled line beside the right child and nowhere else', async () => {
+    const { runNeedsSet, NEEDS_CASES, sampleNeeds } = await import('./needs');
+    expect(NEEDS_CASES).toHaveLength(5);
+    expect(sampleNeeds().needs.map((n) => n.letter).join('')).toBe('ABCDFGHIJKM');
+    const { totals } = runNeedsSet();
+    // Frozen as first measured.
+    expect(totals).toEqual({ replies: 5, lines: 26, right: 26, missing: 0, wrongChild: 0, droppedExpected: 4, droppedFound: 4, hitsExpected: 5, hitsFound: 5, hitsMissed: 0, hitsFalse: 0 });
+  });
+
+  it('has twelve paragraphs for the learning-need proposer, and the rule finds the labelled kinds', async () => {
+    const { LEARNING_CASES, runLearningRules } = await import('./needs');
+    expect(LEARNING_CASES).toHaveLength(12);
+    const got = runLearningRules();
+    expect([got.right, got.cases]).toEqual([12, 12]);
+  });
+});

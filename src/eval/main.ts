@@ -1,7 +1,7 @@
 import type { ItemCheck, Verdict } from '../core/types';
 import { checkItems, detailsFor, onDeviceAsk } from '../ai/check';
 import { paragraphs } from '../ai/guard';
-import { deviceStatus, prepareDevice } from '../ai/routes';
+import { deviceStatus, modelFor, prepareDevice } from '../ai/routes';
 import { combineChecks, ruleCheckItem } from '../core/conflicts';
 import { CASES, prepare, totals, type EvalCase, type EvalRow } from './cases';
 import { prepareFull } from './full';
@@ -10,6 +10,8 @@ import { runRuleSet } from './rules';
 import { FIT_CASES, FIT_CHILD_CASES, fitRow, fitTotals, lessonFitCases, lessonFitRow, lessonFitTotals, type FitRow, type LessonFitRow } from './fit';
 import { FIT_CHILD_SYSTEM, FIT_LESSON_SYSTEM, fitLessonSchema, onDeviceFit } from '../ai/fit';
 import { runLessonSet } from './lesson';
+import { LEARNING_CASES, learningVault, runLearningRules, runNeedsSet } from './needs';
+import { LEARNING_SCHEMA, LEARNING_SYSTEM, readLearningAnswer } from '../ai/learning';
 
 // A developer page, not part of the app. It runs fixed cases through the same check the app runs and shows
 // what came back. Nothing is sent anywhere: the model sets use the ONLY_ON_DEVICE route, and the rule set
@@ -28,9 +30,11 @@ const runs = Math.max(1, Math.min(20, Number(params.get('runs')) || 1));
  * ?set=heldout: sixteen single-fact cases the model has not been tuned on.
  * ?set=fit: fourteen steps in conflict, each rewritten by the on-device model for the child, and eight steps of a lesson for which it says what one child does instead.
  * ?set=lesson: five whole lesson plans against the sample class, rule layer only, no model.
+ * ?set=needs: five lesson replies with lines for needs, placed beside the children of the sample class. Plain code, no model.
+ * ?set=learning: twelve paragraphs for the proposer of learning needs: the rule, and the on-device model where there is one.
  * No set: the 24 single-fact cases.
  */
-const set = (['rules', 'full', 'heldout', 'fit', 'lesson'] as const).find((s) => s === params.get('set')) ?? 'cases';
+const set = (['rules', 'full', 'heldout', 'fit', 'lesson', 'needs', 'learning'] as const).find((s) => s === params.get('set')) ?? 'cases';
 /** One fact at a time is the default, as in the app. ?perFact=0 asks about all of a child's facts in one prompt. */
 const perFact = params.get('perFact') !== '0';
 
@@ -41,9 +45,11 @@ const SET_NAME: Record<typeof set, string> = {
   rules: 'rule layer only, no model',
   fit: '14 steps in conflict rewritten, and 8 steps of a lesson fitted to one child, by the on-device model',
   lesson: '5 lesson plans against the sample class, rule layer only, no model',
+  needs: '5 lesson replies with lines for needs, placed beside the children of the sample class, plain code, no model',
+  learning: '12 paragraphs for the proposer of learning needs, by rule and by the on-device model',
 };
 document.getElementById('eval-mode')!.textContent =
-  set === 'rules' || set === 'lesson'
+  set === 'rules' || set === 'lesson' || set === 'needs' || set === 'learning'
     ? `Set: ${SET_NAME[set]}.`
     : set === 'fit'
       ? `Set: ${SET_NAME[set]}. Runs of each: ${runs}.`
@@ -313,6 +319,78 @@ function runLessons() {
   document.body.dataset.state = 'done';
 }
 
+/** Five replies with lines for needs: the parser and the placing. No model, so it runs at once in any browser. */
+function runNeeds() {
+  const { rows, totals: t } = runNeedsSet();
+  for (const row of rows) {
+    const tr = table.insertRow();
+    cell(tr, '1');
+    cell(tr, row.id);
+    cell(tr, `Need ${row.letter}`);
+    cell(tr, row.stage);
+    cell(tr, `beside ${row.child}${row.hitExpected ? ', and a rule fires' : ''}`);
+    cell(tr, `${row.outcome}${row.hitFound ? ', a rule fired' : ''}`, row.outcome === 'right' && row.hitExpected === row.hitFound ? 'right' : 'wrong');
+    cell(tr, row.why);
+    cell(tr, '');
+  }
+  status.textContent = `Done (${SET_NAME.needs}). Of ${t.lines} labelled lines: ${t.right} beside the right child, ${t.missing} missing, ${t.wrongChild} beside a wrong child. Lines left out (letter not sent, or no words): ${t.droppedFound}, expected ${t.droppedExpected}. Rule hits: ${t.hitsFound} of ${t.hitsExpected} found, ${t.hitsFalse} not labelled.`;
+  json.textContent = JSON.stringify({ done: true, at: new Date().toISOString(), userAgent: navigator.userAgent, set, totals: t, rows }, null, 2);
+  document.body.dataset.state = 'done';
+}
+
+/** Twelve paragraphs for the proposer of learning needs. The rule runs anywhere; the on-device model is asked only where there is one. Its lines are for a person to read. */
+async function runLearning() {
+  const byRule = runLearningRules();
+  const device = await deviceStatus();
+  const model = device === 'available' ? modelFor('guard', { system: LEARNING_SYSTEM, schema: LEARNING_SCHEMA }) : null;
+  const rows: unknown[] = [];
+  let kept = 0;
+  let dropped = 0;
+  let unread = 0;
+  for (const [i, c] of LEARNING_CASES.entries()) {
+    status.textContent = `Paragraph ${i + 1} of ${LEARNING_CASES.length} (${c.id})`;
+    const rule = byRule.rows[i];
+    let said = 'not asked: no on-device model here';
+    let needs: { quote: string; need: string }[] = [];
+    let ms = 0;
+    if (model) {
+      const began = performance.now();
+      try {
+        const result = await model.generateContent(`Paragraph:\n${c.paragraph}`);
+        if (result.response.inferenceSource !== 'on_device') throw new Error('the answer did not come from the device');
+        const reading = readLearningAnswer(c.paragraph, c.paragraph, result.response.text(), learningVault(c));
+        if (!reading) {
+          unread++;
+          said = 'the answer could not be read';
+        } else {
+          kept += reading.needs.length;
+          dropped += reading.dropped;
+          needs = reading.needs.map((n) => ({ quote: n.text, need: n.need ?? '' }));
+          said = `${needs.map((n) => `“${n.quote}” -> ${n.need}`).join('; ') || 'no needs'}${reading.dropped > 0 ? ` (left out: ${reading.dropped})` : ''}`;
+        }
+      } catch (e) {
+        unread++;
+        said = `failed: ${e instanceof Error ? e.message : String(e)}`;
+      }
+      ms = Math.round(performance.now() - began);
+    }
+    rows.push({ id: c.id, paragraph: c.paragraph, expected: rule.expected, byRule: rule.found, ruleRight: rule.right, byModel: needs, modelSaid: said, rating: null, ms });
+    const tr = table.insertRow();
+    cell(tr, '1');
+    cell(tr, c.id);
+    cell(tr, c.paragraph);
+    cell(tr, 'the learning needs in it');
+    cell(tr, rule.expected.join(', ') || 'none');
+    cell(tr, `rule: ${rule.found.join(', ') || 'none'}`, rule.right ? 'right' : 'wrong');
+    cell(tr, `on-device model: ${said}`);
+    cell(tr, String(ms));
+  }
+  const totals = { cases: byRule.cases, ruleRight: byRule.right, model: model ? { needsKept: kept, leftOut: dropped, unread } : null };
+  status.textContent = `Done (${SET_NAME.learning}). By rule: ${byRule.right} of ${byRule.cases} paragraphs with exactly the labelled kinds. ${model ? `On-device model: ${kept} needs kept, ${dropped} left out (quote not in the paragraph, or a line that is too long or does not pass the gate), ${unread} paragraphs unread. Its lines are not rated here.` : 'The on-device model was not asked: this browser has none.'}`;
+  json.textContent = JSON.stringify({ done: true, at: new Date().toISOString(), userAgent: navigator.userAgent, set, totals, rows }, null, 2);
+  document.body.dataset.state = 'done';
+}
+
 /** The rule layer on its own. No model, so it runs at once in any browser. */
 function runRules() {
   const { rows, totals: t } = runRuleSet();
@@ -335,6 +413,8 @@ function runRules() {
 async function begin() {
   if (set === 'rules') return runRules();
   if (set === 'lesson') return runLessons();
+  if (set === 'needs') return runNeeds();
+  if (set === 'learning') return runLearning();
   const device = await deviceStatus();
   if (device === 'available') return run();
   if (device === 'downloadable' || device === 'downloading') {
