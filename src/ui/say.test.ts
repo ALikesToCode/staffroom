@@ -1,12 +1,41 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemCheck } from '../core/types';
-import { draftFailure, resultOrder, summaryLine, tally } from './say';
+import { draftFailure, foundLine, resultOrder, signOffLine, summaryLine, tally } from './say';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement } from 'react';
+import { DevicePill } from './pages';
+import README from '../../README.md?raw';
 
 const conflict: ItemCheck = { verdict: 'conflict', reason: 'r', by: 'rule', constraintId: 'a' };
 const doubt: ItemCheck = { verdict: 'unsure', reason: 'r', by: 'model' };
 const fits: ItemCheck = { verdict: 'fits', reason: 'r' };
 const byRule: ItemCheck = { verdict: 'not checked', reason: 'r', by: 'none', rules: 2 };
 const untouched: ItemCheck = { verdict: 'not checked', reason: 'r' };
+
+describe('the lines of a receipt', () => {
+  it('counts what the guard found with the right number', () => {
+    expect(foundLine({ student: 3, adult: 1, place: 0, contact: 1, id: 2, private: 4 })).toBe('3 students, 1 adult, 1 contact detail, 2 identity numbers, 4 private details');
+    expect(foundLine({ student: 1, private: 1 })).toBe('1 student, 1 private detail');
+    expect(foundLine({ student: 0, adult: 0, place: 0, contact: 0, id: 0, private: 0 })).toBe('nothing found');
+  });
+
+  it('says what was rewritten and what began as a suggestion made on the device, and that only this browser knows', () => {
+    expect(signOffLine({ kept: 2, struck: 1, at: 'x' })).toBe('2 kept, 1 struck');
+    expect(signOffLine({ kept: 2, struck: 1, at: 'x', rewritten: 1 })).toBe('2 kept, 1 struck, 1 rewritten by the teacher (kept in this browser only)');
+    expect(signOffLine({ kept: 3, struck: 0, at: 'x', rewritten: 2, fittedOnDevice: 1 })).toBe(
+      '3 kept, 0 struck, 2 rewritten by the teacher, 1 of them from a suggestion made on this device (kept in this browser only)',
+    );
+  });
+});
+
+describe('how to turn the on-device model on', () => {
+  it('names no Chrome setting that the README does not name', () => {
+    const html = renderToStaticMarkup(createElement(DevicePill, { device: 'unsupported', download: null, onTurnOn: () => {} }));
+    expect(html).toContain('see the README');
+    for (const code of html.match(/<code>[^<]+<\/code>/g) ?? []) expect(README, code).toContain(code.replace(/<\/?code>/g, ''));
+    expect(html).not.toMatch(/prompt-api|optimization-guide/);
+  });
+});
 
 describe('the line over the result', () => {
   it('names the conflict first and counts only what was found', () => {

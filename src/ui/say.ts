@@ -1,4 +1,4 @@
-import type { ItemCheck } from '../core/types';
+import type { ItemCheck, Kind, Receipt } from '../core/types';
 
 // Short sentences the screens say, worked out from what the code found. Plain code, so they can be tested.
 
@@ -28,6 +28,33 @@ export function summaryLine(checks: readonly ItemCheck[]): string {
   }
   if (t.open > 0) out.push(`${items(t.open)} ${t.open === 1 ? 'was' : 'were'} not checked.`);
   return out.join(' ');
+}
+
+const KIND_NOUN: Record<Kind, [one: string, many: string]> = {
+  student: ['student', 'students'],
+  adult: ['adult', 'adults'],
+  place: ['place', 'places'],
+  contact: ['contact detail', 'contact details'],
+  id: ['identity number', 'identity numbers'],
+  private: ['private detail', 'private details'],
+};
+
+/** What the guard found, kind by kind, on a receipt: "2 students, 4 private details". */
+export function foundLine(found: Partial<Record<Kind, number>>): string {
+  const parts = (Object.keys(KIND_NOUN) as Kind[])
+    .filter((k) => (found[k] ?? 0) > 0)
+    .map((k) => `${found[k]} ${KIND_NOUN[k][found[k] === 1 ? 0 : 1]}`);
+  return parts.join(', ') || 'nothing found';
+}
+
+/** The sign-off of a receipt in words. What was rewritten or fitted is known to this browser only, and the line says so. */
+export function signOffLine(signOff: Receipt['signOff']): string {
+  const rewritten = signOff.rewritten ?? 0;
+  const fittedOnDevice = signOff.fittedOnDevice ?? 0;
+  const base = `${signOff.kept} kept, ${signOff.struck} struck`;
+  if (rewritten === 0) return base;
+  const fit = fittedOnDevice > 0 ? `, ${fittedOnDevice} of them from a suggestion made on this device` : '';
+  return `${base}, ${rewritten} rewritten by the teacher${fit} (kept in this browser only)`;
 }
 
 /** The order the items are shown in: conflicts first, then doubts, then the rest, each group in the draft's order. */

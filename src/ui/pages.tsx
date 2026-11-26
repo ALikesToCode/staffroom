@@ -1,11 +1,12 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import type { ConstraintKind, Kind, LabelWhere, Receipt, Where } from '../core/types';
+import type { ConstraintKind, LabelWhere, Receipt, Where } from '../core/types';
 import { TASKS } from '../core/samples';
 import { draftLine, recordIdTail, type ReceiptRecord } from '../core/receipts';
 import { CONSTRAINT_LABEL } from '../core/constraints';
 import { configured, type Policy } from '../ai/firebase';
 import { ROUTES, type DeviceStatus, type RouteId } from '../ai/routes';
 import { CloudText, KIND_LABEL } from './parts';
+import { foundLine, signOffLine } from './say';
 
 /** The records read back from the teacher's account. */
 export type Records =
@@ -97,10 +98,7 @@ export function DevicePill({
             <ol>
               <li>Open this page in Chrome 139 or later on a desktop computer.</li>
               <li>Keep about 22 GB of disk free. Chrome downloads the model the first time.</li>
-              <li>
-                If the pill still says this, look in <code>chrome://flags</code> for <code>prompt-api-for-gemini-nano</code> and{' '}
-                <code>optimization-guide-on-device-model</code>.
-              </li>
+              <li>If the pill still says this, see the README.</li>
             </ol>
             <p>Until then the guard and the check run by rule, and the cloud still writes the draft.</p>
             {onWatch && (
@@ -358,10 +356,7 @@ export function Receipts({
                     <dt>Guard</dt>
                     <dd>
                       {r.guard.where === 'ON_DEVICE' ? 'On-device model and rules' : 'Rules only'}:{' '}
-                      {Object.entries(r.guard.found)
-                        .filter(([, n]) => n > 0)
-                        .map(([k, n]) => `${n} ${KIND_LABEL[k as Kind].toLowerCase()}`)
-                        .join(', ') || 'nothing found'}
+                      {foundLine(r.guard.found)}
                       {r.guard.allowedByTeacher > 0 && `. ${r.guard.allowedByTeacher} released by the teacher`}
                       {(r.guard.unreadParagraphs ?? 0) > 0 &&
                         `. The on-device model could not read ${r.guard.unreadParagraphs} ${r.guard.unreadParagraphs === 1 ? 'part' : 'parts'} of the note`}
@@ -408,8 +403,7 @@ export function Receipts({
                     </dd>
                     <dt>Sign-off</dt>
                     <dd>
-                      {r.signOff.kept} kept, {r.signOff.struck} struck
-                      {(r.signOff.rewritten ?? 0) > 0 && `, ${r.signOff.rewritten} rewritten by the teacher (kept in this browser only)`}
+                      {signOffLine(r.signOff)}
                     </dd>
                   </dl>
                   <p className="hint">The text you approved:</p>
