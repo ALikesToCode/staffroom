@@ -89,6 +89,8 @@ export function App() {
   /** What was approved: the text, when, and the vault as it stood at that moment. */
   const [sent, setSent] = useState<{ text: string; at: string; entities: Entity[] } | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
+  /** Whether this computer had a network when the draft came back. Used only to word a fallback honestly. */
+  const [draftOnline, setDraftOnline] = useState(true);
   const [replyIssues, setReplyIssues] = useState<Violation[]>([]);
   const [replyRead, setReplyRead] = useState(false);
   const [checks, setChecks] = useState<ItemCheck[]>([]);
@@ -247,6 +249,7 @@ export function App() {
       return;
     }
     setResult(drafted);
+    setDraftOnline(navigator.onLine);
     setKept(drafted.draft.items.map(() => true));
     const replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
     setReplyIssues(checkReply(replyText, entities, text));
@@ -408,10 +411,17 @@ export function App() {
         </nav>
         <div className="status">
           <DevicePill device={device} download={download} onTurnOn={turnOnDevice} />
-          <span className={`pill ${configured && online ? 'ok' : 'warn'}`}>
+          {/* navigator.onLine says only that this computer has a network. It does not say the cloud model will answer. */}
+          <span className={`pill ${online ? 'ok' : 'warn'}`}>
             <i />
-            {!configured ? 'Cloud: not connected' : online ? 'Cloud: reachable' : 'Offline'}
+            {online ? 'Network: online' : 'Network: offline'}
           </span>
+          {!configured && (
+            <span className="pill warn">
+              <i />
+              Cloud: not connected
+            </span>
+          )}
         </div>
       </header>
 
@@ -838,7 +848,7 @@ export function App() {
 
               {stage === 'drafting' && (
                 <article className="card">
-                  <Spinner label={online ? `${policy.cloudModel} is writing the draft` : 'No signal. The on-device model is writing the draft'} />
+                  <Spinner label={online ? `Asking ${policy.cloudModel} to write the draft` : 'No signal. The on-device model is writing the draft'} />
                 </article>
               )}
 
@@ -849,7 +859,11 @@ export function App() {
                     <RouteChip route="draft" where={result.where} />
                   </div>
                   {result.where === 'ON_DEVICE' && (
-                    <p className="caution">The cloud could not be reached, so the on-device model wrote this draft from the same approved text.</p>
+                    <p className="caution">
+                      {draftOnline
+                        ? 'The cloud model did not answer, so the on-device model wrote this draft from the same approved text.'
+                        : 'The cloud could not be reached, so the on-device model wrote this draft from the same approved text.'}
+                    </p>
                   )}
                   <p className="hint">
                     {result.model}. The reply uses the stand-ins. Names are put back on your side of the door.
