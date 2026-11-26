@@ -5,7 +5,8 @@ import { CASES, prepare } from './cases';
 import { prepareFull } from './full';
 import { HELDOUT } from './heldout';
 import { RULE_CASES, runRuleSet } from './rules';
-import { FIT_CASES, fitInput, fitRow, fitTotals } from './fit';
+import { FIT_CASES, FIT_CHILD_CASES, fitInput, fitRow, fitTotals } from './fit';
+import { LESSON_CASES, runLessonSet } from './lesson';
 import { ruleConflicts } from '../core/conflicts';
 import type { FitAsk } from '../ai/fit';
 
@@ -163,5 +164,56 @@ describe('the fit set', () => {
     expect(stopped.error).toBe('The fit did not run on the device. Stopped.');
     const good = await fitRow(FIT_CASES[6], async () => says('Lend Farhan a geometry box from the class set for next week.'));
     expect(fitTotals([none, stopped, good])).toEqual({ cases: 3, produced: 1, rulePasses: 1, saysFact: 0, offered: 1, offeredSaysFact: 0, errors: 1 });
+  });
+});
+
+describe('the lesson set: whole lessons against the sample class, by rule', () => {
+  const { rows, totals } = runLessonSet();
+
+  it('has five lessons in five subjects, five stages each, with the stages that do not suit a child labelled', () => {
+    expect(LESSON_CASES.map((c) => c.subject)).toEqual(['English', 'Mathematics', 'Science', 'Social science', 'Art']);
+    for (const c of LESSON_CASES) {
+      expect(c.stages, c.id).toHaveLength(5);
+      for (const [i] of c.expected) expect(i, c.id).toBeLessThan(5);
+    }
+  });
+
+  it('is measured as it is: what the rules miss and flag wrongly stays listed', () => {
+    // A measurement, not a target. The rules were not changed for this set.
+    expect(totals).toEqual({ lessons: 5, stages: 25, expected: 13, caught: 10, missed: 3, falseAlarms: 1 });
+    expect(rows.filter((r) => r.outcome === 'missed').map((r) => `${r.id}/${r.stage}/${r.child}`)).toEqual([
+      // "bring one from home": the money rule knows "bring money", not things to bring.
+      'english/Practise (15 minutes)/Aarav',
+      // A flickering light: the health constraint has no trigger words until the teacher gives some.
+      'science/Teach (10 minutes)/Meenal',
+      // "those without can purchase a kit": the rule reads "without" as turning the clause round.
+      'art/Starter (5 minutes)/Aarav',
+    ]);
+    // A phone used in class is flagged for the child with no phone at home.
+    expect(rows.filter((r) => r.outcome === 'false alarm').map((r) => `${r.id}/${r.stage}/${r.child}/${r.matched}`)).toEqual(['social/Practise (15 minutes)/Tanvi/phone']);
+  });
+});
+
+describe('the fit set for a lesson', () => {
+  it('has eight fresh steps of a lesson, each one a rule conflict for the child', () => {
+    expect(FIT_CHILD_CASES).toHaveLength(8);
+    const others = new Set([...FIT_CASES.map((c) => c.step), ...RULE_CASES.map((c) => c.step), ...LESSON_CASES.flatMap((c) => c.stages.map((s) => s.text))]);
+    for (const c of FIT_CHILD_CASES) {
+      expect(ruleConflicts(c.step, c.constraint)?.verdict, c.id).toBe('conflict');
+      expect(others.has(c.step), c.id).toBe(false);
+    }
+  });
+
+  it('asks what the child does instead, and reads the answer by rule', async () => {
+    const c = FIT_CHILD_CASES.find((x) => x.id === 'child-offline-1')!;
+    const prompts: string[] = [];
+    const ask: FitAsk = async (prompt) => {
+      prompts.push(prompt);
+      return { text: JSON.stringify({ rewrite: 'He reads the page on the water cycle in the textbook and lists its four stages.' }), onDevice: true };
+    };
+    const row = await fitRow(c, ask, true);
+    expect(prompts[0]).toMatch(/Say what this child does instead\.$/);
+    expect(row.offered).toMatchObject({ ok: true, requests: 1 });
+    expect(row.first).toMatchObject({ produced: true, rulePasses: true });
   });
 });

@@ -1,5 +1,5 @@
 import type { Constraint } from '../core/types';
-import { factWordsIn, fitHits, fitPrompt, fitStep, readFit, type FitAsk, type FitInput } from '../ai/fit';
+import { factWordsIn, fitForChild, fitHits, fitPrompt, fitStep, readFit, type FitAsk, type FitInput } from '../ai/fit';
 
 /**
  * A set for measuring the fit: a step of advice that goes against one
@@ -47,6 +47,24 @@ const LIST: [string, string, Constraint, string][] = [
 
 export const FIT_CASES: FitCase[] = LIST.map(([id, student, constraint, step]) => ({ id, student, constraint, step }));
 
+/**
+ * Eight more pairs, for a lesson: a step written for the whole class and a
+ * fact about one child, for which the model is asked what that child does
+ * instead (fitForChild). Invented, and written before any model was run.
+ */
+const CHILD_LIST: [string, string, Constraint, string][] = [
+  ['child-after', 'Ritika', made('time-after', 'has to catch the 3.40 bus, the last one to her village'), 'Groups still working on their poster stay after school on Wednesday to complete it.'],
+  ['child-before', 'Imran', made('time-before', 'delivers milk with his uncle until just before the first bell'), 'All pupils come in early on Monday to rehearse the class assembly.'],
+  ['child-days', 'Pooja', made('days-away', 'does not come on Saturdays: she works at the market stall', { days: ['Saturday'] }), 'The class test on this chapter is on Saturday in the second period.'],
+  ['child-money-1', 'Farhan', made('money', 'the family cannot afford anything beyond the school fees this year'), 'Every pupil buys a set of twelve colour pencils for the map work.'],
+  ['child-money-2', 'Lata', made('money', 'her mother is out of work and there is no money for extras'), 'Pupils bring money for a new exercise book for the science journal.'],
+  ['child-offline-1', 'Gopal', made('no-phone-internet', 'there is no phone and no internet in the house'), 'For homework, pupils watch a video about the water cycle online and list its four stages.'],
+  ['child-offline-2', 'Mini', made('no-phone-internet', 'the only phone in the family goes to work with her father'), 'Pupils send a photo of their finished drawing to the class WhatsApp group tonight.'],
+  ['child-contact', 'Kiran', made('contact', 'lives with her aunt while her parents work abroad', { who: 'parents', guardian: 'aunt', away: true }), 'Pupils ask their parents to tell them a story from their own school days and write it down.'],
+];
+
+export const FIT_CHILD_CASES: FitCase[] = CHILD_LIST.map(([id, student, constraint, step]) => ({ id, student, constraint, step }));
+
 export const fitInput = (c: FitCase): FitInput => ({ step: c.step, itemText: c.step, constraint: c.constraint, studentName: c.student, task: 'plan' });
 
 /** What the model gave for one pair. `first` is its first answer on its own; `offered` is what the app would put in the box, after the one retry. */
@@ -88,7 +106,7 @@ export interface FitTotals {
 }
 
 /** Run one pair. The model is asked as the app asks it; its first answer is also kept and read on its own. */
-export async function fitRow(c: FitCase, ask: FitAsk): Promise<FitRow> {
+export async function fitRow(c: FitCase, ask: FitAsk, forChild = false): Promise<FitRow> {
   const input = fitInput(c);
   const answers: string[] = [];
   const recording: FitAsk = async (prompt) => {
@@ -105,7 +123,7 @@ export async function fitRow(c: FitCase, ask: FitAsk): Promise<FitRow> {
     offered: { ok: false, suggestion: '', requests: 0, factWords: [] },
   };
   try {
-    const got = await fitStep(input, recording);
+    const got = forChild ? await fitForChild({ step: c.step, constraint: c.constraint }, recording) : await fitStep(input, recording);
     row.offered = got.ok
       ? { ok: true, suggestion: got.suggestion, requests: got.asked, factWords: factWordsIn(got.suggestion, c.constraint) }
       : { ok: false, suggestion: '', requests: got.asked, factWords: [] };

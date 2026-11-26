@@ -7,8 +7,9 @@ import { CASES, prepare, totals, type EvalCase, type EvalRow } from './cases';
 import { prepareFull } from './full';
 import { HELDOUT } from './heldout';
 import { runRuleSet } from './rules';
-import { FIT_CASES, fitRow, fitTotals, type FitRow } from './fit';
-import { onDeviceFit } from '../ai/fit';
+import { FIT_CASES, FIT_CHILD_CASES, fitRow, fitTotals, type FitRow } from './fit';
+import { FIT_CHILD_SYSTEM, onDeviceFit } from '../ai/fit';
+import { runLessonSet } from './lesson';
 
 // A developer page, not part of the app. It runs fixed cases through the same check the app runs and shows
 // what came back. Nothing is sent anywhere: the model sets use the ONLY_ON_DEVICE route, and the rule set
@@ -25,10 +26,11 @@ const runs = Math.max(1, Math.min(20, Number(params.get('runs')) || 1));
  * ?set=rules: the rule layer on its own, no model, any browser.
  * ?set=full: the whole sample note and six fixed drafts, both layers.
  * ?set=heldout: sixteen single-fact cases the model has not been tuned on.
- * ?set=fit: fourteen steps in conflict, each rewritten by the on-device model for the child.
+ * ?set=fit: fourteen steps in conflict, each rewritten by the on-device model for the child, and eight steps of a lesson for which it says what one child does instead.
+ * ?set=lesson: five whole lesson plans against the sample class, rule layer only, no model.
  * No set: the 24 single-fact cases.
  */
-const set = (['rules', 'full', 'heldout', 'fit'] as const).find((s) => s === params.get('set')) ?? 'cases';
+const set = (['rules', 'full', 'heldout', 'fit', 'lesson'] as const).find((s) => s === params.get('set')) ?? 'cases';
 /** One fact at a time is the default, as in the app. ?perFact=0 asks about all of a child's facts in one prompt. */
 const perFact = params.get('perFact') !== '0';
 
@@ -37,10 +39,11 @@ const SET_NAME: Record<typeof set, string> = {
   heldout: '16 held-out single-fact cases, on-device model only',
   full: 'full note, 30 items in 6 drafts, rule layer and on-device model',
   rules: 'rule layer only, no model',
-  fit: '14 steps in conflict, rewritten by the on-device model',
+  fit: '14 steps in conflict rewritten, and 8 steps of a lesson fitted to one child, by the on-device model',
+  lesson: '5 lesson plans against the sample class, rule layer only, no model',
 };
 document.getElementById('eval-mode')!.textContent =
-  set === 'rules'
+  set === 'rules' || set === 'lesson'
     ? `Set: ${SET_NAME[set]}.`
     : set === 'fit'
       ? `Set: ${SET_NAME[set]}. Runs of each: ${runs}.`
@@ -156,14 +159,16 @@ async function runFit() {
   document.body.dataset.state = 'running';
   const rows: (FitRow & { run: number; ms: number })[] = [];
   const ask = onDeviceFit();
+  const askChild = onDeviceFit(FIT_CHILD_SYSTEM);
+  const cases = [...FIT_CASES.map((c) => ({ c, child: false })), ...FIT_CHILD_CASES.map((c) => ({ c, child: true }))];
   const report = (done: boolean) =>
     (json.textContent = JSON.stringify({ done, at: new Date().toISOString(), userAgent: navigator.userAgent, set, runsPerCase: runs, totals: fitTotals(rows), rows }, null, 2));
   let n = 0;
   for (let r = 1; r <= runs; r++) {
-    for (const c of FIT_CASES) {
-      status.textContent = `Run ${r} of ${runs}: step ${++n} of ${FIT_CASES.length * runs} (${c.id})`;
+    for (const { c, child } of cases) {
+      status.textContent = `Run ${r} of ${runs}: step ${++n} of ${cases.length * runs} (${c.id})`;
       const began = performance.now();
-      const row = { ...(await fitRow(c, ask)), run: r, ms: 0 };
+      const row = { ...(await fitRow(c, child ? askChild : ask, child)), run: r, ms: 0 };
       row.ms = Math.round(performance.now() - began);
       rows.push(row);
       const tr = table.insertRow();
@@ -238,6 +243,25 @@ async function run() {
   document.body.dataset.state = 'done';
 }
 
+/** Five whole lessons against the sample class, by rule. No model, so it runs at once in any browser. */
+function runLessons() {
+  const { rows, totals: t } = runLessonSet();
+  for (const row of rows) {
+    const tr = table.insertRow();
+    cell(tr, '1');
+    cell(tr, `${row.id}`);
+    cell(tr, row.child);
+    cell(tr, `${row.subject}: ${row.stage}`);
+    cell(tr, row.outcome === 'false alarm' ? 'suits everyone' : 'needs fitting');
+    cell(tr, row.outcome, row.outcome === 'caught' ? 'right' : 'wrong');
+    cell(tr, row.matched ? `matched “${row.matched}”` : '');
+    cell(tr, '');
+  }
+  status.textContent = `Done (${SET_NAME.lesson}). Of ${t.expected} stages labelled as not suiting a child: ${t.caught} caught, ${t.missed} missed. False alarms: ${t.falseAlarms}.`;
+  json.textContent = JSON.stringify({ done: true, at: new Date().toISOString(), userAgent: navigator.userAgent, set, totals: t, rows }, null, 2);
+  document.body.dataset.state = 'done';
+}
+
 /** The rule layer on its own. No model, so it runs at once in any browser. */
 function runRules() {
   const { rows, totals: t } = runRuleSet();
@@ -259,6 +283,7 @@ function runRules() {
 
 async function begin() {
   if (set === 'rules') return runRules();
+  if (set === 'lesson') return runLessons();
   const device = await deviceStatus();
   if (device === 'available') return run();
   if (device === 'downloadable' || device === 'downloading') {
