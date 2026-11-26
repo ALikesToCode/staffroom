@@ -206,7 +206,7 @@ describe('vault', () => {
 
 import { anchorQuote, paragraphs, readGuardAnswer } from '../ai/guard';
 import { anythingToCheck, detailsFor, readVerdict } from '../ai/check';
-import { makeReceipt } from './receipts';
+import { makeReceipt, receiptRecord, sha256Hex } from './receipts';
 
 describe('guard helpers', () => {
   const para = "Kabir's parents are separating and he is staying with his grandmother.";
@@ -280,32 +280,65 @@ describe('check and receipt', () => {
     expect(anythingToCheck([{ heading: '[Student 2]', text: 'pair work' }, { heading: '[Student 1]', text: 'quiz' }], vault)).toBe(true);
   });
 
+  const sentText = redact(note, vault);
+  const receipt = makeReceipt({
+    task: 'plan',
+    label: 'Reading and a shy reader',
+    labelWhere: 'ON_DEVICE',
+    entities: vault,
+    guardWhere: 'ON_DEVICE',
+    unreadParagraphs: 1,
+    droppedDetails: 0,
+    sentText,
+    approvedAt: new Date().toISOString(),
+    draftWhere: 'IN_CLOUD',
+    draftModel: 'gemini-3.5-flash-lite',
+    checkWhere: 'ON_DEVICE',
+    replyFlagged: true,
+    checks: [{ verdict: 'conflict', reason: 'x' }, { verdict: 'nothing withheld', reason: 'y' }],
+    kept: 1,
+    struck: 1,
+  });
+
   it('writes a receipt with no vault contents', () => {
-    const receipt = makeReceipt({
-      task: 'plan',
-      label: 'Support plan',
-      labelWhere: 'ON_DEVICE',
-      entities: vault,
-      guardWhere: 'ON_DEVICE',
-      unreadParagraphs: 1,
-      droppedDetails: 0,
-      sentText: redact(note, vault),
-      approvedAt: new Date().toISOString(),
-      draftWhere: 'IN_CLOUD',
-      draftModel: 'gemini-3.5-flash-lite',
-      checkWhere: 'ON_DEVICE',
-      replyFlagged: false,
-      checks: [{ verdict: 'conflict', reason: 'x' }, { verdict: 'nothing withheld', reason: 'y' }],
-      kept: 1,
-      struck: 1,
-    });
     const json = JSON.stringify(receipt);
     expect(json).not.toContain('Meenal');
     expect(json).not.toContain('epilepsy');
+    expect(receipt.sent.text).toBe(sentText);
     expect(receipt.guard.found.student).toBe(2);
     expect(receipt.guard.unreadParagraphs).toBe(1);
     expect(receipt.labelWhere).toBe('ON_DEVICE');
     expect(receipt.check.conflict).toBe(1);
+  });
+
+  it('computes a SHA-256 digest in hex', async () => {
+    expect(await sha256Hex('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  });
+
+  it('reduces a receipt to a record with no text for the cloud copy', async () => {
+    const record = await receiptRecord(receipt);
+    expect(Object.keys(record).sort()).toEqual(
+      [
+        'id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars', 'approvedSha256', 'guardWhere',
+        'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts', 'kept', 'struck', 'flags',
+      ].sort(),
+    );
+    const json = JSON.stringify(record);
+    expect(json).not.toContain(sentText);
+    expect(json).not.toContain('reads well');
+    expect(json).not.toContain('Student 1');
+    expect(json).not.toContain(receipt.label);
+    expect(json).not.toContain('Meenal');
+    expect(record.approvedChars).toBe(sentText.length);
+    expect(record.approvedSha256).toBe(await sha256Hex(sentText));
+    expect(record.approvedSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(record.withheld).toEqual({ student: 2, adult: 0, place: 0, contact: 0, id: 0, private: 1 });
+    expect(record.verdicts.conflict).toBe(1);
+    expect(record.flags).toEqual({ replyFlagged: true, unreadParagraphs: 1, droppedDetails: 0 });
+    expect([record.kept, record.struck]).toEqual([1, 1]);
+    // Every value is a number, a boolean, or one of a few short fixed strings.
+    const strings = Object.values(record).filter((v): v is string => typeof v === 'string');
+    expect(strings.every((v) => v.length <= 100)).toBe(true);
   });
 });
 

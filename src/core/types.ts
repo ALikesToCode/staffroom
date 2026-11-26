@@ -62,7 +62,11 @@ export type Where = 'ON_DEVICE' | 'IN_CLOUD' | 'RULES_ONLY' | 'NOT_RUN' | 'SKIPP
 /** Where the call that names the receipt ran. FALLBACK: no model answered, so the task name is used. */
 export type LabelWhere = 'ON_DEVICE' | 'IN_CLOUD' | 'FALLBACK';
 
-/** The audit record of one run. It holds no vault contents. */
+/**
+ * The receipt of one run, kept in this browser. It holds the approved text
+ * and no vault contents. The copy that may go to the cloud is smaller: see
+ * ReceiptRecord in receipts.ts.
+ */
 export interface Receipt {
   id: string;
   createdAt: string;

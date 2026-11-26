@@ -703,8 +703,10 @@ export function App() {
                           Start again
                         </button>
                       </div>
-                      {copyState === 'saved' && <p className="hint">An audit copy of the receipt was saved to your account.</p>}
-                      {copyState === 'failed' && <p className="caution">The audit copy could not be saved. The receipt is still kept in this browser.</p>}
+                      {copyState === 'saved' && <p className="hint">The receipt's record (no text) was saved to your account.</p>}
+                      {copyState === 'failed' && (
+                        <p className="caution">The record could not be saved to your account. The receipt is still kept in this browser.</p>
+                      )}
                     </div>
                   )}
                 </article>
@@ -981,12 +983,12 @@ function Receipts({
     <main className="page">
       <h2>Receipts</h2>
       <p className="lede">
-        One receipt per run: what was withheld, the exact text that was approved, which model ran where, and what you signed off. A receipt
-        never holds your note, a name or a private detail.
+        A receipt holds the exact text you approved, counts of what was withheld, which model ran where, and what you signed off. It never
+        holds your raw note or anything you withheld.
       </p>
       <label className="read-it">
         <input type="checkbox" checked={keepCopies} disabled={!signedIn} onChange={(e) => setKeepCopies(e.target.checked)} />
-        Keep an audit copy of each new receipt in my account (Firestore).
+        Keep a copy of each receipt's record (no text) in my account (Firestore).
         {!signedIn && <em> Not available: no Firebase project is connected.</em>}
       </label>
       {receipts.length === 0 ? (

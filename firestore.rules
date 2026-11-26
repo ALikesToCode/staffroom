@@ -1,17 +1,74 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Audit copies of receipts. A user can read and add their own; nobody can edit or delete one.
+    // The teacher's own record of each receipt. It holds counts, times, where each step ran and a
+    // digest of the approved text: no text. A user can add and read their own; nobody can edit or delete one.
     match /users/{uid}/receipts/{receiptId} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['id', 'createdAt', 'task', 'label', 'guard', 'sent', 'draft', 'check', 'signOff'])
-        && request.resource.data.sent.text is string
-        && request.resource.data.sent.text.size() < 20000;
+        && receiptId.matches('^[0-9a-z-]{1,40}$')
+        && validRecord(request.resource.data, receiptId);
       allow update, delete: if false;
     }
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    function isCount(v) {
+      return v is int && v >= 0 && v <= 1000000;
+    }
+
+    function isTime(v) {
+      return v is string && v.size() >= 20 && v.size() <= 40;
+    }
+
+    function validWithheld(m) {
+      return m is map
+        && m.keys().hasOnly(['student', 'adult', 'place', 'contact', 'id', 'private'])
+        && m.keys().hasAll(['student', 'adult', 'place', 'contact', 'id', 'private'])
+        && isCount(m.student) && isCount(m.adult) && isCount(m.place)
+        && isCount(m.contact) && isCount(m.id) && isCount(m.private);
+    }
+
+    function validVerdicts(m) {
+      return m is map
+        && m.keys().hasOnly(['fits', 'conflict', 'unsure', 'nothingWithheld', 'notChecked'])
+        && m.keys().hasAll(['fits', 'conflict', 'unsure', 'nothingWithheld', 'notChecked'])
+        && isCount(m.fits) && isCount(m.conflict) && isCount(m.unsure)
+        && isCount(m.nothingWithheld) && isCount(m.notChecked);
+    }
+
+    function validFlags(m) {
+      return m is map
+        && m.keys().hasOnly(['replyFlagged', 'unreadParagraphs', 'droppedDetails'])
+        && m.keys().hasAll(['replyFlagged', 'unreadParagraphs', 'droppedDetails'])
+        && m.replyFlagged is bool && isCount(m.unreadParagraphs) && isCount(m.droppedDetails);
+    }
+
+    // Exactly these keys, each with its type and a bound on its size. The only free strings are
+    // the two times, a hex digest and a model name of at most 100 characters.
+    function validRecord(d, receiptId) {
+      return d.keys().hasOnly(['id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars',
+          'approvedSha256', 'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
+          'kept', 'struck', 'flags'])
+        && d.keys().hasAll(['id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars',
+          'approvedSha256', 'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
+          'kept', 'struck', 'flags'])
+        && d.id is string && d.id == receiptId
+        && isTime(d.createdAt) && isTime(d.approvedAt)
+        && d.task in ['plan', 'parents', 'handover']
+        && validWithheld(d.withheld)
+        && isCount(d.released)
+        && isCount(d.approvedChars)
+        && d.approvedSha256 is string && d.approvedSha256.matches('^[0-9a-f]{64}$')
+        && d.guardWhere in ['ON_DEVICE', 'RULES_ONLY']
+        && d.draftWhere in ['ON_DEVICE', 'IN_CLOUD']
+        && d.draftModel is string && d.draftModel.size() >= 1 && d.draftModel.size() <= 100
+        && d.checkWhere in ['ON_DEVICE', 'NOT_RUN', 'SKIPPED']
+        && d.labelWhere in ['ON_DEVICE', 'IN_CLOUD', 'FALLBACK']
+        && validVerdicts(d.verdicts)
+        && isCount(d.kept) && isCount(d.struck)
+        && validFlags(d.flags);
     }
   }
 }

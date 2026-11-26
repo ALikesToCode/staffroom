@@ -5,6 +5,7 @@ import { getAuth, onAuthStateChanged, signInAnonymously, type User } from 'fireb
 import { collection, doc, getDocs, getFirestore, orderBy, query, setDoc } from 'firebase/firestore';
 import { fetchAndActivate, getRemoteConfig, getValue } from 'firebase/remote-config';
 import type { Kind, Receipt } from '../core/types';
+import { receiptRecord, type ReceiptRecord } from '../core/receipts';
 
 const env = import.meta.env;
 
@@ -45,11 +46,15 @@ export const ai = getAI(app, { backend: new GoogleAIBackend() });
 
 // ---------------------------------------------------------------- policy
 
-/** What the school sets remotely. The teacher cannot change it. */
+/**
+ * A setting the school publishes through Remote Config. It is enforced in
+ * the app, on the teacher's device: it is a default the school chooses, not
+ * a security control.
+ */
 export interface Policy {
   /** The cloud model that drafts. */
   cloudModel: string;
-  /** Kinds of item a teacher may never release to the cloud. */
+  /** Kinds of item the app will not let a teacher release to the cloud. */
   lockedKinds: Kind[];
   /** Where these values came from. */
   from: 'school policy (Remote Config)' | 'built-in defaults';
@@ -89,9 +94,9 @@ export async function loadPolicy(): Promise<Policy> {
   }
 }
 
-// ---------------------------------------------------------------- audit copies
+// ---------------------------------------------------------------- the teacher's own record
 
-/** Sign in without an account, so audit copies have an owner. */
+/** Sign in without an account, so the teacher's records have an owner. */
 export function watchUser(onUser: (user: User | null) => void): () => void {
   if (!configured) {
     onUser(null);
@@ -104,17 +109,19 @@ export function watchUser(onUser: (user: User | null) => void): () => void {
 }
 
 /**
- * Save a receipt to Firestore under the signed-in user. A receipt holds the
- * text that was already sent and the counts of what was withheld. It never
- * holds the note, the vault or the restored draft.
+ * Save the record of a receipt to Firestore under the signed-in user. Only
+ * the record goes: counts, times, where each step ran and a digest of the
+ * approved text. No text of any kind is sent, and the Firestore rules
+ * refuse a document with any other field.
  */
 export async function saveReceiptCopy(uid: string, receipt: Receipt): Promise<void> {
-  await setDoc(doc(getFirestore(app), 'users', uid, 'receipts', receipt.id), receipt);
+  const record: ReceiptRecord = await receiptRecord(receipt);
+  await setDoc(doc(getFirestore(app), 'users', uid, 'receipts', record.id), record);
 }
 
-export async function loadReceiptCopies(uid: string): Promise<Receipt[]> {
+export async function loadReceiptCopies(uid: string): Promise<ReceiptRecord[]> {
   const snap = await getDocs(
     query(collection(getFirestore(app), 'users', uid, 'receipts'), orderBy('createdAt', 'desc')),
   );
-  return snap.docs.map((d) => d.data() as Receipt);
+  return snap.docs.map((d) => d.data() as ReceiptRecord);
 }
