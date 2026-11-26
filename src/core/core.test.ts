@@ -170,16 +170,24 @@ describe('vault', () => {
   });
 
   describe('return gate', () => {
-    it('passes a reply that uses known stand-ins', () => {
-      expect(checkReply('Pair [Student 1] with [Student 4].', vault)).toEqual([]);
+    it('passes a reply that uses stand-ins from the approved text', () => {
+      expect(checkReply('Pair [Student 1] with [Student 4].', vault, redacted)).toEqual([]);
     });
 
     it('flags a stand-in that is not in the vault', () => {
-      expect(checkReply('Pair [Student 1] with [Student 9].', vault)).toHaveLength(1);
+      expect(checkReply('Pair [Student 1] with [Student 9].', vault, redacted)).toHaveLength(1);
+    });
+
+    it('flags a stand-in the vault holds but the approved text did not contain', () => {
+      const approved = 'Help [Student 1] with homework.';
+      expect(vault.some((e) => e.token === '[Student 4]')).toBe(true);
+      const issues = checkReply('Pair [Student 1] with [Student 4]. Thank [Student 4].', vault, approved);
+      expect(issues).toEqual([{ what: '[Student 4]', why: 'a stand-in that was not in the text you approved' }]);
+      expect(checkReply('Seat [Student 1] at the front.', vault, approved)).toEqual([]);
     });
 
     it('flags a real name coming back', () => {
-      expect(checkReply('Ask Meenal to read.', vault)).toHaveLength(1);
+      expect(checkReply('Ask Meenal to read.', vault, redacted)).toHaveLength(1);
     });
   });
 });

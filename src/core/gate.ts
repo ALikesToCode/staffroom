@@ -49,14 +49,23 @@ export function checkOutgoing(text: string, entities: Entity[]): Violation[] {
 }
 
 /**
- * The return gate. A reply is flagged when it uses a stand-in the vault does
- * not know, or when it contains anything the exit gate would have stopped.
+ * The return gate. A reply is flagged when it uses a stand-in that was not
+ * in the text the teacher approved, or when it contains anything the exit
+ * gate would have stopped.
+ *
+ * The stand-ins are taken from the approved text, not from the vault: a
+ * stand-in the vault holds but the cloud was never sent (for a name inside
+ * a withheld private detail, say) is one the cloud model cannot know, so
+ * a reply that uses it is not trusted.
  */
-export function checkReply(text: string, entities: Entity[]): Violation[] {
+export function checkReply(text: string, entities: Entity[], approvedText: string): Violation[] {
   const violations = checkOutgoing(text, entities);
-  const known = new Set(entities.map((e) => e.token));
+  const sent = new Set(Array.from(approvedText.matchAll(TOKEN_RE), (m) => m[0]));
+  const seen = new Set<string>();
   for (const m of text.matchAll(TOKEN_RE)) {
-    if (!known.has(m[0])) violations.push({ what: m[0], why: 'a stand-in that is not in your vault' });
+    if (sent.has(m[0]) || seen.has(m[0])) continue;
+    seen.add(m[0]);
+    violations.push({ what: m[0], why: 'a stand-in that was not in the text you approved' });
   }
   return violations;
 }

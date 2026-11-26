@@ -53,6 +53,7 @@ export function App() {
   const [sent, setSent] = useState<{ text: string; at: string } | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
   const [replyIssues, setReplyIssues] = useState<Violation[]>([]);
+  const [replyRead, setReplyRead] = useState(false);
   const [checks, setChecks] = useState<ItemCheck[]>([]);
   const [checkWhere, setCheckWhere] = useState<Where>('NOT_RUN');
   const [kept, setKept] = useState<boolean[]>([]);
@@ -180,7 +181,8 @@ export function App() {
     setResult(drafted);
     setKept(drafted.draft.items.map(() => true));
     const replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
-    setReplyIssues(checkReply(replyText, entities));
+    setReplyIssues(checkReply(replyText, entities, text));
+    setReplyRead(false);
 
     setStage('checking');
     let itemChecks: ItemCheck[];
@@ -214,7 +216,7 @@ export function App() {
   // ---------------------------------------------------------------- step 6: sign off
 
   const signOff = async () => {
-    if (!result || !sent) return;
+    if (!result || !sent || replyBlocked) return;
     const receipt = makeReceipt({
       task,
       label: label || currentTask.label,
@@ -254,6 +256,7 @@ export function App() {
   }, [result, kept, entities]);
 
   const copyFinal = async () => {
+    if (replyBlocked) return;
     await navigator.clipboard.writeText(finalText);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
@@ -277,6 +280,8 @@ export function App() {
   // ---------------------------------------------------------------- render
 
   const withheld = entities.filter((e) => e.withheld);
+  /** A reply flagged at the return gate cannot be signed off or copied until the teacher has read it. */
+  const replyBlocked = replyIssues.length > 0 && !replyRead;
   const editing = stage === 'write';
   const busy = stage === 'guarding' || stage === 'drafting' || stage === 'checking';
 
@@ -516,7 +521,8 @@ export function App() {
                   {replyIssues.length > 0 && (
                     <p className="caution">
                       The reply was flagged at the return gate:{' '}
-                      {replyIssues.map((v) => `“${v.what}” (${v.why})`).join('; ')}. Read it with care.
+                      {replyIssues.map((v) => `“${v.what}” (${v.why})`).join('; ')}. Read the reply with care. You cannot sign
+                      off or copy it until you tick the box below.
                     </p>
                   )}
                   {checkWhere === 'SKIPPED' && (
@@ -562,9 +568,20 @@ export function App() {
                       );
                     })}
                   </ol>
+                  {replyIssues.length > 0 && (
+                    <label className="read-it reply-read">
+                      <input
+                        type="checkbox"
+                        checked={replyRead}
+                        disabled={stage !== 'result'}
+                        onChange={(e) => setReplyRead(e.target.checked)}
+                      />
+                      I have read the flagged reply and I still want to use it.
+                    </label>
+                  )}
                   {stage === 'result' ? (
                     <div className="actions">
-                      <button className="primary" onClick={signOff} disabled={!kept.some(Boolean)}>
+                      <button className="primary" onClick={signOff} disabled={!kept.some(Boolean) || replyBlocked}>
                         Sign off {kept.filter(Boolean).length} of {kept.length} items
                       </button>
                       <span className="hint">Your sign-off is recorded on the receipt.</span>
@@ -573,7 +590,7 @@ export function App() {
                     <div className="signed">
                       <span className="stamp">Signed off by teacher</span>
                       <div className="actions">
-                        <button className="primary" onClick={copyFinal}>
+                        <button className="primary" onClick={copyFinal} disabled={replyBlocked}>
                           {copied ? 'Copied' : 'Copy the text'}
                         </button>
                         <button className="secondary" onClick={() => setView('receipts')}>
@@ -816,7 +833,8 @@ function How({ policy, device }: { policy: Policy; device: DeviceStatus }) {
           <b>You.</b> Nothing is sent until you have read the exact text and pressed Approve.
         </li>
         <li>
-          <b>The return gate.</b> Plain code checks that the reply uses only stand-ins from your vault and contains no withheld item.
+          <b>The return gate.</b> Plain code checks that the reply uses only the stand-ins that were in the text you approved and
+          contains no withheld item. It blocks sign-off until you have read a flagged reply.
         </li>
       </ul>
       <h3>What is in force now</h3>
