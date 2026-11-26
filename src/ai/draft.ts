@@ -12,7 +12,7 @@ Write plainly, in plain text with no markdown: no asterisks, no # headings. No d
 
 /** The fixed sentence that follows the task instruction in every draft prompt. */
 export const DRAFT_FORMAT =
-  'Return a title and a list of items. Each item has a short heading and the text. In the title, in every heading and in every text, write each stand-in exactly as it is in the notes, with its square brackets: [Student 1], never Student 1.';
+  'Return a title and a list of items. Each item has a short heading and the text. In the title, in every heading and in every text, write each stand-in exactly as it is in the notes, with its square brackets: [Student 1], never Student 1. Where the notes say [withheld], something was kept from you: do not write [withheld] in your answer and do not guess what it was.';
 
 /** The fixed line written above the approved text in every draft prompt. */
 export const DRAFT_NOTES_HEADING = "The teacher's redacted notes:";
