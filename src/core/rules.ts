@@ -35,6 +35,13 @@ const RULES: Rule[] = [
     re: new RegExp(`(?<![\\d-])(?:\\+?\\d{1,3}${GAP}?)?\\(\\+?\\d{1,5}\\)${GAP}?\\d{3,5}(?:${GAP}?\\d{3,5}){0,2}(?![\\d-])`, 'g'),
     accept: (m) => digits(m[0]) >= 10 && digits(m[0]) <= 13,
   },
+  // A landline: 0, an STD code of two to four digits, then six to eight digits: "022 2345 6789", "080-23456789".
+  {
+    name: 'phone number',
+    kind: 'contact',
+    re: new RegExp(`(?<![\\d-])0\\d{2,4}${GAP}?\\d{3,4}${GAP}?\\d{3,4}(?![\\d-])`, 'g'),
+    accept: (m) => digits(m[0]) >= 9 && digits(m[0]) <= 13,
+  },
   // After "roll", "admission" and the like. A single digit counts only after "no.", "number" or "#", so
   // "the bread roll is 5 rupees" is left alone. The number may be written with a letter prefix and a space
   // ("AB 12345"); the prefix must be in capitals, so an ordinary word before a number is not taken for one.
@@ -92,11 +99,12 @@ const NOT_A_NAME = new Set([
 
 /**
  * Every word of a name, short ones included, without honorifics.
- * "Mrs. Om Rao" gives ["Om", "Rao"]. Used to tell two people apart.
+ * "Mrs. Om Rao" gives ["Om", "Rao"], and "Mary-Jane Lee" gives
+ * ["Mary", "Jane", "Lee"]. Used to tell two people apart.
  */
 export function nameWords(name: string): string[] {
   return name
-    .split(/[\s.,]+/)
+    .split(/[\s.,\u2010\u2011-]+/)
     .map((p) => p.trim())
     .filter((p) => p.length > 0 && !HONORIFICS.has(p.toLowerCase()) && !NOT_A_NAME.has(p.toLowerCase()));
 }
@@ -109,6 +117,18 @@ export function nameWords(name: string): string[] {
  */
 export function nameParts(name: string): string[] {
   return nameWords(name).filter((p) => p.length >= 3);
+}
+
+/**
+ * The parts of a class-list name that are withheld when they stand alone:
+ * every word of two letters or more. A single letter, such as the initial
+ * in "A. Kumar", is never withheld on its own, or every "A" and "I" in the
+ * note would go. The whole name is still withheld wherever it is written.
+ */
+export function listedParts(name: string): string[] {
+  // "Mary-Jane Lee" gives "Mary-Jane" as well as "Mary" and "Jane", so the pair is one stand-in, not two.
+  const joined = name.split(/[\s.,]+/).filter((p) => /[\u2010\u2011-]/.test(p) && nameWords(p).length > 1);
+  return [...new Set([...joined, ...nameWords(name)])].filter((p) => [...p.normalize('NFC')].length >= 2);
 }
 
 /** Escape a string for use inside a regular expression. */
@@ -167,15 +187,24 @@ export function wholeWordMatcher(surfaces: string[]): RegExp | null {
  * only because no model was there to read it.
  */
 const SENSITIVE: { category: string; terms: string[] }[] = [
-  { category: 'health', terms: ['epilepsy', 'seizure', 'asthma', 'diabetes', 'disability', 'medication', 'hospital', 'pregnant'] },
+  {
+    category: 'health',
+    terms: [
+      'epilepsy', 'seizure', 'asthma', 'diabetes', 'disability', 'disabled', 'medication', 'hospital', 'pregnant', 'pregnancy',
+      'cancer', 'hiv', 'tb', 'depression', 'depressed', 'anxiety', 'self-harm', 'self harm', 'suicide', 'suicidal',
+      'autism', 'autistic', 'dyslexia', 'dyslexic',
+    ],
+  },
   {
     category: 'family',
     terms: [
       'separating', 'separated', 'divorce', 'divorced', 'died', 'death', 'orphan', 'lost his job', 'lost her job',
-      'unemployed', 'debt', 'alcohol', 'abuse', 'violence',
+      'unemployed', 'debt', 'alcohol', 'alcoholic', 'drinks', 'drinking', 'drunk', 'abuse', 'abused', 'violence',
+      'homeless', 'hungry',
     ],
   },
-  { category: 'identity', terms: ['caste', 'religion'] },
+  { category: 'safety', terms: ['jail', 'jailed', 'prison', 'police', 'arrested', 'beats', 'beaten', 'beating', 'hits', 'bullied'] },
+  { category: 'identity', terms: ['caste', 'religion', 'dalit', 'sc/st', 'muslim', 'hindu', 'christian', 'sikh'] },
 ];
 
 /** The same word with a plain plural "s" also counts: "seizures", "debts". */
@@ -246,6 +275,26 @@ const NOT_A_PROPER_NAME = new Set([
   ...NOT_A_NAME,
 ]);
 
+/**
+ * Ordinary words that often open a sentence. A capitalised word in that
+ * place is held as a possible name unless it is one of these. The list is
+ * short on purpose: a word missing from it is withheld, which the teacher
+ * can undo, and a name wrongly on it would be sent.
+ */
+const SENTENCE_OPENERS = new Set([
+  'a', 'an', 'this', 'that', 'these', 'those', 'there', 'here', 'you', 'your', 'my', 'our', 'its', 'us',
+  'in', 'on', 'at', 'to', 'for', 'from', 'with', 'without', 'by', 'of', 'as', 'after', 'before', 'during', 'since', 'until',
+  'when', 'while', 'if', 'but', 'and', 'or', 'so', 'because', 'although', 'though', 'however', 'also', 'then', 'now', 'still',
+  'what', 'where', 'why', 'how', 'who', 'which',
+  'some', 'most', 'all', 'no', 'not', 'none', 'many', 'few', 'both', 'each', 'every', 'any', 'another', 'other', 'others',
+  'one', 'two', 'three', 'four', 'five', 'six', 'last', 'next', 'once',
+  'please', 'today', 'tomorrow', 'yesterday', 'tonight', 'sometimes', 'often', 'always', 'never', 'usually', 'maybe', 'perhaps',
+  'is', 'are', 'was', 'were', 'has', 'have', 'had', 'will', 'would', 'can', 'could', 'should', 'must', 'do', 'does', 'did',
+  'needs', 'need', 'ask', 'ring', 'call', 'see', 'check', 'seat', 'give', 'tell', 'move', 'remind', 'send', 'plan', 'write',
+  'everyone', 'everybody', 'nobody', 'someone', 'children', 'pupils', 'students', 'boys', 'girls', 'homework', 'reading', 'writing',
+  'yes', 'thanks', 'thank', 'dear', 'hello',
+]);
+
 export interface PossibleName {
   kind: 'adult' | 'place';
   text: string;
@@ -254,10 +303,10 @@ export interface PossibleName {
 }
 
 /**
- * Words that may be a name because they are capitalised in mid-sentence.
- * Used only when no model read the note. A word is passed over when it
- * starts a sentence, is on the class list, or is a month, a day or one of
- * a few ordinary capitalised words. After "to", "in", "at" or "from" the
+ * Words that may be a name because they are capitalised. Used only when
+ * no model read the note. A word is passed over when it is on the class
+ * list, is a month, a day or one of a few ordinary capitalised words, or
+ * opens a sentence and is an ordinary opener such as "The" or "When". After "to", "in", "at" or "from" the
  * guess is a place; otherwise an adult.
  */
 export function findPossibleNames(text: string, classList: string[]): PossibleName[] {
@@ -273,10 +322,14 @@ export function findPossibleNames(text: string, classList: string[]): PossibleNa
       let to = words.length;
       while (from < to && skip(words[from].text)) from++;
       while (to > from && skip(words[to - 1].text)) to--;
-      if (from >= to) continue;
-      // The first word of a sentence is capitalised whatever it is, so one capitalised word there says nothing.
+      // The first word of a sentence is capitalised whatever it is. An ordinary opener there is no name; any
+      // other word is held, since "Sunita rang" and "Homework rang" look the same to a rule.
       const opensSentence = from === 0 && !/[\p{L}\p{N}]/u.test(sentence.text.slice(0, m.index));
-      if (opensSentence && to - from === 1) continue;
+      if (opensSentence && SENTENCE_OPENERS.has(words[0].text.toLowerCase())) {
+        from++;
+        while (from < to && skip(words[from].text)) from++;
+      }
+      if (from >= to) continue;
       const start = sentence.start + words[from].at;
       const end = sentence.start + words[to - 1].at + words[to - 1].text.length;
       const before = /([\p{L}]+)[ \t]+$/u.exec(text.slice(Math.max(0, start - 12), start))?.[1].toLowerCase();

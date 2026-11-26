@@ -1034,3 +1034,126 @@ describe('approval and policy', () => {
     }
   });
 });
+
+describe('listed names with initials and hyphens', () => {
+  it('never withholds a one-letter part of a listed name on its own', () => {
+    const list = ['A. Kumar', 'Imran I'];
+    const note = 'A good week. I saw Imran and Kumar after lunch. A. Kumar and Imran I were early.';
+    const v = buildVault(note, deterministicCandidates(note, list));
+    expect(v.map((e) => e.surfaces)).toEqual([
+      ['A. Kumar', 'Kumar'],
+      ['Imran I', 'Imran'],
+    ]);
+    expect(redact(note, v)).toBe('A good week. I saw [Student 2] and [Student 1] after lunch. [Student 1] and [Student 2] were early.');
+    expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+  });
+
+  it('does not list a student whose only match is an initial', () => {
+    const note = 'A good week. I marked the tests.';
+    expect(deterministicCandidates(note, ['A. Kumar', 'Imran I'])).toEqual([]);
+  });
+
+  it('still withholds a two-letter part of a listed name', () => {
+    const note = 'Om was late.';
+    expect(redact(note, buildVault(note, deterministicCandidates(note, ['Om Rao'])))).toBe('[Student 1] was late.');
+  });
+
+  it('withholds either half of a hyphenated listed name when it stands alone', () => {
+    const list = ['Mary-Jane Lee'];
+    for (const [note, out] of [
+      ['Mary was away.', '[Student 1] was away.'],
+      ['Jane was away.', '[Student 1] was away.'],
+      ['Mary-Jane was away, and Mary-Jane Lee came back.', '[Student 1] was away, and [Student 1] came back.'],
+    ]) {
+      const v = buildVault(note, deterministicCandidates(note, list));
+      expect(redact(note, v)).toBe(out);
+      expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+    }
+  });
+});
+
+describe('landline numbers', () => {
+  it('finds a landline with its STD code, in the rules and at the exit gate', () => {
+    for (const number of ['022 2345 6789', '080-23456789', '0484 234 5678', '01123456789']) {
+      const note = `Ring the office on ${number} after four.`;
+      expect(findByRule(note).map((h) => [h.rule, h.text])).toEqual([['phone number', number]]);
+      const v = buildVault(note, deterministicCandidates(note, []));
+      expect(redact(note, v)).toBe('Ring the office on [Contact 1] after four.');
+      expect(checkOutgoing(note, []).map((x) => x.why)).toEqual(['looks like a phone number']);
+    }
+  });
+
+  it('leaves dates, times and short numbers alone', () => {
+    expect(findByRule('Due 01-02-2026 at 0900 hours. Page 0123 of 0456. Scored 045 then 067.')).toEqual([]);
+  });
+});
+
+describe('more sensitive words', () => {
+  it('withholds sentences about the law, drink, violence, health, hardship and identity', () => {
+    const lines = [
+      'His father is in jail',
+      'Her uncle was sent to prison',
+      'The police came to the house',
+      'His brother was arrested',
+      'Her father drinks',
+      'He has been drinking again',
+      'Her father comes home drunk',
+      'There is alcohol at home',
+      'He beats the children',
+      'She was beaten at home',
+      'He hits her',
+      'There was abuse at home',
+      'Her mother has cancer',
+      'His father has HIV',
+      'Her aunt is being treated for TB',
+      'She is treated for depression',
+      'He has anxiety before tests',
+      'There are signs of self-harm',
+      'She spoke of suicide',
+      'He has autism',
+      'She has dyslexia',
+      'He has a disability',
+      'She is being bullied',
+      'The family is homeless',
+      'He comes to school hungry',
+      'They are in debt',
+      'Others tease her about caste',
+      'The family is Dalit',
+      'He is listed as SC/ST',
+      'The family is Muslim',
+      'The family is Hindu',
+      'The family is Christian',
+      'The family is Sikh',
+      'Her sister is pregnant',
+      'His grandfather died',
+      'There was a death in the family',
+    ];
+    for (const line of lines) expect(findSensitive(`${line}.`).map((h) => h.text), line).toEqual([line]);
+  });
+
+  it('leaves ordinary classroom words alone', () => {
+    expect(findSensitive('She speaks Hindi well. He hit the target in maths. The debate was on the best table. Stables and policy were the topics.')).toEqual([]);
+  });
+});
+
+describe('capitalised words that open a sentence, when no model read the note', () => {
+  const guess = (note: string, list: string[] = []) => possibleNameCandidates(note, list).map((c) => c.text);
+
+  it('holds a word that opens a sentence unless it is an ordinary opener', () => {
+    expect(guess('Sunita rang at noon. She was upset. Today went well. Rohan was absent on Monday.')).toEqual(['Sunita', 'Rohan']);
+  });
+
+  it('passes over ordinary openers, days and months', () => {
+    const note =
+      'The test went well. He is early. They left. This is new. Her work is neat. His bag is lost. We met. I agree. In class he is quiet. On Friday we met. At lunch she left. When it rains he is late. If so, fine. But not always. And so on. Some left. Most stayed. All came. No homework. Not today. Please note. Today is fine. Tomorrow too. Yesterday was hard. Monday is sports day. March is exam month.';
+    expect(guess(note)).toEqual([]);
+  });
+
+  it('drops an ordinary opener in front of a name and keeps the name', () => {
+    expect(guess('When Sunita rang I was out. Then Mrs. Rao came.')).toEqual(['Sunita', 'Rao']);
+  });
+
+  it('leaves a class-list name to the class list', () => {
+    expect(guess('Kabir was late.', ['Kabir Khan'])).toEqual([]);
+  });
+});

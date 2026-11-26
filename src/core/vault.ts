@@ -1,5 +1,5 @@
 import type { Entity, Kind, Source } from './types';
-import { findByRule, findPossibleNames, findSensitive, isWordChar, nameParts, nameWords, patternFor, sameForm, wholeWordMatcher } from './rules';
+import { findByRule, findPossibleNames, findSensitive, isWordChar, listedParts, nameParts, nameWords, patternFor, sameForm, wholeWordMatcher } from './rules';
 
 const TOKEN_NAME: Record<Kind, string> = {
   student: 'Student',
@@ -142,10 +142,10 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
   const wordsOf = (d: Draft) => [...new Set(d.surfaces.flatMap((s) => nameWords(s).map(norm)))];
   const within = (a: string[], b: string[]) => a.every((p) => b.includes(p));
 
-  // The whole name is always a surface, however short. The parts of a listed name all count too;
-  // the parts of a name found any other way count from three letters up.
+  // The whole name is always a surface, however short. The parts of a listed name count from two
+  // letters up; the parts of a name found any other way count from three letters up.
   const addSurfaces = (d: Draft, text: string, listed: boolean) => {
-    const all = isPerson(d.kind) ? [text, ...(listed ? nameWords(text) : nameParts(text))] : [text];
+    const all = isPerson(d.kind) ? [text, ...(listed ? listedParts(text) : nameParts(text))] : [text];
     for (const s of all) {
       if (!d.surfaces.some((x) => norm(x) === norm(s))) d.surfaces.push(s);
     }
@@ -278,9 +278,9 @@ function attachPrivateDetails(note: string, entities: Entity[]) {
  */
 export function deterministicCandidates(note: string, classList: string[]): Candidate[] {
   const out: Candidate[] = [];
-  // A listed name counts when the note has it in full or has any one of its words, however short.
+  // A listed name counts when the note has it in full or has any one of its words of two letters or more.
   for (const name of classList) {
-    const m = wholeWordMatcher([name, ...nameWords(name)]);
+    const m = wholeWordMatcher([name, ...listedParts(name)]);
     if (m && m.test(note)) out.push({ kind: 'student', text: name, source: 'class list' });
   }
   for (const hit of findByRule(note)) out.push({ kind: hit.kind, text: hit.text, source: 'rule' });
