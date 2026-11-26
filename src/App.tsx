@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Entity, ItemCheck, Kind, LabelWhere, Receipt, TaskId, Where } from './core/types';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './core/samples';
-import { addByTeacher, appearsIn, applyLocks, buildVault, deterministicCandidates, redact, restore, segment } from './core/vault';
+import {
+  addByTeacher,
+  appearsIn,
+  applyLocks,
+  buildVault,
+  CAPITALISED,
+  deterministicCandidates,
+  possibleNameCandidates,
+  redact,
+  redactWithTokens,
+  RESERVED,
+  restore,
+  segment,
+} from './core/vault';
 import { checkOutgoing, checkReply, type Violation } from './core/gate';
 import { loadReceipts, makeReceipt, storeReceipts, type ReceiptRecord } from './core/receipts';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
@@ -64,7 +77,17 @@ type Records =
   | { state: 'idle' | 'loading' | 'failed' }
   | { state: 'ready'; list: ReceiptRecord[]; unreadable: number };
 
-const NO_GAPS: { unread: number[]; dropped: number } = { unread: [], dropped: 0 };
+/** Where the on-device guard fell short: pieces it did not read, things it reported that were lost or only partly found. */
+interface Gaps {
+  unread: number[];
+  dropped: number;
+  partial: number;
+}
+
+const NO_GAPS: Gaps = { unread: [], dropped: 0, partial: 0 };
+
+/** The longest piece of the note that can be marked in one go. */
+const MAX_SELECTION = 600;
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -86,13 +109,15 @@ export function App() {
   /** The vault as the guard and the teacher left it. Read `entities` below, which has the school's locks applied. */
   const [rawEntities, setEntities] = useState<Entity[]>([]);
   const [guardWhere, setGuardWhere] = useState<Where>('NOT_RUN');
-  const [guardGaps, setGuardGaps] = useState<{ unread: number[]; dropped: number }>(NO_GAPS);
+  const [guardGaps, setGuardGaps] = useState<Gaps>(NO_GAPS);
   const [progress, setProgress] = useState('');
   const [selection, setSelection] = useState('');
+  /** Said in place of the marking buttons when a selection cannot be used. */
+  const [selectionNote, setSelectionNote] = useState('');
   /** The exact outgoing text the teacher ticked as read. The tick holds only while this is still the outgoing text. */
   const [readText, setReadText] = useState<string | null>(null);
   /** What was approved: the text, when, and the vault as it stood at that moment. */
-  const [sent, setSent] = useState<{ text: string; at: string; entities: Entity[] } | null>(null);
+  const [sent, setSent] = useState<{ text: string; at: string; entities: Entity[]; tokens: string[] } | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
   /** Whether this computer had a network when the draft came back. Used only to word a fallback honestly. */
   const [draftOnline, setDraftOnline] = useState(true);
@@ -162,7 +187,7 @@ export function App() {
     [sent, rawEntities, policy.lockedKinds],
   );
   const outgoing = useMemo(() => redact(note, entities), [note, entities]);
-  const violations = useMemo(() => checkOutgoing(outgoing, entities), [outgoing, entities]);
+  const violations = useMemo(() => checkOutgoing(outgoing, entities, note), [outgoing, entities, note]);
   const readIt = readText !== null && readText === outgoing;
 
   // The tick is for one exact text under one policy. If either changes, it is cleared.
@@ -205,15 +230,25 @@ export function App() {
     if (await turnOnDevice()) {
       try {
         const report = await guardOnDevice(note, (done, total) =>
-          setProgress(`The on-device model is reading paragraph ${Math.min(done + 1, total)} of ${total}`),
+          setProgress(`The on-device model is reading part ${Math.min(done + 1, total)} of ${total}`),
         );
         candidates.push(...report.candidates);
-        gaps = { unread: report.unread, dropped: report.dropped };
-        where = 'ON_DEVICE';
+        if (report.unread.length >= report.total) {
+          // The model read nothing, so this run is a rules-only run and is called one everywhere.
+          setError(
+            `${report.stopped ?? 'The on-device model could not read any part of the note.'} Only the rules were applied. Read the outgoing text with care.`,
+          );
+        } else {
+          where = 'ON_DEVICE';
+          gaps = { unread: report.unread, dropped: report.dropped, partial: report.partial };
+          if (report.stopped) setError(`The on-device guard stopped early: ${report.stopped} Check the parts it did not read.`);
+        }
       } catch (e) {
         setError(`The on-device guard stopped: ${message(e)} Only the rules were applied. Read the outgoing text with care.`);
       }
     }
+    // With no model, a capitalised word in mid-sentence is held back as a possible name. A guess: it can be released.
+    if (where === 'RULES_ONLY') candidates.push(...possibleNameCandidates(note, classList));
     setEntities(buildVault(note, candidates));
     setGuardWhere(where);
     setGuardGaps(gaps);
@@ -225,14 +260,53 @@ export function App() {
       list.map((e) => (e.id === id && !policyRef.current.lockedKinds.includes(e.kind) ? { ...e, withheld: !e.withheld } : e)),
     );
 
-  const onSelectText = () => {
-    const text = window.getSelection()?.toString().trim() ?? '';
-    setSelection(text.length >= 2 && text.length <= 240 && appearsIn(note, text) ? text : '');
-  };
+  /** Take the current selection as something to mark, if it is a usable piece of the note. */
+  const readSelection = useCallback(
+    (keepIfEmpty: boolean) => {
+      const sel = window.getSelection();
+      const inNote = !!sel && !!noteRef.current && !!sel.anchorNode && noteRef.current.contains(sel.anchorNode);
+      const text = inNote ? sel.toString().trim() : '';
+      if (text.length < 2) {
+        if (!keepIfEmpty) {
+          setSelection('');
+          setSelectionNote('');
+        }
+        return;
+      }
+      if (text.length > MAX_SELECTION) {
+        setSelection('');
+        setSelectionNote(
+          `That selection is ${text.length.toLocaleString()} characters long. Select ${MAX_SELECTION} characters or fewer at a time, and mark a longer passage in parts.`,
+        );
+        return;
+      }
+      if (!appearsIn(note, text)) {
+        setSelection('');
+        setSelectionNote('That selection is not one unbroken piece of your note. Select within one paragraph.');
+        return;
+      }
+      setSelection(text);
+      setSelectionNote('');
+    },
+    [note],
+  );
 
+  const onSelectText = () => readSelection(false);
+
+  // A touch selection raises no mouse or key event in the note, so the selection itself is listened to.
+  // An emptied selection is ignored here: tapping a button can empty it before the tap arrives.
+  useEffect(() => {
+    if (stage !== 'review') return;
+    const onChange = () => readSelection(true);
+    document.addEventListener('selectionchange', onChange);
+    return () => document.removeEventListener('selectionchange', onChange);
+  }, [stage, readSelection]);
+
+  /** Mark the selection. Text already in the vault is set back to withheld; a cut word is widened to the whole word. */
   const withholdSelection = (kind: Kind) => {
     setEntities((list) => addByTeacher(note, list, selection, kind));
     setSelection('');
+    setSelectionNote('');
     window.getSelection()?.removeAllRanges();
   };
 
@@ -242,8 +316,8 @@ export function App() {
     // Everything is worked out again at the moment of sending: the current locks, the text they give,
     // and the gate on exactly that text. It is sent only if it is the text the teacher ticked as read.
     const current = applyLocks(rawEntities, policyRef.current.lockedKinds);
-    const text = redact(note, current);
-    const stopped = checkOutgoing(text, current);
+    const { text, tokens } = redactWithTokens(note, current);
+    const stopped = checkOutgoing(text, current, note);
     if (stage !== 'review' || readText === null || text !== readText || stopped.length > 0) {
       setReadText(null);
       setError(
@@ -257,7 +331,7 @@ export function App() {
     const cloudModel = policyRef.current.cloudModel;
     setError(null);
     const approvedAt = new Date().toISOString();
-    setSent({ text, at: approvedAt, entities });
+    setSent({ text, at: approvedAt, entities, tokens });
     setStage('drafting');
     let drafted: DraftResult;
     try {
@@ -276,7 +350,7 @@ export function App() {
     setDraftOnline(navigator.onLine);
     setKept(drafted.draft.items.map(() => true));
     const replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
-    setReplyIssues(checkReply(replyText, entities, text));
+    setReplyIssues(checkReply(replyText, entities, tokens));
     setReplyRead(false);
 
     setStage('checking');
@@ -321,7 +395,7 @@ export function App() {
       entities,
       guardWhere,
       unreadParagraphs: guardGaps.unread.length,
-      droppedDetails: guardGaps.dropped,
+      droppedDetails: guardGaps.dropped + guardGaps.partial,
       sentText: sent.text,
       approvedAt: sent.at,
       draftWhere: result.where,
@@ -351,8 +425,8 @@ export function App() {
   const finalText = useMemo(() => {
     if (!result) return '';
     const items = result.draft.items.filter((_, i) => kept[i]);
-    return restore([result.draft.title, '', ...items.map((i) => `${i.heading}\n${i.text}\n`)].join('\n'), entities).trim();
-  }, [result, kept, entities]);
+    return restore([result.draft.title, '', ...items.map((i) => `${i.heading}\n${i.text}\n`)].join('\n'), entities, sent?.tokens).trim();
+  }, [result, kept, entities, sent]);
 
   /** Copy to the clipboard and say plainly whether it worked. The browser can refuse. */
   const copy = async (what: 'all' | number, text: string) => {
@@ -377,6 +451,7 @@ export function App() {
     setGuardWhere('NOT_RUN');
     setGuardGaps(NO_GAPS);
     setSelection('');
+    setSelectionNote('');
     setReadText(null);
     setSent(null);
     setResult(null);
@@ -438,7 +513,9 @@ export function App() {
       ) : (
         <ul className="vault">
           {entities.map((e) => {
-            const locked = policy.lockedKinds.includes(e.kind);
+            const reserved = e.category === RESERVED;
+            const locked = reserved || policy.lockedKinds.includes(e.kind);
+            const guess = e.source === 'rule' && e.category === CAPITALISED;
             const about = entities.find((s) => s.id === e.about);
             return (
               <li key={e.id} className={e.withheld ? '' : 'off'}>
@@ -446,13 +523,23 @@ export function App() {
                 <div className="what">
                   <strong>{e.surfaces[0]}</strong>
                   <small>
-                    {KIND_LABEL[e.kind]}
-                    {e.category ? `, ${e.category}` : ''}
-                    {about ? `, about ${about.surfaces[0]}` : ''} · found by {e.source}
+                    {reserved ? 'Looks like a stand-in' : KIND_LABEL[e.kind]}
+                    {e.category && !guess && !reserved ? `, ${e.category}` : ''}
+                    {about && !reserved ? `, about ${about.surfaces[0]}` : ''} · found by{' '}
+                    {guess ? 'rule: capitalised word' : e.source}
                   </small>
                 </div>
                 <code className="token">{e.withheld ? e.token : 'released'}</code>
-                <label className="switch" title={locked ? 'A setting the school publishes: the app keeps this kind withheld' : ''}>
+                <label
+                  className="switch"
+                  title={
+                    reserved
+                      ? 'Text that looks like one of the stand-ins is always withheld, so it cannot be mistaken for one'
+                      : locked
+                        ? 'A setting the school publishes: the app keeps this kind withheld'
+                        : ''
+                  }
+                >
                   <input
                     type="checkbox"
                     checked={e.withheld}
@@ -654,14 +741,18 @@ export function App() {
                             <span>
                               Withhold <q>{selection.length > 48 ? `${selection.slice(0, 48)}…` : selection}</q> as
                             </span>
-                            {(['student', 'adult', 'place', 'private'] as Kind[]).map((k) => (
+                            {(['student', 'adult', 'place', 'contact', 'id', 'private'] as Kind[]).map((k) => (
                               <button key={k} className="chip-btn" onClick={() => withholdSelection(k)}>
                                 {KIND_LABEL[k]}
                               </button>
                             ))}
                           </>
+                        ) : selectionNote ? (
+                          <span className="caution selection-note">{selectionNote}</span>
                         ) : (
-                          <span className="hint">Missed something? Select it in your note to withhold it.</span>
+                          <span className="hint">
+                            Missed something? Select it in your note to withhold it. Selecting a released item withholds it again.
+                          </span>
                         )}
                       </div>
                     )}
@@ -705,7 +796,7 @@ export function App() {
               {(stage === 'result' || stage === 'signed') && result && (
                 <article className="card result">
                   <div className="card-head">
-                    <h3>{restore(result.draft.title, entities)}</h3>
+                    <h3>{restore(result.draft.title, entities, sent?.tokens)}</h3>
                   </div>
                   <div className="result-chips">
                     <span className={`route route-${result.where.toLowerCase()}`}>
@@ -740,10 +831,10 @@ export function App() {
                       return (
                         <li key={i} className={kept[i] ? '' : 'struck'}>
                           <h4>
-                            <DeviceText text={item.heading} entities={entities} />
+                            <DeviceText text={item.heading} entities={entities} allowed={sent?.tokens} />
                           </h4>
                           <p>
-                            <DeviceText text={item.text} entities={entities} />
+                            <DeviceText text={item.text} entities={entities} allowed={sent?.tokens} />
                           </p>
                           {c && (
                             <div className={`verdict v-${c.verdict.replace(' ', '-')}`}>
@@ -767,7 +858,7 @@ export function App() {
                             <button
                               className="link copy-one"
                               disabled={replyBlocked}
-                              onClick={() => copy(i, restore(item.text, entities).trim())}
+                              onClick={() => copy(i, restore(item.text, entities, sent?.tokens).trim())}
                             >
                               {copyLabel(i, 'Copy this message')}
                             </button>
@@ -892,16 +983,23 @@ export function App() {
                   )}
                   {guardGaps.unread.map((i) => (
                     <p className="caution" key={i}>
-                      The on-device model could not read paragraph {i + 1}
+                      The on-device model could not read part {i + 1} of your note
                       {paragraphs(note)[i] ? ` (it begins “${paragraphs(note)[i].slice(0, 40).trim()}…”)` : ''}. Check it yourself
                       before you approve.
                     </p>
                   ))}
                   {guardGaps.dropped > 0 && (
                     <p className="caution">
-                      The on-device model reported {guardGaps.dropped} private {guardGaps.dropped === 1 ? 'detail' : 'details'} that
-                      could not be matched to the words of your note, so {guardGaps.dropped === 1 ? 'it was' : 'they were'} not
-                      withheld. Look for private details yourself before you approve.
+                      The on-device model reported {guardGaps.dropped} {guardGaps.dropped === 1 ? 'item' : 'items'} (a name, a place
+                      or a private detail) that could not be matched to the words of your note, so{' '}
+                      {guardGaps.dropped === 1 ? 'it was' : 'they were'} not withheld. Look for names and private details yourself
+                      before you approve.
+                    </p>
+                  )}
+                  {guardGaps.partial > 0 && (
+                    <p className="caution">
+                      {guardGaps.partial} private {guardGaps.partial === 1 ? 'detail was' : 'details were'} matched to your note only
+                      in part. The matching words were withheld. Read the text around each private detail and mark what is left.
                     </p>
                   )}
                   {guardWhere === 'RULES_ONLY' && (
@@ -1206,9 +1304,9 @@ function Receipts({
                           .join(', ') || 'nothing found'}
                         {r.guard.allowedByTeacher > 0 && `. ${r.guard.allowedByTeacher} released by the teacher`}
                         {(r.guard.unreadParagraphs ?? 0) > 0 &&
-                          `. The on-device model could not read ${r.guard.unreadParagraphs} ${r.guard.unreadParagraphs === 1 ? 'paragraph' : 'paragraphs'}`}
+                          `. The on-device model could not read ${r.guard.unreadParagraphs} ${r.guard.unreadParagraphs === 1 ? 'part' : 'parts'} of the note`}
                         {(r.guard.droppedDetails ?? 0) > 0 &&
-                          `. ${r.guard.droppedDetails} reported private ${r.guard.droppedDetails === 1 ? 'detail' : 'details'} could not be matched to the note`}
+                          `. ${r.guard.droppedDetails} reported ${r.guard.droppedDetails === 1 ? 'item' : 'items'} could not be matched to the note in full`}
                       </dd>
                       <dt>Approved</dt>
                       <dd>

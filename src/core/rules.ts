@@ -17,6 +17,7 @@ interface Rule {
 
 const RULES: Rule[] = [
   { name: 'email address', kind: 'contact', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g },
+  // (the roll rule below: a single digit counts only after "no.", "number" or "#", so "the bread roll is 5 rupees" is left alone)
   // 12 digits in groups of four: the format of an Aadhaar number.
   { name: '12-digit identity number', kind: 'id', re: /(?<![\d-])\d{4}[ -]?\d{4}[ -]?\d{4}(?![\d-])/g },
   // Indian mobile numbers, with or without +91, and other long digit runs written as phone numbers.
@@ -25,7 +26,7 @@ const RULES: Rule[] = [
   {
     name: 'roll or admission number',
     kind: 'id',
-    re: /\b(?:roll|admission|adm\.?|registration|reg\.?|enrolment|enrollment|student id|udise)\s*(?:no\.?|number|#)?\s*(?:(?:is|was)\s+)?[:#-]?\s*(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,}/gi,
+    re: /\b(?:roll|admission|adm\.?|registration|reg\.?|enrolment|enrollment|student id|udise)\s*(?:(?:no\.?|number|#)\s*(?:(?:is|was)\s+)?[:#-]?\s*(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]*|(?:(?:is|was)\s+)?[:#-]?\s*(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,})/gi,
   },
   {
     name: 'date of birth',
@@ -180,4 +181,58 @@ export function findSensitive(text: string): SensitiveHit[] {
     if (group) hits.push({ ...sentence, category: group.category });
   }
   return hits;
+}
+
+// ---------------------------------------------------------------- possible names
+
+/** Capitalised words that are not names. Months and days, and words a note often capitalises. */
+const NOT_A_PROPER_NAME = new Set([
+  'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+  'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec',
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+  'class', 'notes', 'note', 'i', 'the', 'he', 'she', 'they', 'we', 'it', 'grade', 'section', 'std', 'standard', 'roll',
+  'school', 'term', 'week', 'maths', 'english', 'hindi', 'science', 'aadhaar', 'dob', 'udise', 'ptm',
+  ...HONORIFICS,
+  ...NOT_A_NAME,
+]);
+
+export interface PossibleName {
+  kind: 'adult' | 'place';
+  text: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * Words that may be a name because they are capitalised in mid-sentence.
+ * Used only when no model read the note. A word is passed over when it
+ * starts a sentence, is on the class list, or is a month, a day or one of
+ * a few ordinary capitalised words. After "to", "in", "at" or "from" the
+ * guess is a place; otherwise an adult.
+ */
+export function findPossibleNames(text: string, classList: string[]): PossibleName[] {
+  const listed = new Set(classList.flatMap((name) => nameWords(name).map((w) => w.toLowerCase())));
+  const skip = (word: string) => listed.has(word.toLowerCase()) || NOT_A_PROPER_NAME.has(word.toLowerCase());
+  const out: PossibleName[] = [];
+  const run = /(?<![\p{L}\p{N}])\p{Lu}[\p{L}\p{M}]+(?:[ \t]+\p{Lu}[\p{L}\p{M}]+)*(?![\p{L}\p{N}])/gu;
+  for (const sentence of sentences(text)) {
+    for (const m of sentence.text.matchAll(run)) {
+      const words = [...m[0].matchAll(/[\p{L}\p{M}]+/gu)].map((w) => ({ text: w[0], at: m.index + w.index }));
+      // Ordinary words at either end of a run are dropped; a run made only of them is no name.
+      let from = 0;
+      let to = words.length;
+      while (from < to && skip(words[from].text)) from++;
+      while (to > from && skip(words[to - 1].text)) to--;
+      if (from >= to) continue;
+      // The first word of a sentence is capitalised whatever it is, so one capitalised word there says nothing.
+      const opensSentence = from === 0 && !/[\p{L}\p{N}]/u.test(sentence.text.slice(0, m.index));
+      if (opensSentence && to - from === 1) continue;
+      const start = sentence.start + words[from].at;
+      const end = sentence.start + words[to - 1].at + words[to - 1].text.length;
+      const before = /([\p{L}]+)[ \t]+$/u.exec(text.slice(Math.max(0, start - 12), start))?.[1].toLowerCase();
+      const kind = before && ['to', 'in', 'at', 'from'].includes(before) ? 'place' : 'adult';
+      out.push({ kind, text: text.slice(start, end), start, end });
+    }
+  }
+  return out;
 }

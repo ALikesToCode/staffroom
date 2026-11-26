@@ -18,6 +18,8 @@ export interface Entity {
   source: Source;
   /** false = the teacher chose to let this one through. */
   withheld: boolean;
+  /** For private details: where in the note this one stands. The same words elsewhere are another entry. */
+  at?: number;
   /** For private details: the id of the student it is about, when known. */
   about?: string;
   /** For private details: health, family, money, identity or other. */

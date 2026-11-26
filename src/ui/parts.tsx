@@ -35,21 +35,26 @@ export function CloudText({ text }: { text: string }) {
   return <>{out}</>;
 }
 
-/** Text as the teacher sees it on the device: real names put back, lightly marked. */
-export function DeviceText({ text, entities }: { text: string; entities: Entity[] }) {
-  const byToken = new Map(entities.map((e) => [e.token, e]));
+/**
+ * Text as the teacher sees it on the device: real names put back, lightly
+ * marked. Only a stand-in that was in the approved text (`allowed`) is
+ * turned back into a name. Any other is shown as it came, marked unknown,
+ * even if the vault happens to hold one that reads the same.
+ */
+export function DeviceText({ text, entities, allowed }: { text: string; entities: Entity[]; allowed?: readonly string[] }) {
+  const byToken = new Map(entities.filter((e) => e.kind !== 'private').map((e) => [e.token, e]));
   const out: ReactNode[] = [];
   let at = 0;
   for (const m of text.matchAll(TOKEN_RE)) {
     if (m.index > at) out.push(text.slice(at, m.index));
-    const e = byToken.get(m[0]);
+    const e = !allowed || allowed.includes(m[0]) ? byToken.get(m[0]) : undefined;
     out.push(
       e ? (
         <span className="restored" key={m.index} title={`The cloud saw ${m[0]}`}>
           {e.surfaces[0]}
         </span>
       ) : (
-        <span className="unknown-token" key={m.index} title="This stand-in is not in your vault">
+        <span className="unknown-token" key={m.index} title="This stand-in was not in the text you approved, so no name is put back">
           {m[0]}
         </span>
       ),

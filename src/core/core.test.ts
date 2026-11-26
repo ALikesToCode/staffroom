@@ -1,10 +1,34 @@
+import indexHtml from '../../index.html?raw';
 import { describe, expect, it } from 'vitest';
 import { findByRule, findSensitive, nameParts, sentences } from './rules';
-import { addByTeacher, applyLocks, buildVault, deterministicCandidates, redact, restore, segment, PRIVATE_TOKEN } from './vault';
+import {
+  addByTeacher,
+  applyLocks,
+  buildVault,
+  deterministicCandidates,
+  possibleNameCandidates,
+  redact,
+  redactWithTokens,
+  restore,
+  segment,
+  widenToWords,
+  PRIVATE_TOKEN,
+} from './vault';
 import { checkOutgoing, checkReply } from './gate';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './samples';
 import { DRAFT_FORMAT, DRAFT_NOTES_HEADING, draftPrompt, LABEL_CHARS, labelPrompt } from '../ai/draft';
 import { plainText } from './text';
+
+/** The sample note as it goes out when no model read it: class list, patterns, sensitive words and capitalised words only. */
+const RULES_ONLY_SAMPLE = `Class 6B, week of 16 November. Notes for myself.
+
+[Student 1] has missed four days this month. [withheld]. He is bright in maths but has not handed in homework for two weeks.
+
+[Student 2] reads well aloud but freezes in written tests. She needs extra writing practice. [withheld]. Her [ID 1]. She walks six kilometres home to [Place 1] and must leave before dark.
+
+[Student 3] and [Student 5] fight most days during group work. [withheld]. [Student 5] finishes early and gets bored.
+
+[Student 4] is far ahead in reading. She could help others, but she is shy.`;
 
 describe('pattern rules', () => {
   it('finds phone numbers, emails and identity numbers', () => {
@@ -27,6 +51,12 @@ describe('pattern rules', () => {
       ['roll or admission number', 'roll no. was 14'],
     ]);
     expect(findByRule('The roll was called at nine. The bread roll is 5 rupees.')).toEqual([]);
+  });
+
+  it('finds a single-digit roll number after "no." or "number"', () => {
+    expect(findByRule('Roll no. 5 sits by roll number 7.').map((h) => h.text)).toEqual(['Roll no. 5', 'roll number 7']);
+    const note = 'Roll no. 5 was late.';
+    expect(redact(note, buildVault(note, deterministicCandidates(note, [])))).toBe('[ID 1] was late.');
   });
 
   it('leaves ordinary numbers and dates alone', () => {
@@ -110,11 +140,11 @@ describe('vault', () => {
     { kind: 'student' as const, text: 'Zubin', source: 'on-device model' as const },
   ];
   const vault = buildVault(SAMPLE_NOTE, candidates);
-  const redacted = redact(SAMPLE_NOTE, vault);
+  const { text: redacted, tokens: sentTokens } = redactWithTokens(SAMPLE_NOTE, vault);
 
   it('treats a first name and a full name as one student', () => {
     const students = vault.filter((e) => e.kind === 'student');
-    expect(students.map((s) => s.surfaces[0])).toEqual(['Aarav Sharma', 'Meenal', 'Kabir', 'Tanvi', 'Ishaan']);
+    expect(students.map((s) => s.surfaces[0])).toEqual(['Aarav Sharma', 'Meenal Joshi', 'Kabir Qureshi', 'Tanvi Rao', 'Ishaan Verma']);
     expect(students[0].surfaces).toContain('Aarav');
   });
 
@@ -145,22 +175,22 @@ describe('vault', () => {
   it('attaches a private detail to the right student', () => {
     const byId = (id?: string) => vault.find((e) => e.id === id)?.surfaces[0];
     const about = (start: string) => byId(vault.find((e) => e.kind === 'private' && e.surfaces[0].startsWith(start))?.about);
-    expect(about('she has epilepsy')).toBe('Meenal');
-    expect(about('She told me')).toBe('Meenal');
+    expect(about('she has epilepsy')).toBe('Meenal Joshi');
+    expect(about('She told me')).toBe('Meenal Joshi');
     expect(about('his father lost his job')).toBe('Aarav Sharma');
     expect(about('His mother Sunita')).toBe('Aarav Sharma');
     // A name inside the detail wins over the name nearest before it ("Kabir and Ishaan fight ...").
-    expect(about("Kabir's parents")).toBe('Kabir');
+    expect(about("Kabir's parents")).toBe('Kabir Qureshi');
   });
 
   it('puts names back on the device', () => {
     expect(restore('Seat [Student 1] beside [Student 4]. Ask [Adult 1].', vault)).toBe(
-      'Seat Aarav Sharma beside Tanvi. Ask Sunita.',
+      'Seat Aarav Sharma beside Tanvi Rao. Ask Sunita.',
     );
   });
 
   it('lets the teacher release one item and mark another', () => {
-    const released = vault.map((e) => (e.surfaces[0] === 'Tanvi' ? { ...e, withheld: false } : e));
+    const released = vault.map((e) => (e.surfaces[0] === 'Tanvi Rao' ? { ...e, withheld: false } : e));
     expect(redact(SAMPLE_NOTE, released)).toContain('Tanvi is far ahead');
     const marked = addByTeacher(SAMPLE_NOTE, released, 'family tea stall', 'private');
     expect(redact(SAMPLE_NOTE, marked)).not.toContain('tea stall');
@@ -242,6 +272,154 @@ describe('vault', () => {
     expect(checkOutgoing(out, v)).toEqual([]);
   });
 
+  it('withholds a short part of a listed name wherever it stands alone', () => {
+    const note = 'Om Rao was absent. Om needs reading support. Some children join late.';
+    const v = buildVault(note, deterministicCandidates(note, ['Om Rao']));
+    expect(v.map((e) => e.surfaces)).toEqual([['Om Rao', 'Rao', 'Om']]);
+    expect(redact(note, v)).toBe('[Student 1] was absent. [Student 1] needs reading support. Some children join late.');
+    expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+    // A name only a model found keeps the three-letter floor for its parts.
+    const fromModel = buildVault(note, [{ kind: 'student', text: 'Om Rao', source: 'on-device model' }]);
+    expect(redact(note, fromModel)).toBe('[Student 1] was absent. Om needs reading support. Some children join late.');
+  });
+
+  it('withholds every part of a listed name used on its own', () => {
+    const note = 'Uma and Priya need reading support.';
+    const v = buildVault(note, deterministicCandidates(note, ['Uma Priya']));
+    expect(redact(note, v)).toBe('[Student 1] and [Student 1] need reading support.');
+    expect(restore('[Student 1]', v)).toBe('Uma Priya');
+    // A part two listed people share is withheld as an item of its own.
+    const two = 'Uma and Priya need reading support. Priya Nair is new.';
+    const shared = buildVault(two, deterministicCandidates(two, ['Uma Priya', 'Priya Nair']));
+    expect(redact(two, shared)).toBe('[Student 1] and [Student 3] need reading support. [Student 2] is new.');
+    expect(checkOutgoing(redact(two, shared), shared, two)).toEqual([]);
+    // A listed name that is nowhere in the note is not in the vault.
+    expect(buildVault(note, deterministicCandidates(note, ['Uma Priya', 'Diya Sharma']))).toHaveLength(1);
+  });
+
+  it('widens a mark that cuts a word, so what is marked is really withheld', () => {
+    const note = 'She walks home to Rampur Kalan and is staying with his grandmother.';
+    const out = 'She walks home to [Place 1] and is staying with his grandmother.';
+    expect(widenToWords(note, 'Rampur Kal')).toBe('Rampur Kalan');
+    expect(widenToWords(note, 'mpur Kalan')).toBe('Rampur Kalan');
+    expect(widenToWords(note, 'rampur  kalan')).toBe('Rampur Kalan');
+    expect(widenToWords(note, 'Delhi')).toBeUndefined();
+    for (const cut of ['Rampur Kal', 'mpur Kalan']) {
+      const byTeacher = addByTeacher(note, [], cut, 'place');
+      expect(redact(note, byTeacher)).toBe(out);
+      expect(checkOutgoing(redact(note, byTeacher), byTeacher, note)).toEqual([]);
+      expect(redact(note, buildVault(note, [{ kind: 'place', text: cut, source: 'on-device model' }]))).toBe(out);
+    }
+    const quote = buildVault(note, [{ kind: 'private', text: 'staying with his grandmoth', source: 'on-device model' }]);
+    expect(redact(note, quote)).toBe('She walks home to Rampur Kalan and is [withheld].');
+  });
+
+  it('widens a mark inside a longer run of letters and digits to the whole run', () => {
+    const note = 'Her bus pass is XAB12345 this year.';
+    const v = addByTeacher(note, [], 'AB1234', 'id');
+    expect(v[0].surfaces).toEqual(['XAB12345']);
+    expect(redact(note, v)).toBe('Her bus pass is [ID 1] this year.');
+  });
+
+  it('stops the send when a withheld item is nowhere in the note', () => {
+    const note = 'She walks home to Rampur Kalan.';
+    const ghost = [{ id: 'place-1', kind: 'place' as const, token: '[Place 1]', surfaces: ['Rampur Kal'], source: 'teacher' as const, withheld: true }];
+    expect(redact(note, ghost)).toBe(note);
+    expect(checkOutgoing(redact(note, ghost), ghost, note)).toEqual([{ what: 'Rampur Kal', why: 'marked but not found in the text' }]);
+    expect(checkOutgoing(redact(note, ghost), [{ ...ghost[0], withheld: false }], note)).toEqual([]);
+  });
+
+  it('withholds a released item again when the teacher marks it again', () => {
+    const note = 'Tanvi is shy. Ask Tanvi Rao to read.';
+    const v = buildVault(note, deterministicCandidates(note, ['Tanvi Rao']));
+    const released = v.map((e) => ({ ...e, withheld: false }));
+    expect(redact(note, released)).toBe(note);
+    const again = addByTeacher(note, released, 'Tanvi', 'place');
+    expect(again).toHaveLength(1);
+    expect(again[0].kind).toBe('student');
+    expect(redact(note, again)).toBe('[Student 1] is shy. Ask [Student 1] to read.');
+  });
+
+  it('keeps every form of an item already in the vault when the teacher marks something new', () => {
+    const note = 'Om Rao was absent. Om walks to Rampur. He is tired.';
+    const v = buildVault(note, [
+      ...deterministicCandidates(note, ['Om Rao']),
+      { kind: 'private', text: 'He is tired', source: 'on-device model' },
+    ]).map((e) => (e.kind === 'private' ? { ...e, withheld: false } : e));
+    const marked = addByTeacher(note, v, 'Rampur', 'place');
+    expect(marked[0].surfaces).toEqual(['Om Rao', 'Rao', 'Om']);
+    expect(marked.map((e) => [e.id, e.withheld, e.about])).toEqual([
+      ['student-1', true, undefined],
+      ['private-1', false, 'student-1'],
+      ['place-1', true, undefined],
+    ]);
+    expect(redact(note, marked)).toBe('[Student 1] was absent. [Student 1] walks to [Place 1]. He is tired.');
+  });
+
+  it('keeps the same private phrase about two children as two entries', () => {
+    const note = 'Kabir is on medication.\n\nIshaan is on medication.';
+    const v = buildVault(note, [
+      { kind: 'student', text: 'Kabir', source: 'class list' },
+      { kind: 'student', text: 'Ishaan', source: 'class list' },
+      { kind: 'private', text: 'is on medication', source: 'on-device model', aboutName: 'Kabir' },
+      { kind: 'private', text: 'is on medication', source: 'on-device model', aboutName: 'Ishaan' },
+    ]);
+    const details = v.filter((e) => e.kind === 'private');
+    expect(details.map((d) => v.find((e) => e.id === d.about)?.surfaces[0])).toEqual(['Kabir', 'Ishaan']);
+    expect(redact(note, v)).toBe('[Student 1] [withheld].\n\n[Student 2] [withheld].');
+    const oneReleased = v.map((e) => (e === details[0] ? { ...e, withheld: false } : e));
+    expect(redact(note, oneReleased)).toBe('[Student 1] is on medication.\n\n[Student 2] [withheld].');
+    // A phrase the teacher marks once is withheld in both places, as two entries.
+    const byTeacher = addByTeacher(note, v.filter((e) => e.kind !== 'private'), 'on medication', 'private');
+    expect(byTeacher.filter((e) => e.kind === 'private').map((d) => byTeacher.find((e) => e.id === d.about)?.surfaces[0])).toEqual(['Kabir', 'Ishaan']);
+    expect(redact(note, byTeacher)).toBe('[Student 1] is [withheld].\n\n[Student 2] is [withheld].');
+  });
+
+  it('never sends a stand-in the teacher typed into the note as if it were one', () => {
+    const note = 'I wrote [Student 1] and [withheld] and [student 7] by hand. Aarav is here.';
+    const v = buildVault(note, deterministicCandidates(note, ['Aarav']));
+    const sent = redactWithTokens(note, v);
+    expect(sent.text).toBe('I wrote [withheld] and [withheld] and [withheld] by hand. [Student 1] is here.');
+    expect(sent.tokens).toEqual(['[withheld]', '[Student 1]']);
+    expect(checkOutgoing(sent.text, v, note)).toEqual([]);
+    // It cannot be released, by the switch or by a policy with no locks.
+    const allReleased = v.map((e) => ({ ...e, withheld: false }));
+    expect(redact(note, allReleased)).toBe('I wrote [withheld] and [withheld] and [withheld] by hand. Aarav is here.');
+    expect(redactWithTokens(note, allReleased).tokens).toEqual(['[withheld]']);
+    expect(applyLocks(allReleased, []).filter((e) => e.withheld)).toHaveLength(3);
+  });
+
+  it('restores only the stand-ins that were in the approved text', () => {
+    expect(restore('Seat [Student 1] beside [Student 4].', vault, ['[Student 1]'])).toBe('Seat Aarav Sharma beside [Student 4].');
+    expect(restore('Seat [Student 1] beside [Student 4].', vault, [])).toBe('Seat [Student 1] beside [Student 4].');
+  });
+
+  it('guesses names by their capital letter when no model read the note', () => {
+    const note = 'Notes for Monday. I met Sunita at Rampur Kalan in November. Then Mrs. Rao rang from Delhi. Aarav was there.';
+    const guesses = possibleNameCandidates(note, ['Aarav Sharma']);
+    expect(guesses.map((c) => [c.kind, c.text, c.source, c.category])).toEqual([
+      ['adult', 'Sunita', 'rule', 'capitalised word'],
+      ['place', 'Rampur Kalan', 'rule', 'capitalised word'],
+      ['adult', 'Rao', 'rule', 'capitalised word'],
+      ['place', 'Delhi', 'rule', 'capitalised word'],
+    ]);
+    const v = buildVault(note, [...deterministicCandidates(note, ['Aarav Sharma']), ...guesses]);
+    expect(redact(note, v)).toBe('Notes for Monday. I met [Adult 1] at [Place 1] in November. Then Mrs. [Adult 2] rang from [Place 2]. [Student 1] was there.');
+    // A guess can be released.
+    const released = v.map((e) => (e.surfaces[0] === 'Delhi' ? { ...e, withheld: false } : e));
+    expect(redact(note, released)).toContain('rang from Delhi.');
+  });
+
+  it('withholds Sunita and Rampur Kalan in the sample note with rules only', () => {
+    const v = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
+    expect(v.filter((e) => e.category === 'capitalised word').map((e) => [e.kind, e.surfaces[0], e.withheld])).toEqual([
+      ['adult', 'Sunita', true],
+      ['place', 'Rampur Kalan', true],
+    ]);
+    expect(redact(SAMPLE_NOTE, v)).toBe(RULES_ONLY_SAMPLE);
+    expect(checkOutgoing(redact(SAMPLE_NOTE, v), v, SAMPLE_NOTE)).toEqual([]);
+  });
+
   it('still withholds a name inside a private detail the teacher released', () => {
     const note = "Kabir's parents are separating and he is tired. Ring 98765 43210.";
     const v = buildVault(note, [
@@ -306,28 +484,38 @@ describe('vault', () => {
 
   describe('return gate', () => {
     it('passes a reply that uses stand-ins from the approved text', () => {
-      expect(checkReply('Pair [Student 1] with [Student 4].', vault, redacted)).toEqual([]);
+      expect(checkReply('Pair [Student 1] with [Student 4].', vault, sentTokens)).toEqual([]);
     });
 
     it('flags a stand-in that is not in the vault', () => {
-      expect(checkReply('Pair [Student 1] with [Student 9].', vault, redacted)).toHaveLength(1);
+      expect(checkReply('Pair [Student 1] with [Student 9].', vault, sentTokens)).toHaveLength(1);
     });
 
     it('flags a stand-in the vault holds but the approved text did not contain', () => {
-      const approved = 'Help [Student 1] with homework.';
+      const approved = ['[Student 1]'];
       expect(vault.some((e) => e.token === '[Student 4]')).toBe(true);
       const issues = checkReply('Pair [Student 1] with [Student 4]. Thank [Student 4].', vault, approved);
       expect(issues).toEqual([{ what: '[Student 4]', why: 'a stand-in that was not in the text you approved' }]);
       expect(checkReply('Seat [Student 1] at the front.', vault, approved)).toEqual([]);
     });
 
+    it('flags a malformed look-alike of a stand-in', () => {
+      const approved = ['[Student 1]', '[withheld]'];
+      expect(checkReply('Ask [student 1], [Student1], [ Student 1 ] and [Student 99]. [withheld] stays.', vault, approved).map((v) => v.what)).toEqual([
+        '[student 1]',
+        '[Student1]',
+        '[ Student 1 ]',
+        '[Student 99]',
+      ]);
+    });
+
     it('flags a real name coming back', () => {
-      expect(checkReply('Ask Meenal to read.', vault, redacted)).toHaveLength(1);
+      expect(checkReply('Ask Meenal to read.', vault, sentTokens)).toHaveLength(1);
     });
   });
 });
 
-import { anchorQuote, MAX_CHUNK, paragraphs, readGuardAnswer } from '../ai/guard';
+import { anchor, anchorQuote, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
 import { anythingToCheck, checkPrompt, contextParagraphs, detailsFor, readVerdict, startsKept, studentsNamed } from '../ai/check';
 import { asReceiptRecord, makeReceipt, receiptRecord, sha256Hex } from './receipts';
 
@@ -346,28 +534,76 @@ describe('guard helpers', () => {
     expect(anchorQuote(para, 'he has asthma')).toBeUndefined();
   });
 
-  it('reads a well-formed answer and counts a detail it cannot find in the note', () => {
+  it('widens a quote that cuts a word', () => {
+    expect(anchorQuote(para, 'staying with his grandmoth')).toBe('staying with his grandmother');
+    expect(anchor(para, 'staying with his grandmoth')).toEqual({ text: 'staying with his grandmother', exact: true });
+    expect(anchor(para, 'Kabir is staying with his grandmother')).toEqual({ text: 'is staying with his grandmother', exact: false });
+  });
+
+  it('reads a well-formed answer and counts what it cannot find in the note', () => {
     const reading = readGuardAnswer(
       para,
       JSON.stringify({
-        people: [{ name: 'Kabir', role: 'student' }],
-        places: [],
+        people: [{ name: 'Kabir', role: 'student' }, { name: 'Zubin', role: 'student' }, { name: 7, role: 'adult' }, { name: 'Class 6B' }],
+        places: ['Rampur', 12, 'Class 6B'],
         private: [
           { quote: "Kabir's parents are separating", category: 'family', about: 'Kabir' },
           { quote: 'he has asthma', category: 'health', about: 'Kabir' },
+          { quote: 'Kabir is staying with his grandmother', category: 'family', about: 'Kabir' },
+          { quote: 5 },
         ],
       }),
     );
-    expect(reading?.candidates.map((c) => c.text)).toEqual(['Kabir', "Kabir's parents are separating"]);
-    expect(reading?.dropped).toBe(1);
+    expect(reading?.candidates.map((c) => c.text)).toEqual(['Kabir', "Kabir's parents are separating", 'is staying with his grandmother']);
+    // Dropped: Zubin, the name 7, Rampur, the place 12, the asthma quote and the quote 5.
+    expect(reading?.dropped).toBe(6);
+    expect(reading?.partial).toBe(1);
   });
 
-  it('reports an answer it cannot read instead of treating it as empty', () => {
+  it('reports an answer it cannot read, or that lacks a list, instead of treating it as empty', () => {
     expect(readGuardAnswer(para, '{"people": [')).toBeUndefined();
     expect(readGuardAnswer(para, 'null')).toBeUndefined();
     expect(readGuardAnswer(para, '[]')).toBeUndefined();
     expect(readGuardAnswer(para, '{"people": "Kabir", "places": [], "private": []}')).toBeUndefined();
-    expect(readGuardAnswer(para, '{"people": [], "places": [], "private": []}')).toEqual({ candidates: [], dropped: 0 });
+    expect(readGuardAnswer(para, '{"people": [], "places": []}')).toBeUndefined();
+    expect(readGuardAnswer(para, '{}')).toBeUndefined();
+    expect(readGuardAnswer(para, '{"people": [], "places": [], "private": []}')).toEqual({ candidates: [], dropped: 0, partial: 0 });
+  });
+
+  it('keeps what earlier pieces found when a later piece fails', async () => {
+    const good = (name: string) => JSON.stringify({ people: [{ name, role: 'student' }], places: [], private: [] });
+    const asked: string[] = [];
+    const report = await readChunks(['Kabir is here.', 'Ishaan is here.', 'Tanvi is here.', 'Meenal is here.'], async (chunk) => {
+      asked.push(chunk);
+      if (chunk.startsWith('Ishaan')) throw new Error('the model stopped');
+      if (chunk.startsWith('Tanvi')) return { text: 'not json', onDevice: true };
+      return { text: good(chunk.split(' ')[0]), onDevice: true };
+    });
+    expect(report.candidates.map((c) => c.text)).toEqual(['Kabir', 'Meenal']);
+    expect(report.unread).toEqual([1, 2]);
+    expect(report.total).toBe(4);
+    expect(report.stopped).toBeUndefined();
+    expect(asked).toHaveLength(4);
+  });
+
+  it('stops asking, and keeps what it has, when an answer did not come from the device', async () => {
+    const asked: string[] = [];
+    const report = await readChunks(['Kabir is here.', 'Ishaan is here.', 'Tanvi is here.'], async (chunk) => {
+      asked.push(chunk);
+      return { text: JSON.stringify({ people: [{ name: chunk.split(' ')[0] }], places: [], private: [] }), onDevice: asked.length === 1 };
+    });
+    expect(report.candidates.map((c) => c.text)).toEqual(['Kabir']);
+    expect(report.unread).toEqual([1, 2]);
+    expect(report.stopped).toMatch(/did not run on the device/);
+    expect(asked).toHaveLength(2);
+  });
+
+  it('marks every piece unread when the model never answers', async () => {
+    const report = await readChunks(['one', 'two'], async () => {
+      throw new Error('no answer');
+    });
+    expect(report.unread).toEqual([0, 1]);
+    expect(report.unread.length).toBe(report.total);
   });
 
   it('splits on blank lines', () => {
@@ -593,5 +829,14 @@ describe('plainText', () => {
   });
   it('drops an unpaired bold mark', () => {
     expect(plainText('**Note: sit near [Student 3]')).toBe('Note: sit near [Student 3]');
+  });
+});
+
+describe('page', () => {
+  it('asks the browser not to translate it, so page translation is not sent the note', () => {
+    const html = indexHtml;
+    expect(html).toContain('<meta name="google" content="notranslate" />');
+    expect(html).toContain('<html lang="en" translate="no">');
+    expect(html).toContain('<div id="root" translate="no">');
   });
 });

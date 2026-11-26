@@ -1,4 +1,4 @@
-import type { Candidate } from '../core/vault';
+import { widenToWords, type Candidate } from '../core/vault';
 import { modelFor } from './routes';
 
 const SYSTEM = `You protect a teacher's private notes about children. You read one paragraph and list what must not leave the teacher's device. Copy every name and phrase exactly as written in the paragraph. Never paraphrase. Never add anything that is not in the paragraph.
@@ -96,40 +96,53 @@ export function paragraphs(note: string): string[] {
     });
 }
 
+/** A quote pinned to the words of the note. `exact` is false when only part of the quote could be found. */
+export interface Anchored {
+  text: string;
+  exact: boolean;
+}
+
 /**
- * The model sometimes rewords a quote slightly ("Kabir is staying" for "he is
- * staying"). Keep the longest run of at least three of its words that does
- * appear in the paragraph, so the detail is still withheld.
+ * Pin a quote to the words of the paragraph. The model sometimes rewords a
+ * quote slightly ("Kabir is staying" for "he is staying"): then the longest
+ * run of at least three of its words that does appear is kept, so the
+ * detail is still withheld, and the match is marked as partial. Whatever is
+ * found is widened to whole words, so a quote that cuts a word
+ * ("staying with his grandmoth") still withholds the whole word.
  */
-export function anchorQuote(paragraph: string, quote: string): string | undefined {
-  const hay = paragraph.toLowerCase();
-  if (hay.includes(quote.toLowerCase().trim())) return exactSlice(paragraph, quote.trim());
+export function anchor(paragraph: string, quote: string): Anchored | undefined {
+  const whole = widenToWords(paragraph, quote);
+  if (whole) return { text: whole, exact: true };
   const words = quote.trim().split(/\s+/);
   for (let len = words.length - 1; len >= 3; len--) {
     for (let start = 0; start + len <= words.length; start++) {
-      const run = words.slice(start, start + len).join(' ');
-      if (hay.includes(run.toLowerCase())) return exactSlice(paragraph, run);
+      const found = widenToWords(paragraph, words.slice(start, start + len).join(' '));
+      if (found) return { text: found, exact: false };
     }
   }
   return undefined;
 }
 
-function exactSlice(paragraph: string, text: string): string {
-  const at = paragraph.toLowerCase().indexOf(text.toLowerCase());
-  return paragraph.slice(at, at + text.length);
+/** The words of the paragraph a quote was pinned to, if any. */
+export function anchorQuote(paragraph: string, quote: string): string | undefined {
+  return anchor(paragraph, quote)?.text;
 }
 
 /** What the model said about one paragraph, turned into candidates. */
 export interface ParagraphReading {
   candidates: Candidate[];
-  /** Private details the model reported that could not be found in the paragraph. */
+  /** Things the model reported that could not be found in the paragraph at all, so were not withheld. */
   dropped: number;
+  /** Private details found only in part: the matching words were withheld, the rest needs the teacher's eye. */
+  partial: number;
 }
 
 /**
  * Turn the model's answer for one paragraph into candidates. Returns
- * undefined when the answer cannot be read at all: the caller must then
- * treat the paragraph as not guarded by the model.
+ * undefined when the answer cannot be read, or lacks any of its three
+ * lists: the caller must then treat the paragraph as not guarded by the
+ * model. A name, place or detail that cannot be found in the paragraph, or
+ * is not text at all, is counted as dropped, never passed over in silence.
  */
 export function readGuardAnswer(paragraph: string, raw: string): ParagraphReading | undefined {
   let answer: GuardAnswer;
@@ -139,47 +152,119 @@ export function readGuardAnswer(paragraph: string, raw: string): ParagraphReadin
     return undefined;
   }
   if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return undefined;
-  const list = <T,>(v: T[] | undefined): T[] | undefined => (v === undefined ? [] : Array.isArray(v) ? v : undefined);
-  const people = list(answer.people);
-  const places = list(answer.places);
-  const details = list(answer.private);
-  if (!people || !places || !details) return undefined;
+  const { people, places, private: details } = answer;
+  if (!Array.isArray(people) || !Array.isArray(places) || !Array.isArray(details)) return undefined;
 
   const candidates: Candidate[] = [];
   let dropped = 0;
-  for (const p of people) {
-    if (!p || typeof p.name !== 'string' || !p.name || /\d/.test(p.name)) continue;
-    candidates.push({ kind: p.role === 'adult' ? 'adult' : 'student', text: p.name, source: 'on-device model' });
+  let partial = 0;
+  for (const p of people as unknown[]) {
+    const name = (p as { name?: unknown } | null)?.name;
+    if (typeof name !== 'string' || !name.trim()) {
+      dropped++;
+      continue;
+    }
+    // "Class 6B" and the like: not a person, and not something the model saw that was then lost.
+    if (/\d/.test(name)) continue;
+    const text = widenToWords(paragraph, name);
+    if (!text) {
+      dropped++;
+      continue;
+    }
+    candidates.push({ kind: (p as { role?: unknown }).role === 'adult' ? 'adult' : 'student', text, source: 'on-device model' });
   }
-  for (const place of places) {
-    if (typeof place !== 'string' || !place || /^(class|grade|std|standard|section)\b/i.test(place)) continue;
-    candidates.push({ kind: 'place', text: place, source: 'on-device model' });
+  for (const place of places as unknown[]) {
+    if (typeof place !== 'string' || !place.trim()) {
+      dropped++;
+      continue;
+    }
+    if (/^(class|grade|std|standard|section)\b/i.test(place)) continue;
+    const text = widenToWords(paragraph, place);
+    if (!text) {
+      dropped++;
+      continue;
+    }
+    candidates.push({ kind: 'place', text, source: 'on-device model' });
   }
-  for (const d of details) {
-    const quote = d && typeof d.quote === 'string' && d.quote.trim() ? anchorQuote(paragraph, d.quote) : undefined;
-    if (!quote) {
+  for (const d of details as unknown[]) {
+    const detail = d as { quote?: unknown; category?: unknown; about?: unknown } | null;
+    const found = detail && typeof detail.quote === 'string' ? anchor(paragraph, detail.quote) : undefined;
+    if (!found) {
       // The model saw something private here and it could not be pinned to the words of the note.
       dropped++;
       continue;
     }
+    if (!found.exact) partial++;
     candidates.push({
       kind: 'private',
-      text: quote,
+      text: found.text,
       source: 'on-device model',
-      category: typeof d.category === 'string' ? d.category : undefined,
-      aboutName: typeof d.about === 'string' ? d.about : undefined,
+      category: typeof detail!.category === 'string' ? detail!.category : undefined,
+      aboutName: typeof detail!.about === 'string' ? detail!.about : undefined,
     });
   }
-  return { candidates, dropped };
+  return { candidates, dropped, partial };
 }
 
 /** What the on-device guard found, and where it fell short. */
 export interface GuardReport {
   candidates: Candidate[];
-  /** Paragraphs (counted from 0) whose answer could not be read. The model did not guard these. */
+  /** How many pieces the note was read in. */
+  total: number;
+  /** Pieces (counted from 0) that were not read: the answer was unreadable or the request failed. */
   unread: number[];
-  /** Private details the model reported that could not be found in the note, so were not withheld. */
+  /** Things the model reported that could not be found in the note, so were not withheld. */
   dropped: number;
+  /** Private details found only in part. */
+  partial: number;
+  /** Set when the run had to stop early. What was found before that is kept. */
+  stopped?: string;
+}
+
+/** The model's answer for one piece, and whether it came from the device. */
+export interface ChunkAnswer {
+  text: string;
+  onDevice: boolean;
+}
+
+/**
+ * Read the pieces one at a time. A piece whose request fails or whose
+ * answer cannot be read is marked unread, and what was found in the other
+ * pieces is kept. An answer that did not come from the device stops the
+ * run at once: that piece and every later one is unread, and nothing more
+ * is asked.
+ */
+export async function readChunks(
+  parts: string[],
+  ask: (chunk: string) => Promise<ChunkAnswer>,
+  onProgress: (done: number, total: number) => void = () => {},
+): Promise<GuardReport> {
+  const report: GuardReport = { candidates: [], total: parts.length, unread: [], dropped: 0, partial: 0 };
+  for (let i = 0; i < parts.length; i++) {
+    onProgress(i, parts.length);
+    let answer: ChunkAnswer;
+    try {
+      answer = await ask(parts[i]);
+    } catch {
+      report.unread.push(i);
+      continue;
+    }
+    if (!answer.onDevice) {
+      report.stopped = 'The guard did not run on the device. Stopped.';
+      for (let j = i; j < parts.length; j++) report.unread.push(j);
+      break;
+    }
+    const reading = readGuardAnswer(parts[i], answer.text);
+    if (!reading) {
+      report.unread.push(i);
+      continue;
+    }
+    report.candidates.push(...reading.candidates);
+    report.dropped += reading.dropped;
+    report.partial += reading.partial;
+  }
+  onProgress(parts.length, parts.length);
+  return report;
 }
 
 /**
@@ -187,38 +272,22 @@ export interface GuardReport {
  * if the browser has no on-device model, modelFor throws before a request
  * is made, and nothing is sent anywhere.
  *
- * A paragraph the model did not answer in a readable way is reported, never
- * passed over in silence: the teacher is told to check it.
+ * modelFor already refused to start without an on-device model. The source
+ * of each response is the second check, after the fact: the SDK reports
+ * where it came from, and anything but the device stops the run.
  */
 export async function guardOnDevice(
   note: string,
   onProgress: (done: number, total: number) => void,
 ): Promise<GuardReport> {
   const model = modelFor('guard', { system: SYSTEM, schema: SCHEMA });
-  const parts = paragraphs(note);
-  const report: GuardReport = { candidates: [], unread: [], dropped: 0 };
-  for (let i = 0; i < parts.length; i++) {
-    onProgress(i, parts.length);
-    const result = await model.generateContent(`Paragraph:\n${parts[i]}`);
-    if (result.response.inferenceSource !== 'on_device') {
-      // modelFor already refused to start without an on-device model. This is the second check, after
-      // the fact: the SDK reports where each response came from, and anything but the device stops the run.
-      throw new Error('The guard did not run on the device. Stopped.');
-    }
-    let raw: string | undefined;
-    try {
-      raw = result.response.text();
-    } catch {
-      raw = undefined;
-    }
-    const reading = raw === undefined ? undefined : readGuardAnswer(parts[i], raw);
-    if (!reading) {
-      report.unread.push(i);
-      continue;
-    }
-    report.candidates.push(...reading.candidates);
-    report.dropped += reading.dropped;
-  }
-  onProgress(parts.length, parts.length);
-  return report;
+  return readChunks(
+    paragraphs(note),
+    async (chunk) => {
+      const result = await model.generateContent(`Paragraph:\n${chunk}`);
+      const onDevice = result.response.inferenceSource === 'on_device';
+      return { text: onDevice ? result.response.text() : '', onDevice };
+    },
+    onProgress,
+  );
 }

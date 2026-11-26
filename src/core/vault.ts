@@ -1,5 +1,5 @@
 import type { Entity, Kind, Source } from './types';
-import { findByRule, findSensitive, nameParts, nameWords, wholeWordMatcher } from './rules';
+import { escapeRe, findByRule, findPossibleNames, findSensitive, nameParts, nameWords, wholeWordMatcher } from './rules';
 
 const TOKEN_NAME: Record<Kind, string> = {
   student: 'Student',
@@ -15,6 +15,19 @@ export const PRIVATE_TOKEN = '[withheld]';
 
 /** Matches every stand-in the redactor can write. */
 export const TOKEN_RE = /\[(?:Student|Adult|Place|Contact|ID) \d+\]/g;
+
+/**
+ * Anything that looks like a stand-in, in any case or spacing: "[student 7]",
+ * "[Student7]", "[ withheld ]". Used to catch one typed into the raw note and
+ * one a reply invents.
+ */
+export const LOOKALIKE_RE = /\[\s*(?:student|adult|place|contact|id)\s*\d+\s*\]|\[\s*withheld\s*\]/gi;
+
+/** The category of a stand-in look-alike found in the raw note. It is always withheld and cannot be released. */
+export const RESERVED = 'stand-in';
+
+/** Withheld by the teacher's choice, or because it can never be released. */
+const held = (e: Entity) => e.withheld || e.category === RESERVED;
 
 export interface Candidate {
   kind: Kind;
@@ -32,6 +45,29 @@ export function appearsIn(note: string, text: string): boolean {
   return text.trim().length > 0 && norm(note).includes(norm(text));
 }
 
+const isWordChar = (c: string | undefined) => !!c && /[\p{L}\p{N}]/u.test(c);
+
+/**
+ * The text as the note writes it, widened to whole words. A selection or a
+ * model's quote that cuts a word ("Rampur Kal", "AB1234" inside "XAB12345")
+ * would be listed in the vault and then not found by the whole-word search,
+ * so it would be sent. Widening it means anything marked is really withheld.
+ * Returns undefined when the text is not in the note at all.
+ */
+export function widenToWords(note: string, text: string): string | undefined {
+  const wanted = text.trim();
+  if (!wanted) return undefined;
+  const whole = wholeWordMatcher([wanted])!.exec(note);
+  if (whole) return whole[0];
+  const loose = new RegExp(escapeRe(wanted).replace(/\s+/g, '\\s+'), 'iu').exec(note);
+  if (!loose) return undefined;
+  let start = loose.index;
+  let end = start + loose[0].length;
+  while (start > 0 && isWordChar(note[start - 1])) start--;
+  while (end < note.length && isWordChar(note[end])) end++;
+  return note.slice(start, end);
+}
+
 /**
  * Build the vault from everything the guard found.
  *
@@ -42,15 +78,46 @@ export function appearsIn(note: string, text: string): boolean {
  * person could own (a bare "Sharma" beside two Sharmas) is given to none
  * of them: it becomes a withheld item of its own.
  *
+ * A name from the class list is held with every one of its words, short
+ * ones included ("Om Rao" also withholds a lone "Om"), wherever any of
+ * them stands in the note. Everything else is taken as the note writes
+ * it, widened to whole words. A private detail gets one entry for each
+ * place it occurs, so the same phrase about two children is two entries.
+ *
  * Later sources never override an earlier one, so the class list and the
  * rules take priority over the model.
  */
+interface Sketch {
+  kind: Kind;
+  source: Source;
+  surfaces: string[];
+  category?: string;
+}
+
+/**
+ * Add a private detail: one entry for each place its words stand in the
+ * note, each tied to that place. Returns the entries for this detail that
+ * occur once only (a model's "about" can be trusted for those; where the
+ * words occur twice, each entry is attached by where it stands).
+ */
+function addPrivate(note: string, entities: Entity[], c: Candidate, number: (d: Sketch) => Entity): Entity[] {
+  const text = widenToWords(note, c.text);
+  if (!text) return [];
+  const hits = [...note.matchAll(wholeWordMatcher([text])!)];
+  const mine: Entity[] = [];
+  for (const hit of hits) {
+    let e = entities.find((x) => x.kind === 'private' && x.at === hit.index && norm(x.surfaces[0]) === norm(hit[0]));
+    if (!e) {
+      e = number({ kind: 'private', source: c.source, surfaces: [hit[0]], category: c.category });
+      e.at = hit.index;
+    }
+    mine.push(e);
+  }
+  return hits.length === 1 ? mine : [];
+}
+
 export function buildVault(note: string, candidates: Candidate[]): Entity[] {
-  interface Draft {
-    kind: Kind;
-    source: Source;
-    surfaces: string[];
-    category?: string;
+  interface Draft extends Sketch {
     /** For people: each name as a candidate gave it, in full. */
     given: string[];
   }
@@ -58,9 +125,10 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
   const wordsOf = (d: Draft) => [...new Set(d.surfaces.flatMap((s) => nameWords(s).map(norm)))];
   const within = (a: string[], b: string[]) => a.every((p) => b.includes(p));
 
-  // The whole name is always a surface, however short. Only the parts are filtered.
-  const addSurfaces = (d: Draft, text: string) => {
-    const all = isPerson(d.kind) ? [text, ...nameParts(text)] : [text];
+  // The whole name is always a surface, however short. The parts of a listed name all count too;
+  // the parts of a name found any other way count from three letters up.
+  const addSurfaces = (d: Draft, text: string, listed: boolean) => {
+    const all = isPerson(d.kind) ? [text, ...(listed ? nameWords(text) : nameParts(text))] : [text];
     for (const s of all) {
       if (!d.surfaces.some((x) => norm(x) === norm(s))) d.surfaces.push(s);
     }
@@ -68,8 +136,10 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
 
   let drafts: Draft[] = [];
   const addDraft = (c: Candidate): Draft | undefined => {
-    const text = c.text.trim();
-    if (!text || !appearsIn(note, text)) return undefined;
+    const listed = c.source === 'class list' && isPerson(c.kind);
+    // A listed name is taken as the list writes it, and need not be in the note in full.
+    const text = listed ? c.text.trim() : widenToWords(note, c.text);
+    if (!text) return undefined;
     let same: Draft | undefined;
     if (isPerson(c.kind)) {
       // Every word counts here, short ones too: "Om" and "Jo" are two people.
@@ -94,7 +164,7 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
       same = { kind: c.kind, source: c.source, surfaces: [], category: c.category, given: [] };
       drafts.push(same);
     }
-    addSurfaces(same, text);
+    addSurfaces(same, text, listed);
     if (isPerson(c.kind)) {
       same.given.push(norm(text));
       // The longest form is the one we restore to.
@@ -120,11 +190,12 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
     const kind = owner?.kind ?? (claimants.every((d) => d.kind === claimants[0].kind) ? claimants[0].kind : 'adult');
     shared.push({ kind, source: (owner ?? claimants[0]).source, surfaces: [written], given: [key] });
   }
-  drafts = drafts.filter((d) => d.surfaces.length > 0);
+  // What is left of each draft must stand somewhere in the note. A listed name that does not is left out.
+  drafts = drafts.filter((d) => d.surfaces.length > 0 && wholeWordMatcher(d.surfaces)!.test(note));
 
   const counters: Partial<Record<Kind, number>> = {};
   const entities: Entity[] = [];
-  const toEntity = (d: Draft, n: number): Entity => ({
+  const toEntity = (d: Sketch, n: number): Entity => ({
     id: `${d.kind}-${n}`,
     kind: d.kind,
     token: d.kind === 'private' ? PRIVATE_TOKEN : `[${TOKEN_NAME[d.kind]} ${n}]`,
@@ -133,7 +204,7 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
     withheld: true,
     category: d.category,
   });
-  const number = (d: Draft): Entity => {
+  const number = (d: Sketch): Entity => {
     const entity = toEntity(d, (counters[d.kind] = (counters[d.kind] ?? 0) + 1));
     entities.push(entity);
     return entity;
@@ -145,18 +216,12 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
     if (segment(note, [...entities, probe]).some((s) => s.entity === probe)) number(d);
   }
 
-  // Private details come last. Each new one is numbered as it is first seen; a repeat finds its entity again.
-  drafts = [];
+  // Private details come last, one entry for each place the words stand in the note.
   for (const c of candidates.filter((c) => c.kind === 'private')) {
-    const d = addDraft(c);
-    if (!d) continue;
-    let e = entities.find((x) => x.surfaces === d.surfaces);
-    if (!e) e = number(d);
-    if (c.aboutName && !e.about) {
+    for (const e of addPrivate(note, entities, c, number)) {
+      if (!c.aboutName || e.about) continue;
       const parts = [norm(c.aboutName), ...nameWords(c.aboutName).map(norm)];
-      const person = entities.find(
-        (p) => p.kind === 'student' && p.surfaces.some((s) => parts.includes(norm(s))),
-      );
+      const person = entities.find((p) => p.kind === 'student' && p.surfaces.some((s) => parts.includes(norm(s))));
       if (person) e.about = person.id;
     }
   }
@@ -182,7 +247,7 @@ function attachPrivateDetails(note: string, entities: Entity[]) {
     return best;
   };
   for (const p of entities.filter((e) => e.kind === 'private' && !e.about)) {
-    const at = lower.indexOf(p.surfaces[0].toLowerCase());
+    const at = p.at ?? lower.indexOf(p.surfaces[0].toLowerCase());
     if (at < 0) continue;
     const paragraphStart = lower.lastIndexOf('\n', at) + 1;
     const best = mentions(p.surfaces[0], false) ?? mentions(note.slice(paragraphStart, at), true);
@@ -196,20 +261,28 @@ function attachPrivateDetails(note: string, entities: Entity[]) {
  */
 export function deterministicCandidates(note: string, classList: string[]): Candidate[] {
   const out: Candidate[] = [];
+  // A listed name counts when the note has it in full or has any one of its words, however short.
   for (const name of classList) {
-    const m = wholeWordMatcher([name, ...nameParts(name)]);
+    const m = wholeWordMatcher([name, ...nameWords(name)]);
     if (m && m.test(note)) out.push({ kind: 'student', text: name, source: 'class list' });
-  }
-  // A class-list name may be written in the note only by its first name.
-  for (const c of out) {
-    if (!appearsIn(note, c.text)) {
-      const part = nameParts(c.text).find((p) => wholeWordMatcher([p])!.test(note));
-      if (part) c.text = part;
-    }
   }
   for (const hit of findByRule(note)) out.push({ kind: hit.kind, text: hit.text, source: 'rule' });
   for (const hit of findSensitive(note)) out.push({ kind: 'private', text: hit.text, source: 'rule', category: hit.category });
+  // Text typed into the note that looks like one of the app's own stand-ins must not go out looking like one.
+  for (const m of note.matchAll(LOOKALIKE_RE)) out.push({ kind: 'private', text: m[0], source: 'rule', category: RESERVED });
   return out;
+}
+
+/** The category of a possible name found by its capital letter. */
+export const CAPITALISED = 'capitalised word';
+
+/**
+ * Extra candidates for when no model read the note: words that may be a
+ * name because they are capitalised in mid-sentence. A guess, so the
+ * teacher can release each one.
+ */
+export function possibleNameCandidates(note: string, classList: string[]): Candidate[] {
+  return findPossibleNames(note, classList).map((hit) => ({ kind: hit.kind, text: hit.text, source: 'rule', category: CAPITALISED }));
 }
 
 export interface Segment {
@@ -229,7 +302,11 @@ export function segment(note: string, entities: Entity[]): Segment[] {
   for (const entity of entities) {
     const matcher = wholeWordMatcher(entity.surfaces);
     if (!matcher) continue;
-    for (const m of note.matchAll(matcher)) ranges.push({ start: m.index, end: m.index + m[0].length, entity });
+    for (const m of note.matchAll(matcher)) {
+      // A private detail is tied to one place in the note. The same words elsewhere are another entry's.
+      if (entity.at !== undefined && m.index !== entity.at) continue;
+      ranges.push({ start: m.index, end: m.index + m[0].length, entity });
+    }
   }
   if (ranges.length === 0) return [{ text: note }];
   // Painted in this order, so the last to paint a character owns it:
@@ -237,7 +314,7 @@ export function segment(note: string, entities: Entity[]): Segment[] {
   const order = new Map(entities.map((e, i) => [e, i]));
   ranges.sort(
     (a, b) =>
-      Number(a.entity.withheld) - Number(b.entity.withheld) ||
+      Number(held(a.entity)) - Number(held(b.entity)) ||
       a.end - a.start - (b.end - b.start) ||
       order.get(b.entity)! - order.get(a.entity)! ||
       a.start - b.start,
@@ -256,12 +333,20 @@ export function segment(note: string, entities: Entity[]): Segment[] {
   return out;
 }
 
-/** The text that may leave the device: every withheld item replaced by its stand-in. */
-export function redact(note: string, entities: Entity[]): string {
+/** The outgoing text, with the exact set of stand-ins the redactor wrote into it. */
+export interface Redaction {
+  text: string;
+  /** Every stand-in written into the text, once each. Only these may come back and be restored. */
+  tokens: string[];
+}
+
+/** Replace every withheld item by its stand-in, and keep a list of the stand-ins used. */
+export function redactWithTokens(note: string, entities: Entity[]): Redaction {
   const out: string[] = [];
+  const tokens = new Set<string>();
   let lastWasPrivate = false;
   for (const s of segment(note, entities)) {
-    if (!s.entity || !s.entity.withheld) {
+    if (!s.entity || !held(s.entity)) {
       out.push(s.text);
       lastWasPrivate = false;
       continue;
@@ -269,9 +354,15 @@ export function redact(note: string, entities: Entity[]): string {
     // Two private details that run into each other are written as one stand-in.
     const isPrivate = s.entity.token === PRIVATE_TOKEN;
     if (!(isPrivate && lastWasPrivate)) out.push(s.entity.token);
+    tokens.add(s.entity.token);
     lastWasPrivate = isPrivate;
   }
-  return out.join('');
+  return { text: out.join(''), tokens: [...tokens] };
+}
+
+/** The text that may leave the device: every withheld item replaced by its stand-in. */
+export function redact(note: string, entities: Entity[]): string {
+  return redactWithTokens(note, entities).text;
 }
 
 /**
@@ -280,35 +371,59 @@ export function redact(note: string, entities: Entity[]): string {
  * The outgoing text is always computed from the result of this.
  */
 export function applyLocks(entities: Entity[], lockedKinds: Kind[]): Entity[] {
-  return entities.map((e) => (lockedKinds.includes(e.kind) && !e.withheld ? { ...e, withheld: true } : e));
+  return entities.map((e) => ((lockedKinds.includes(e.kind) || e.category === RESERVED) && !e.withheld ? { ...e, withheld: true } : e));
 }
 
-/** Put real names back into text that came from the cloud. Runs on the device. */
-export function restore(text: string, entities: Entity[]): string {
+/**
+ * Put real names back into text that came from the cloud. Runs on the
+ * device. When `allowed` is given, only those stand-ins are restored: the
+ * ones the redactor wrote into the approved text. Any other is left as it
+ * came, so a stand-in the cloud was never sent is never turned into a name.
+ */
+export function restore(text: string, entities: Entity[], allowed?: readonly string[]): string {
   const byToken = new Map(entities.filter((e) => e.kind !== 'private').map((e) => [e.token, e]));
-  return text.replace(TOKEN_RE, (t) => byToken.get(t)?.surfaces[0] ?? t);
+  return text.replace(TOKEN_RE, (t) => (allowed && !allowed.includes(t) ? t : (byToken.get(t)?.surfaces[0] ?? t)));
 }
 
-/** Add an item the teacher marked by hand. */
+/**
+ * Add an item the teacher marked by hand. The vault is added to, never
+ * rebuilt: every item already in it keeps all its forms, its withheld
+ * state and the student it is about.
+ *
+ * The marked text is widened to whole words first. Text that is already in
+ * the vault is set back to withheld (marking a released item again).
+ */
 export function addByTeacher(note: string, entities: Entity[], text: string, kind: Kind): Entity[] {
-  const candidates: Candidate[] = entities.map((e) => ({
-    kind: e.kind,
-    text: e.surfaces[0],
-    source: e.source,
-    category: e.category,
-  }));
-  const next = buildVault(note, [...candidates, { kind, text, source: 'teacher' }]);
-  // Keep the teacher's earlier choices, and who each private detail is about. Ids can shift when the
-  // vault is rebuilt, so the student is found again by name; a fresh guess never replaces what was known.
-  const sameItem = (a: Entity, b: Entity) => a.kind === b.kind && norm(a.surfaces[0]) === norm(b.surfaces[0]);
-  for (const e of next) {
-    const old = entities.find((o) => sameItem(o, e));
-    if (!old) continue;
-    e.withheld = old.withheld;
-    if (e.kind !== 'private') continue;
-    const wasAbout = entities.find((o) => o.id === old.about);
-    const nowAbout = wasAbout && next.find((n) => sameItem(n, wasAbout));
-    if (nowAbout) e.about = nowAbout.id;
+  const marked = widenToWords(note, text);
+  if (!marked) return entities;
+  const has = (e: Entity, key: string) => e.surfaces.some((s) => norm(s) === key);
+  if (entities.some((e) => has(e, norm(marked)))) {
+    return entities.map((e) => (has(e, norm(marked)) && !e.withheld ? { ...e, withheld: true } : e));
   }
+  const next = entities.map((e) => ({ ...e }));
+  const number = (d: Sketch): Entity => {
+    const n = Math.max(0, ...next.filter((e) => e.kind === d.kind).map((e) => Number(e.id.split('-')[1]) || 0)) + 1;
+    const entity: Entity = {
+      id: `${d.kind}-${n}`,
+      kind: d.kind,
+      token: d.kind === 'private' ? PRIVATE_TOKEN : `[${TOKEN_NAME[d.kind]} ${n}]`,
+      surfaces: d.surfaces,
+      source: d.source,
+      withheld: true,
+      category: d.category,
+    };
+    next.push(entity);
+    return entity;
+  };
+  if (kind === 'private') {
+    addPrivate(note, next, { kind, text: marked, source: 'teacher' }, number);
+    attachPrivateDetails(note, next);
+    return next;
+  }
+  // A part of a marked name is added only if nobody in the vault already has it.
+  const person = kind === 'student' || kind === 'adult';
+  const parts = person ? nameParts(marked).filter((p) => !next.some((e) => has(e, norm(p)))) : [];
+  const surfaces = [marked, ...parts.filter((p) => norm(p) !== norm(marked))];
+  number({ kind, source: 'teacher', surfaces });
   return next;
 }

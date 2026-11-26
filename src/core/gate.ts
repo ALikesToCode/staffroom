@@ -1,6 +1,6 @@
 import type { Entity } from './types';
-import { findByRule } from './rules';
-import { TOKEN_RE } from './vault';
+import { findByRule, wholeWordMatcher } from './rules';
+import { LOOKALIKE_RE, RESERVED } from './vault';
 
 export interface Violation {
   what: string;
@@ -29,11 +29,23 @@ function containsWord(haystack: string, needle: string): boolean {
  * violations. It re-checks the outgoing text for every withheld item and
  * for the phone, email and ID patterns, so it catches a redaction mistake.
  * It cannot find a private detail that nobody marked.
+ *
+ * When the raw note is given, it also refuses a withheld item that is
+ * nowhere to be found in the note as whole words: such an item is listed
+ * in the vault but would redact nothing, so the vault would promise more
+ * than the text delivers.
  */
-export function checkOutgoing(text: string, entities: Entity[]): Violation[] {
+export function checkOutgoing(text: string, entities: Entity[], note?: string): Violation[] {
   const violations: Violation[] = [];
   for (const e of entities) {
-    if (!e.withheld) continue;
+    if (!e.withheld && e.category !== RESERVED) continue;
+    if (note !== undefined && !wholeWordMatcher(e.surfaces)?.test(note)) {
+      violations.push({ what: e.surfaces[0] ?? '', why: 'marked but not found in the text' });
+      continue;
+    }
+    // A stand-in look-alike typed into the note reads the same as a real stand-in, so it cannot be searched
+    // for in the outgoing text. The redactor always replaces it, whatever the vault says (see RESERVED).
+    if (e.category === RESERVED) continue;
     for (const surface of e.surfaces) {
       if (containsWord(text, surface)) {
         violations.push({ what: surface, why: `a withheld ${label(e)} is still in the text` });
@@ -41,7 +53,7 @@ export function checkOutgoing(text: string, entities: Entity[]): Violation[] {
       }
     }
   }
-  const allowed = entities.filter((e) => !e.withheld).flatMap((e) => e.surfaces.map(flat));
+  const allowed = entities.filter((e) => !e.withheld && e.category !== RESERVED).flatMap((e) => e.surfaces.map(flat));
   for (const hit of findByRule(text)) {
     if (allowed.includes(flat(hit.text))) continue;
     violations.push({ what: hit.text, why: `looks like a ${hit.rule}` });
@@ -50,21 +62,21 @@ export function checkOutgoing(text: string, entities: Entity[]): Violation[] {
 }
 
 /**
- * The return gate. A reply is flagged when it uses a stand-in that was not
- * in the text the teacher approved, or when it contains anything the exit
- * gate would have stopped.
+ * The return gate. A reply is flagged when it contains anything that looks
+ * like a stand-in and is not, character for character, one the redactor
+ * wrote into the text the teacher approved; or when it contains anything
+ * the exit gate would have stopped.
  *
- * The stand-ins are taken from the approved text, not from the vault: a
- * stand-in the vault holds but the cloud was never sent (for a name inside
- * a withheld private detail, say) is one the cloud model cannot know, so
- * a reply that uses it is not trusted.
+ * `sentTokens` is the set recorded at approval (see redactWithTokens), not
+ * the vault and not a search of the approved text. A stand-in the vault
+ * holds but the cloud was never sent, and a malformed one such as
+ * "[student 99]" or "[Student99]", are both flagged.
  */
-export function checkReply(text: string, entities: Entity[], approvedText: string): Violation[] {
+export function checkReply(text: string, entities: Entity[], sentTokens: readonly string[]): Violation[] {
   const violations = checkOutgoing(text, entities);
-  const sent = new Set(Array.from(approvedText.matchAll(TOKEN_RE), (m) => m[0]));
   const seen = new Set<string>();
-  for (const m of text.matchAll(TOKEN_RE)) {
-    if (sent.has(m[0]) || seen.has(m[0])) continue;
+  for (const m of text.matchAll(LOOKALIKE_RE)) {
+    if (sentTokens.includes(m[0]) || seen.has(m[0])) continue;
     seen.add(m[0]);
     violations.push({ what: m[0], why: 'a stand-in that was not in the text you approved' });
   }

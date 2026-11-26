@@ -1,6 +1,6 @@
 import type { DraftItem, Entity, ItemCheck } from '../core/types';
 import { wholeWordMatcher } from '../core/rules';
-import { restore } from '../core/vault';
+import { RESERVED, restore } from '../core/vault';
 import { paragraphs } from './guard';
 import { modelFor } from './routes';
 
@@ -90,7 +90,8 @@ const longestOnly = (all: Entity[]) =>
  * The result is empty only when no private detail is withheld at all.
  */
 export function detailsFor(item: DraftItem, entities: Entity[]): CheckGroup[] {
-  const withheld = entities.filter((d) => d.kind === 'private' && d.withheld);
+  // A stand-in look-alike typed into the note is held back as a private item, and is no fact about anyone.
+  const withheld = entities.filter((d) => d.kind === 'private' && d.withheld && d.category !== RESERVED);
   if (withheld.length === 0) return [];
   const groups: CheckGroup[] = studentsNamed(item, entities)
     .map((student) => ({ student, details: longestOnly(withheld.filter((d) => d.about === student.id)) }))
