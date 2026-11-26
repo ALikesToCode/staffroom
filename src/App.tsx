@@ -8,7 +8,7 @@ import { configured, DEFAULT_POLICY, loadPolicy, saveReceiptCopy, watchUser, typ
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, paragraphs } from './ai/guard';
 import { labelReceipt, writeDraft, type DraftResult } from './ai/draft';
-import { checkOnDevice, detailsFor } from './ai/check';
+import { anythingToCheck, checkOnDevice, detailsFor, NOTHING_WITHHELD } from './ai/check';
 import { CloudText, DeviceText, KIND_LABEL, RouteChip, Spinner, Stepper } from './ui/parts';
 
 type Stage = 'write' | 'guarding' | 'review' | 'drafting' | 'checking' | 'result' | 'signed';
@@ -185,18 +185,24 @@ export function App() {
     setStage('checking');
     let itemChecks: ItemCheck[];
     let where: Where = 'NOT_RUN';
-    try {
-      if ((await deviceStatus()) !== 'available') throw new Error('no on-device model');
-      itemChecks = await checkOnDevice(note, drafted.draft.items, entities, (done, total) =>
-        setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`),
-      );
-      where = 'ON_DEVICE';
-    } catch {
-      itemChecks = drafted.draft.items.map((item) =>
-        detailsFor(item, entities).length > 0
-          ? { verdict: 'not checked', reason: 'No on-device model was available. Read this item against the private details yourself.' }
-          : { verdict: 'nothing withheld', reason: 'No private detail was withheld about anyone in this item.' },
-      );
+    if (!anythingToCheck(drafted.draft.items, entities)) {
+      // No item names a student with a withheld private detail: there is nothing to check, so no model is asked.
+      itemChecks = drafted.draft.items.map(() => NOTHING_WITHHELD);
+      where = 'SKIPPED';
+    } else {
+      try {
+        if ((await deviceStatus()) !== 'available') throw new Error('no on-device model');
+        itemChecks = await checkOnDevice(note, drafted.draft.items, entities, (done, total) =>
+          setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`),
+        );
+        where = 'ON_DEVICE';
+      } catch {
+        itemChecks = drafted.draft.items.map((item) =>
+          detailsFor(item, entities).length > 0
+            ? { verdict: 'not checked', reason: 'No on-device model was available. Read this item against the private details yourself.' }
+            : NOTHING_WITHHELD,
+        );
+      }
     }
     setChecks(itemChecks);
     setCheckWhere(where);
@@ -513,7 +519,12 @@ export function App() {
                       {replyIssues.map((v) => `“${v.what}” (${v.why})`).join('; ')}. Read it with care.
                     </p>
                   )}
-                  {checkWhere !== 'ON_DEVICE' && (
+                  {checkWhere === 'SKIPPED' && (
+                    <p className="hint">
+                      No item names a student with a withheld private detail, so there was nothing to check and no model was asked.
+                    </p>
+                  )}
+                  {checkWhere === 'NOT_RUN' && (
                     <p className="caution">
                       No on-device model was available to check this draft against what was withheld. The items below are not checked.
                     </p>
@@ -892,7 +903,9 @@ function Receipts({
                       <dd>
                         {r.check.where === 'ON_DEVICE'
                           ? `On device: ${r.check.fits} fit, ${r.check.unsure} to think about, ${r.check.conflict} in conflict, ${r.check.nothingWithheld} with nothing to check`
-                          : `Did not run: ${r.check.notChecked} not checked, ${r.check.nothingWithheld} with nothing to check`}
+                          : r.check.where === 'SKIPPED'
+                            ? `Skipped, nothing to check: ${r.check.nothingWithheld} with nothing withheld`
+                            : `Did not run: ${r.check.notChecked} not checked, ${r.check.nothingWithheld} with nothing to check`}
                         . Return gate {r.check.replyGate}.
                       </dd>
                       <dt>Sign-off</dt>

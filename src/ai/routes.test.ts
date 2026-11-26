@@ -43,6 +43,13 @@ describe('ONLY_ON_DEVICE routes with no on-device model', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('answers without any model when no item has anything to be checked against', async () => {
+    const items = [{ heading: 'Whole class', text: 'Start with a quiet reading task.' }];
+    const checks = await checkOnDevice(note, items, vault, () => {});
+    expect(checks.map((c) => c.verdict)).toEqual(['nothing withheld']);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('rejects loading the model without a request', async () => {
     await expect(prepareDevice(() => {})).rejects.toThrow(/no on-device model/);
     expect(fetchSpy).not.toHaveBeenCalled();

@@ -185,7 +185,7 @@ describe('vault', () => {
 });
 
 import { anchorQuote, paragraphs, readGuardAnswer } from '../ai/guard';
-import { detailsFor } from '../ai/check';
+import { anythingToCheck, detailsFor, readVerdict } from '../ai/check';
 import { makeReceipt } from './receipts';
 
 describe('guard helpers', () => {
@@ -243,6 +243,21 @@ describe('check and receipt', () => {
   it('gives each item only the details about the students it names', () => {
     expect(detailsFor({ heading: '[Student 1]', text: 'timed quiz' }, vault)[0].details).toHaveLength(1);
     expect(detailsFor({ heading: '[Student 2]', text: 'pair work' }, vault)).toEqual([]);
+  });
+
+  it('reads a clear verdict and treats anything else as unsure', () => {
+    expect(readVerdict('{"verdict":"fits","reason":"ok"}')).toEqual({ verdict: 'fits', reason: 'ok' });
+    expect(readVerdict('{"verdict":"conflict","reason":"must leave early"}').verdict).toBe('conflict');
+    expect(readVerdict('{"verdict":"unsure","reason":"r"}').verdict).toBe('unsure');
+    for (const raw of ['{"reason":"looks fine"}', '{"verdict":"approved","reason":"x"}', '{"verdict":null}', 'null', '"fits"', 'not json']) {
+      expect(readVerdict(raw).verdict).toBe('unsure');
+      expect(readVerdict(raw).reason).toMatch(/no clear answer/);
+    }
+  });
+
+  it('knows when no item has anything to be checked against', () => {
+    expect(anythingToCheck([{ heading: '[Student 2]', text: 'pair work' }], vault)).toBe(false);
+    expect(anythingToCheck([{ heading: '[Student 2]', text: 'pair work' }, { heading: '[Student 1]', text: 'quiz' }], vault)).toBe(true);
   });
 
   it('writes a receipt with no vault contents', () => {

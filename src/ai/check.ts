@@ -24,6 +24,39 @@ const SCHEMA = {
   required: ['verdict', 'reason'],
 };
 
+const NO_CLEAR_ANSWER = 'The on-device check gave no clear answer. Read this item yourself.';
+
+/**
+ * Turn the check model's answer into a verdict. Anything that is not a
+ * clear "fits" or "conflict" becomes "unsure", so a broken or unexpected
+ * answer is never shown to the teacher as approval.
+ */
+export function readVerdict(raw: string): ItemCheck {
+  let parsed: { verdict?: unknown; reason?: unknown } | null;
+  try {
+    parsed = JSON.parse(raw) as { verdict?: unknown; reason?: unknown } | null;
+  } catch {
+    return { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
+  }
+  if (!parsed || typeof parsed !== 'object') return { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
+  const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
+  if (parsed.verdict === 'fits' || parsed.verdict === 'conflict' || parsed.verdict === 'unsure') {
+    return { verdict: parsed.verdict, reason };
+  }
+  return { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
+}
+
+/** The verdict for an item that names no student with a withheld private detail. */
+export const NOTHING_WITHHELD: ItemCheck = {
+  verdict: 'nothing withheld',
+  reason: 'No private detail was withheld about anyone in this item.',
+};
+
+/** True when at least one item has something to be checked against. */
+export function anythingToCheck(items: DraftItem[], entities: Entity[]): boolean {
+  return items.some((item) => detailsFor(item, entities).length > 0);
+}
+
 /** The private details that bear on one draft item: those about any student the item names. */
 export function detailsFor(item: DraftItem, entities: Entity[]): { student: Entity; details: Entity[] }[] {
   const text = `${item.heading} ${item.text}`;
@@ -41,6 +74,9 @@ export function detailsFor(item: DraftItem, entities: Entity[]): { student: Enti
  * ONLY_ON_DEVICE: the withheld details are in this prompt, so it must not
  * go to the cloud. modelFor refuses to start without an on-device model, and
  * a response from anywhere but the device stops the check.
+ *
+ * When no item has anything to be checked against, no model is needed and
+ * none is asked: the caller records the check as skipped.
  */
 export async function checkOnDevice(
   note: string,
@@ -48,6 +84,7 @@ export async function checkOnDevice(
   entities: Entity[],
   onProgress: (done: number, total: number) => void,
 ): Promise<ItemCheck[]> {
+  if (!anythingToCheck(items, entities)) return items.map(() => NOTHING_WITHHELD);
   const model = modelFor('check', { system: SYSTEM, schema: SCHEMA });
   const paras = paragraphs(note);
   const checks: ItemCheck[] = [];
@@ -55,7 +92,7 @@ export async function checkOnDevice(
     onProgress(i, items.length);
     const relevant = detailsFor(items[i], entities);
     if (relevant.length === 0) {
-      checks.push({ verdict: 'nothing withheld', reason: 'No private detail was withheld about anyone in this item.' });
+      checks.push(NOTHING_WITHHELD);
       continue;
     }
     let worst: ItemCheck = { verdict: 'fits', reason: '' };
@@ -76,14 +113,7 @@ export async function checkOnDevice(
       if (result.response.inferenceSource !== 'on_device') {
         throw new Error('The check did not run on the device. Stopped.');
       }
-      let answer: ItemCheck;
-      try {
-        const parsed = JSON.parse(result.response.text()) as { verdict?: string; reason?: string };
-        const verdict = parsed.verdict === 'conflict' || parsed.verdict === 'unsure' ? parsed.verdict : 'fits';
-        answer = { verdict, reason: String(parsed.reason ?? '') };
-      } catch {
-        answer = { verdict: 'unsure', reason: 'The on-device check gave no clear answer. Read this item yourself.' };
-      }
+      const answer = readVerdict(result.response.text());
       if (rank(answer) > rank(worst) || !worst.reason) worst = answer;
     }
     checks.push(worst);

@@ -61,6 +61,7 @@ const WHERE_TEXT: Record<Where, string> = {
   IN_CLOUD: 'ran in the cloud',
   RULES_ONLY: 'rules only, no model',
   NOT_RUN: 'did not run',
+  SKIPPED: 'skipped: nothing to check',
 };
 
 /** Shows which inference mode a step was given, and where it actually ran. */
