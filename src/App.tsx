@@ -106,7 +106,8 @@ export function App() {
   const [copyState, setCopyState] = useState<'idle' | 'saved' | 'failed'>('idle');
   const [records, setRecords] = useState<Records>({ state: 'idle' });
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  /** The last copy to the clipboard: the whole text or one item, and whether it worked. */
+  const [copied, setCopied] = useState<{ what: 'all' | number; ok: boolean } | null>(null);
   const noteRef = useRef<HTMLDivElement>(null);
   /** The policy as last loaded, readable at the moment of sending even before a re-render. */
   const policyRef = useRef<Policy>(DEFAULT_POLICY);
@@ -353,12 +354,21 @@ export function App() {
     return restore([result.draft.title, '', ...items.map((i) => `${i.heading}\n${i.text}\n`)].join('\n'), entities).trim();
   }, [result, kept, entities]);
 
-  const copyFinal = async () => {
+  /** Copy to the clipboard and say plainly whether it worked. The browser can refuse. */
+  const copy = async (what: 'all' | number, text: string) => {
     if (replyBlocked) return;
-    await navigator.clipboard.writeText(finalText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
+    let ok = true;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      ok = false;
+    }
+    setCopied({ what, ok });
+    setTimeout(() => setCopied((c) => (c && c.what === what ? null : c)), ok ? 1800 : 6000);
   };
+
+  const copyLabel = (what: 'all' | number, label: string) =>
+    copied?.what === what ? (copied.ok ? 'Copied' : 'Could not copy') : label;
 
   /** Clear everything a run produced. The note and the class list stay. */
   const clearRun = () => {
@@ -378,6 +388,8 @@ export function App() {
     setLabel(null);
     setProgress('');
     setCopyState('idle');
+    setCopied(null);
+    setDraftOnline(true);
     setError(null);
   };
 
@@ -737,6 +749,16 @@ export function App() {
                               Struck to begin with, because it conflicts with what you know. Keep it only if you still want it.
                             </p>
                           )}
+                          {/* A message home is copied one at a time, so one family's message never travels with another's. */}
+                          {stage === 'signed' && task === 'parents' && kept[i] && (
+                            <button
+                              className="link copy-one"
+                              disabled={replyBlocked}
+                              onClick={() => copy(i, restore(item.text, entities).trim())}
+                            >
+                              {copyLabel(i, 'Copy this message')}
+                            </button>
+                          )}
                           {stage === 'result' && (
                             <button className="link" onClick={() => setKept((k) => k.map((v, j) => (j === i ? !v : v)))}>
                               {kept[i] ? 'Strike this item' : 'Keep this item'}
@@ -770,9 +792,13 @@ export function App() {
                     <div className="signed">
                       <span className="stamp">Signed off by teacher</span>
                       <div className="actions">
-                        <button className="primary" onClick={copyFinal} disabled={replyBlocked}>
-                          {copied ? 'Copied' : 'Copy the text'}
-                        </button>
+                        {task === 'parents' ? (
+                          <span className="hint">Each message is copied on its own, with the button under it.</span>
+                        ) : (
+                          <button className="primary" onClick={() => copy('all', finalText)} disabled={replyBlocked}>
+                            {copyLabel('all', 'Copy the text')}
+                          </button>
+                        )}
                         <button className="secondary" onClick={() => setView('receipts')}>
                           See the receipt
                         </button>
@@ -780,6 +806,11 @@ export function App() {
                           Start again
                         </button>
                       </div>
+                      {copied && !copied.ok && (
+                        <p className="caution" role="alert">
+                          Could not copy. Your browser did not allow it: select the text and copy it by hand.
+                        </p>
+                      )}
                       {copyState === 'saved' && <p className="hint">The receipt's record (no text) was saved to your account.</p>}
                       {copyState === 'failed' && (
                         <p className="caution">The record could not be saved to your account. The receipt is still kept in this browser.</p>
