@@ -6,7 +6,15 @@ import { confirmConstraint, lockConstraints, proposeConstraints } from './constr
 import { outgoingOf } from './needs';
 import { ruleCheckItem, ruleConflicts, ruleHitsForItem } from './conflicts';
 import {
+  acceptable,
+  acceptedAdjustments,
   adjustmentHits,
+  adjustmentProblem,
+  forTheseChildren,
+  lessonCounts,
+  savedLesson,
+  unsettled,
+  type Adjustments,
   classPlanText,
   lastTimeSummary,
   lessonBlock,
@@ -219,5 +227,47 @@ describe('a signed lesson, kept on this device', () => {
     expect(text.startsWith('Describing a place\n\nStarter (5 minutes)\nShow a picture')).toBe(true);
     expect(text).toContain(tok('Meenal'));
     expect(text).not.toMatch(/Meenal|Aarav|class set/);
+  });
+});
+
+describe('adjustments on the result screen', () => {
+  const hits = lessonHits(plan, constraints, entities, going.tokens, SAMPLE_NOTE);
+  const [aarav, tanvi, meenal] = hits;
+  const adj: Adjustments = {
+    [aarav.key]: { text: 'Uses chart paper from the class set.', source: 'starter', state: 'accepted' },
+    [tanvi.key]: { text: 'Gets two printed pictures to write from.', source: 'model', state: 'offered', seen: true },
+  };
+
+  it('holds sign-off until every hit is accepted or left', () => {
+    expect(unsettled(hits, adj).map((h) => h.child)).toEqual(['Tanvi', 'Meenal']);
+    const done: Adjustments = { ...adj, [tanvi.key]: { ...adj[tanvi.key], state: 'accepted' }, [meenal.key]: { text: '', source: 'teacher', state: 'left' } };
+    expect(unsettled(hits, done)).toEqual([]);
+    expect(lessonCounts(hits, done)).toEqual({ stepsNeedingFit: 2, adjustmentsAccepted: 2, adjustmentsByModel: 1 });
+    expect(acceptedAdjustments(hits, done).map((a) => [a.itemIndex, a.child, a.source])).toEqual([[2, 'Aarav Sharma', 'starter'], [4, 'Tanvi', 'model']]);
+  });
+
+  it('lets "Accept all" take only offers that have been shown', () => {
+    expect(acceptable(hits, adj)).toEqual({ keys: [tanvi.key], allSeen: true });
+    const unseen: Adjustments = { ...adj, [meenal.key]: { text: 'Finishes at lunch.', source: 'model', state: 'offered' } };
+    expect(acceptable(hits, unseen)).toEqual({ keys: [tanvi.key], allSeen: false });
+  });
+
+  it('refuses a typed adjustment that is empty, too long, or still against that child', () => {
+    expect(adjustmentProblem('  ', of('time-after'), constraints, SAMPLE_NOTE)).toBe('Write what this child does instead.');
+    expect(adjustmentProblem('x'.repeat(301), of('time-after'), constraints, SAMPLE_NOTE)).toBe('Keep it to 300 characters.');
+    expect(adjustmentProblem('Stays back on Friday.', of('time-after'), constraints, SAMPLE_NOTE)).toBe('This still goes against what you confirmed (“Stays back”). Change it.');
+    expect(adjustmentProblem('Finishes it in the lunch break.', of('time-after'), constraints, SAMPLE_NOTE)).toBeUndefined();
+  });
+
+  it('groups what was accepted by stage for the teacher\'s copy, and keeps a signed lesson', () => {
+    const accepted = acceptedAdjustments(hits, { ...adj, [tanvi.key]: { ...adj[tanvi.key], state: 'accepted' } });
+    expect(forTheseChildren(plan, accepted)).toEqual([
+      { stage: 'Practise', lines: [{ child: 'Aarav Sharma', text: 'Uses chart paper from the class set.' }] },
+      { stage: 'Homework', lines: [{ child: 'Tanvi', text: 'Gets two printed pictures to write from.' }] },
+    ]);
+    const kept = savedLesson('l9', '2026-11-26T10:00:00.000Z', SAMPLE_LESSON, 'Describing a place', plan, accepted, constraints);
+    expect(kept.constraintIds).toHaveLength(6);
+    expect(kept.adjustments).toHaveLength(2);
+    expect(kept.after).toBeUndefined();
   });
 });

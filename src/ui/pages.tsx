@@ -6,7 +6,7 @@ import { CONSTRAINT_LABEL } from '../core/constraints';
 import { configured, type Policy } from '../ai/firebase';
 import { ROUTES, type DeviceStatus, type RouteId } from '../ai/routes';
 import { CloudText, KIND_LABEL } from './parts';
-import { foundLine, signOffLine } from './say';
+import { foundLine, lessonLine, signOffLine } from './say';
 
 /** The records read back from the teacher's account. */
 export type Records =
@@ -405,6 +405,12 @@ export function Receipts({
                     <dd>
                       {signOffLine(r.signOff)}
                     </dd>
+                    {r.lesson && (
+                      <>
+                        <dt>Lesson</dt>
+                        <dd>{lessonLine(r.lesson)}</dd>
+                      </>
+                    )}
                   </dl>
                   <p className="hint">The text you approved:</p>
                   <pre className="wire">

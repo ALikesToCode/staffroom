@@ -151,6 +151,8 @@ export interface Receipt {
    * suggestion of the on-device model. Both are kept in this browser only: neither is in the record that may leave the device.
    */
   signOff: { kept: number; struck: number; at: string; rewritten?: number; fittedOnDevice?: number };
+  /** For a lesson: counts of what was fitted. Kept in this browser only; none of them is in the record that may leave the device. */
+  lesson?: { stepsNeedingFit: number; adjustmentsAccepted: number; adjustmentsByModel: number };
 }
 
 /** What a constraint rules out. `other` is free text: only the model can check it. */

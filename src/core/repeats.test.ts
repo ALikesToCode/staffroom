@@ -5,7 +5,7 @@ import { confirmConstraint, lockConstraints, proposeConstraints } from './constr
 import { outgoingOf } from './needs';
 import { rewriteStep } from './recheck';
 import { COPY_OFF_REPEATS, familyAfterRewrite, familyFor } from './family';
-import { contentWords, REPEATS_NOTE, repeatsPrivate } from './repeats';
+import { contentWords, REPEATS_NOTE, repeatsForChild, repeatsPrivate } from './repeats';
 
 const vault = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
 let held = { entities: vault, constraints: proposeConstraints(SAMPLE_NOTE, vault) };
@@ -48,6 +48,15 @@ describe('a rewrite that repeats words of the private note', () => {
     const forAarav = { heading: `A note home for ${tok('Aarav')}`, text: `Lend ${tok('Aarav')} the book, since ${words}.` };
     expect(repeatsPrivate(forAarav, entities, constraints, tokens)).toContain('family pay anything');
     expect(repeatsPrivate({ heading: 'Books', text: `Lend the book, since ${words}.` }, entities, constraints, tokens)).toContain('family pay anything');
+  });
+
+  it('is found in an adjustment for one child, against that child only', () => {
+    const meenal = entities.find((e) => e.surfaces.includes('Meenal'))!.id;
+    const aarav = entities.find((e) => e.surfaces.includes('Aarav'))!.id;
+    const text = 'Finishes at lunch, as she has to leave school at the last bell.';
+    expect(repeatsForChild(text, meenal, entities, constraints)).toEqual(['leave school last']);
+    expect(repeatsForChild(text, aarav, entities, constraints)).toEqual([]);
+    expect(repeatsForChild('Finishes it in the lunch break.', meenal, entities, constraints)).toEqual([]);
   });
 
   it('says so in one plain line that does not claim more', () => {

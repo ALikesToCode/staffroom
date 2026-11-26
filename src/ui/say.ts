@@ -57,6 +57,12 @@ export function signOffLine(signOff: Receipt['signOff']): string {
   return `${base}, ${rewritten} rewritten by the teacher${fit} (kept in this browser only)`;
 }
 
+/** What a receipt says about a lesson. Counts only. */
+export function lessonLine(l: NonNullable<Receipt['lesson']>): string {
+  const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+  return `${n(l.stepsNeedingFit, 'step', 'steps')} needed fitting. ${n(l.adjustmentsAccepted, 'adjustment', 'adjustments')} accepted, ${l.adjustmentsByModel} of them written by the on-device model. Kept in this browser only.`;
+}
+
 /** The order the items are shown in: conflicts first, then doubts, then the rest, each group in the draft's order. */
 export function resultOrder(checks: readonly (ItemCheck | undefined)[], count: number): number[] {
   const rank = (i: number) => (checks[i]?.verdict === 'conflict' ? 0 : checks[i]?.verdict === 'unsure' ? 1 : 2);

@@ -100,6 +100,8 @@ interface Run {
   rewritten?: number;
   /** Kept items whose rewrite began as a suggestion of the on-device model. A count: no words of any suggestion. */
   fittedOnDevice?: number;
+  /** For a lesson: how many stages needed fitting, how many adjustments were accepted, and how many of those the on-device model wrote. */
+  lesson?: { stepsNeedingFit: number; adjustmentsAccepted: number; adjustmentsByModel: number };
 }
 
 /** Build the receipt of a run. Counts and the approved text only: nothing from the vault. */
@@ -146,6 +148,7 @@ export function makeReceipt(run: Run): Receipt {
     },
     constraints: run.constraints ?? { confirmed: 0, byKind: {} },
     signOff: { kept: run.kept, struck: run.struck, at: now, ...(run.rewritten ? { rewritten: run.rewritten } : {}), ...(run.fittedOnDevice ? { fittedOnDevice: run.fittedOnDevice } : {}) },
+    ...(run.lesson ? { lesson: run.lesson } : {}),
   };
 }
 

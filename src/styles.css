@@ -521,7 +521,7 @@ mark.released {
   padding: 0;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 8px;
 }
 
@@ -1721,8 +1721,8 @@ details > summary {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border-left: 4px solid var(--seal) !important;
-  background: var(--seal-soft) !important;
+  border-left: 4px solid var(--amber) !important;
+  background: var(--amber-soft) !important;
 }
 
 .mini-catch s {
@@ -1730,7 +1730,7 @@ details > summary {
 }
 
 .mini-catch b {
-  color: var(--seal);
+  color: #5d3d00;
   font-size: 0.875rem;
 }
 
@@ -2920,4 +2920,223 @@ mark.hit {
 
 .c-controls {
   gap: 8px 10px;
+}
+
+/* ---------------------------------------------------------------- tomorrow's lesson */
+
+.lesson-lines {
+  display: grid;
+  grid-template-columns: 1fr 1fr 6.5rem;
+  gap: 10px 12px;
+  margin-top: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.field small {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.field input,
+.field textarea {
+  font: inherit;
+  font-weight: 400;
+  padding: 7px 9px;
+  border: 1px solid var(--paper-line);
+  border-radius: 8px;
+  background: #fff;
+  min-width: 0;
+}
+
+.lesson-lines .f-topic,
+.lesson-lines .f-last,
+.lesson-lines .hint {
+  grid-column: 1 / -1;
+}
+
+.lesson-lines .f-minutes {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.keep-class {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  align-items: baseline;
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin-top: 10px;
+}
+
+.keep-class small {
+  grid-column: 2;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.keep-ask {
+  margin-bottom: 4px;
+}
+
+.items li.item.needs-fit {
+  border: 2px solid var(--amber);
+  border-left-width: 6px;
+  background: #fffdf6;
+}
+
+.verdict.v-fit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--amber-soft);
+  border-color: var(--amber);
+}
+
+.v-fit > b {
+  color: #5d3d00;
+}
+
+.hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--paper-card);
+  border: 1px solid var(--paper-line);
+}
+
+.hit.accepted {
+  border-color: var(--pass);
+}
+
+.hit-why {
+  color: var(--ink-soft);
+}
+
+.adjustment {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.adjustment.left {
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.adj-source {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.hit-actions {
+  gap: 6px 12px;
+}
+
+.for-children {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.for-children dt {
+  font-weight: 600;
+}
+
+.for-children dd {
+  margin: 2px 0 0 0;
+}
+
+.lesson-list,
+.saved-stages,
+.how-went {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lesson-list > li {
+  background: var(--paper-card);
+  border: 1px solid var(--paper-line);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.lesson-list summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.lesson-list summary span {
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.lesson-list details[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lesson-list h4 {
+  margin: 6px 0 0;
+}
+
+.how-went li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.how-went li > span {
+  flex: 0 0 8rem;
+  font-weight: 600;
+}
+
+.mini-catch span {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .lesson-lines {
+    grid-template-columns: 1fr;
+  }
+
+  .lesson-lines .f-minutes {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+@media print {
+  .print-sheet .for-children dd {
+    margin-left: 0;
+  }
 }

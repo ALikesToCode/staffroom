@@ -373,7 +373,10 @@ describe('what a receipt keeps of the constraints and the two layers', () => {
       struck: 2,
       rewritten: 1,
       fittedOnDevice: 1,
+      lesson: { stepsNeedingFit: 2, adjustmentsAccepted: 3, adjustmentsByModel: 1 },
     });
+    expect(receipt.lesson).toEqual({ stepsNeedingFit: 2, adjustmentsAccepted: 3, adjustmentsByModel: 1 });
+    expect(JSON.stringify(receiptRecord(receipt))).not.toMatch(/stepsNeedingFit|adjustments/);
     // Rewrites and fits are counted in this browser only: the record that may go to the account has no key for either.
     expect(receipt.signOff).toMatchObject({ kept: 1, struck: 2, rewritten: 1, fittedOnDevice: 1 });
     expect(JSON.stringify(receiptRecord(receipt))).not.toMatch(/fitted|rewritten/i);

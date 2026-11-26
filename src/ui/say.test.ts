@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemCheck } from '../core/types';
-import { draftFailure, foundLine, resultOrder, signOffLine, summaryLine, tally } from './say';
+import { draftFailure, lessonLine, foundLine, resultOrder, signOffLine, summaryLine, tally } from './say';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { DevicePill } from './pages';
@@ -17,6 +17,12 @@ describe('the lines of a receipt', () => {
     expect(foundLine({ student: 3, adult: 1, place: 0, contact: 1, id: 2, private: 4 })).toBe('3 students, 1 adult, 1 contact detail, 2 identity numbers, 4 private details');
     expect(foundLine({ student: 1, private: 1 })).toBe('1 student, 1 private detail');
     expect(foundLine({ student: 0, adult: 0, place: 0, contact: 0, id: 0, private: 0 })).toBe('nothing found');
+  });
+
+  it('says what a lesson needed, in counts', () => {
+    expect(lessonLine({ stepsNeedingFit: 1, adjustmentsAccepted: 3, adjustmentsByModel: 2 })).toBe(
+      '1 step needed fitting. 3 adjustments accepted, 2 of them written by the on-device model. Kept in this browser only.',
+    );
   });
 
   it('says what was rewritten and what began as a suggestion made on the device, and that only this browser knows', () => {

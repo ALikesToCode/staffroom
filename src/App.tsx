@@ -39,13 +39,41 @@ import { Hero, PROMISE } from './ui/Hero';
 import { DevicePill, How, Inspect, Receipts, WHERE_RAN, type Records } from './ui/pages';
 import { draftFailure, resultOrder, summaryLine } from './ui/say';
 import { keptAfterRecheck, modelSaid, recheckItems, rewriteStep, stepIndexOf, stepToRewrite } from './core/recheck';
-import { canFit, FIT_FAILED, FIT_LABEL, fitInputFor, fitStep } from './ai/fit';
+import { canFit, FIT_CHILD_FAILED, FIT_FAILED, FIT_LABEL, fitForChild, fitInputFor, fitStep } from './ai/fit';
 import { useInstall, useUpdate } from './ui/pwa';
 import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
 import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, replayBanner, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyAfterRewrite, familyFor } from './core/family';
-import { REPEATS_NOTE, repeatsPrivate } from './core/repeats';
-import { FIELD_MAX, LAST_TIME_MAX, lessonMinutes, lessonReady, NO_LESSON, withLessonGoing, type LessonFields } from './core/lesson';
+import { REPEATS_NOTE, repeatsForChild, repeatsPrivate } from './core/repeats';
+import {
+  acceptable,
+  acceptedAdjustments,
+  adjustmentHits,
+  adjustmentProblem,
+  classPlanText,
+  FIELD_MAX,
+  LAST_TIME_MAX,
+  lessonCounts,
+  lessonHits,
+  lessonMinutes,
+  lessonReady,
+  lessonSummary,
+  loadLessons,
+  needsFitting,
+  nextLessonFields,
+  NO_LESSON,
+  recordedAdjustments,
+  savedLesson,
+  starterFor,
+  storeLessons,
+  unsettled,
+  withLessonGoing,
+  type Adjustments,
+  type LessonFields,
+  type LessonHit,
+  type SavedLesson,
+} from './core/lesson';
+import { ForTheseChildren, LessonHits, Lessons } from './ui/Lesson';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
@@ -62,11 +90,11 @@ import {
   type DraftResult,
 } from './ai/draft';
 import { anythingToCheck, checkDidNotRun, checkOnDevice, detailsFor, keepNoConflict, noConflictFound, NOTHING_WITHHELD, startsKept } from './ai/check';
-import { combineChecks, ruleCheckItem, verdictLabel } from './core/conflicts';
+import { afterBellActivities, combineChecks, ruleCheckItem, verdictLabel } from './core/conflicts';
 import { CloudText, DeviceText, KIND_LABEL, RouteChip, Spinner, Stepper } from './ui/parts';
 
 type Stage = 'write' | 'guarding' | 'review' | 'drafting' | 'checking' | 'result' | 'signed';
-type View = 'desk' | 'receipts' | 'how';
+type View = 'desk' | 'lessons' | 'receipts' | 'how';
 
 // The five steps the teacher sees: Write, What leaves, Draft, What your device caught, Sign off.
 const STEP: Record<Stage, number> = { write: 0, guarding: 1, review: 1, drafting: 2, checking: 3, result: 3, signed: 5 };
@@ -100,6 +128,18 @@ const CLASS_LIST_KEY = 'staffroom.classList';
 const CONSTRAINTS_KEY = 'staffroom.constraints';
 // The lines about the lesson. Nothing in them is private, and they are kept with the note.
 const LESSON_KEY = 'staffroom.lesson';
+// "Keep this class on this device": the note, the class list, the constraints and the lesson lines, in local storage.
+const KEEP_CLASS_KEY = 'staffroom.keepClass';
+const CLASS_KEY = 'staffroom.class.v1';
+interface KeptClass {
+  note: string;
+  classList: string[];
+  constraints: Constraint[];
+  constraintsNote: string;
+  lesson: LessonFields;
+}
+/** What the tab keeps comes first; with none, the class kept on this device, when the teacher chose to keep one. */
+const keptClass = (): KeptClass | null => (read<boolean | null>(local, KEEP_CLASS_KEY, null) === true ? read<KeptClass | null>(local, CLASS_KEY, null) : null);
 
 // Earlier versions kept the raw note and the class list in local storage. Remove what they left.
 try {
@@ -129,13 +169,18 @@ const NO_MODEL = new Error('no on-device model was available.');
 export function App() {
   const [view, setView] = useState<View>('desk');
   const [stage, setStage] = useState<Stage>('write');
-  const [note, setNote] = useState(() => read(session, NOTE_KEY, ''));
-  const [classList, setClassList] = useState<string[]>(() => read(session, CLASS_LIST_KEY, []));
+  const [note, setNote] = useState(() => read(session, NOTE_KEY, '') || (keptClass()?.note ?? ''));
+  const [classList, setClassList] = useState<string[]>(() => {
+    const inTab = read<string[]>(session, CLASS_LIST_KEY, []);
+    return inTab.length > 0 || read(session, NOTE_KEY, '') !== '' ? inTab : (keptClass()?.classList ?? []);
+  });
+  /** Whether the class is kept on this device between lessons. Null: the teacher has not been asked yet. */
+  const [keepClass, setKeepClass] = useState<boolean | null>(() => read<boolean | null>(local, KEEP_CLASS_KEY, null));
   const [task, setTask] = useState<TaskId>('lesson');
   /** The lines about the lesson: the class, the subject, the topic, the length, and what was done last time. Sent as written. */
-  const [lesson, setLesson] = useState<LessonFields>(() => ({ ...NO_LESSON, ...read(session, LESSON_KEY, NO_LESSON) }));
+  const [lesson, setLesson] = useState<LessonFields>(() => ({ ...NO_LESSON, ...(read<LessonFields | null>(session, LESSON_KEY, null) ?? keptClass()?.lesson ?? NO_LESSON) }));
   /** False on the first screen: no form is shown until the teacher chooses to write, or a note is already kept in this tab. */
-  const [composing, setComposing] = useState(() => read(session, NOTE_KEY, '') !== '');
+  const [composing, setComposing] = useState(() => read(session, NOTE_KEY, '') !== '' || Boolean(keptClass()?.note));
   const [inspecting, setInspecting] = useState(false);
   /** Whether the list of what is withheld is unfolded. */
   const [vaultOpen, setVaultOpen] = useState(false);
@@ -152,11 +197,14 @@ export function App() {
   /** The vault as the guard and the teacher left it. Read `entities` below, which has the school's locks applied. */
   const [rawEntities, setEntities] = useState<Entity[]>([]);
   /** The constraints of this note: proposed, confirmed, or added by hand. They never leave the device. */
-  const [constraints, setConstraints] = useState<Constraint[]>(
-    () => read(session, CONSTRAINTS_KEY, { note: '', constraints: [] as Constraint[] }).constraints,
-  );
+  const [constraints, setConstraints] = useState<Constraint[]>(() => {
+    const inTab = read(session, CONSTRAINTS_KEY, { note: '', constraints: [] as Constraint[] });
+    return inTab.constraints.length > 0 || read(session, NOTE_KEY, '') !== '' ? inTab.constraints : (keptClass()?.constraints ?? []);
+  });
   /** The note the constraints were made for. They are kept across a new guard run only while the note is the same. */
-  const constraintsNote = useRef(read(session, CONSTRAINTS_KEY, { note: '', constraints: [] as Constraint[] }).note);
+  const constraintsNote = useRef(
+    read(session, CONSTRAINTS_KEY, { note: '', constraints: [] as Constraint[] }).note || (read(session, NOTE_KEY, '') === '' ? (keptClass()?.constraintsNote ?? '') : ''),
+  );
   /** Where the on-device model's search for constraints fell short. Null when it did not, or did not run. */
   const [constraintGaps, setConstraintGaps] = useState<Pick<ConstraintReport, 'asked' | 'unread' | 'dropped' | 'stopped'> | null>(null);
   /** The vault item whose release was asked for while a confirmed constraint holds it. */
@@ -220,6 +268,15 @@ export function App() {
   const [fitted, setFitted] = useState<number[]>([]);
   /** Rewritten messages home that repeat words of the private note, whose copy the teacher turned on. */
   const [copyOn, setCopyOn] = useState<number[]>([]);
+  /** For a lesson: what each child a step does not suit does instead, as it stands. Never sent, and not in any record. */
+  const [adj, setAdj] = useState<Adjustments>({});
+  /** The hit the device is fitting now, and whether it is going through the whole lesson. */
+  const [adjBusy, setAdjBusy] = useState<string | null>(null);
+  const [fittingLesson, setFittingLesson] = useState(false);
+  /** Said under a hit for which nothing could be offered. */
+  const [adjNotes, setAdjNotes] = useState<Record<string, string>>({});
+  /** The lessons signed off on this device. */
+  const [lessons, setLessons] = useState<SavedLesson[]>(loadLessons);
   /** Where the fit ran in this run. NOT_RUN until the on-device model has answered once. */
   const [fitWhere, setFitWhere] = useState<Where>('NOT_RUN');
   const [checkWhere, setCheckWhere] = useState<Where>('NOT_RUN');
@@ -302,6 +359,12 @@ export function App() {
   useEffect(() => {
     if (!replay) write(session, LESSON_KEY, lesson, false);
   }, [lesson, replay]);
+  // The class is kept on this device only when the teacher said so. Switched off, or forgotten, it is removed.
+  useEffect(() => {
+    if (replay) return;
+    write(local, KEEP_CLASS_KEY, keepClass, keepClass === null);
+    write(local, CLASS_KEY, { note, classList, constraints, constraintsNote: constraintsNote.current, lesson } satisfies KeptClass, keepClass !== true || note === '');
+  }, [keepClass, note, classList, constraints, lesson, replay]);
   useEffect(() => {
     if (!replay) write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints }, constraints.length === 0);
   }, [constraints, replay]);
@@ -727,6 +790,10 @@ export function App() {
     setFits([]);
     setFitted([]);
     setCopyOn([]);
+    setAdj({});
+    setAdjBusy(null);
+    setFittingLesson(false);
+    setAdjNotes({});
     setFitWhere('NOT_RUN');
     // An item in conflict starts struck. Every other item starts undecided: nothing is kept until the teacher keeps it.
     // A lesson is kept whole: a stage that does not suit one child is right for the class, and is fitted, not struck.
@@ -754,6 +821,8 @@ export function App() {
     if (signingRef.current || stage !== 'result' || !result || !sent || replyBlocked || replay) return;
     // Signing off with nothing kept is allowed: it rejects the whole draft, and is recorded like any other sign-off.
     if (kept.some((k) => k === null)) return;
+    // A lesson is signed off only when every child a step does not suit has an adjustment, or the teacher left the step as it is.
+    if (task === 'lesson' && unsettled(hits, adj).length > 0) return;
     signingRef.current = true;
     setSigning(true);
     const run = runRef.current;
@@ -779,6 +848,7 @@ export function App() {
       constraints: { ...constraintCounts(liveConstraints), shared: sent.needs.length },
       rewritten: signed.filter((k, i) => k === true && i in edits).length,
       fittedOnDevice: signed.filter((k, i) => k === true && i in edits && fitted.includes(i)).length,
+      lesson: task === 'lesson' ? lessonCounts(hits, adj) : undefined,
       kept: signed.filter((k) => k === true).length,
       struck: signed.filter((k) => k === false).length,
     });
@@ -787,10 +857,21 @@ export function App() {
     setReceipts(next);
     // The browser can refuse to store (full, or switched off). Say so; the sign-off and the record go on.
     setStoreFailed(!storeReceipts(next));
+    if (task === 'lesson' && draft) {
+      // The signed lesson is kept on this device only: it has the adjustments in it, with names.
+      const stages = draft.items.filter((_, i) => signed[i] === true);
+      const saved = savedLesson(receipt.id, receipt.createdAt, lesson, draft.title, stages, acceptedAdjustments(hits, adj), liveConstraints);
+      setLessons((l) => {
+        const all = [saved, ...l];
+        storeLessons(all);
+        return all.slice(0, 30);
+      });
+    }
     setStage('signed');
     setSigning(false);
     setCopyState('idle');
-    if (keepCopies && uid) {
+    // The account's rules know three tasks. A lesson's record stays in this browser.
+    if (keepCopies && uid && task !== 'lesson') {
       // Independent of the local store. With no network the write waits, and finishes when the network is back.
       setCopyState('pending');
       // The write can finish long after this run was cleared. Its outcome is shown only while this run is on screen.
@@ -928,6 +1009,123 @@ export function App() {
     checkAgain({ ...edits, [i]: next.text }, offIds);
   };
 
+  // ---------------------------------------------------------------- a lesson: fit each step to each child
+
+  /** Every step of the lesson that does not suit a child, by rule, against the constraints as they stand now. */
+  const hits = useMemo<LessonHit[]>(() => {
+    if (task !== 'lesson' || !draft || !sent) return [];
+    const told = new Map(sent.needs.filter((n) => !offIds.includes(n.id)).map((n) => [n.id, n.line]));
+    return lessonHits(draft.items, liveConstraints, sent.entities, sent.tokens, note, told);
+  }, [task, draft, sent, liveConstraints, offIds, note]);
+  const hitsRef = useRef(hits);
+  hitsRef.current = hits;
+  const adjRef = useRef(adj);
+  adjRef.current = adj;
+  const fittingLive = stage === 'result' && !replay;
+
+  /** Offer the starter for this kind of constraint, if it has one and no rule fires on it for that child. */
+  const offerStarter = (hit: LessonHit, c: Constraint, said?: string) => {
+    const starter = starterFor(c);
+    if (starter && adjustmentHits(starter, c, liveConstraints, note).length === 0) {
+      setAdj((a) => ({ ...a, [hit.key]: { text: starter, source: 'starter', state: 'offered', said } }));
+    } else {
+      setAdjNotes((n) => ({ ...n, [hit.key]: said ? FIT_CHILD_FAILED : 'There is no starter wording for this. Write the adjustment yourself.' }));
+    }
+  };
+
+  /** Get words for one child and one step: from the on-device model when it is here, from the starter when it is not. Nothing is accepted. */
+  const suggestFor = async (hit: LessonHit) => {
+    const c = liveConstraints.find((x) => x.id === hit.constraintId);
+    if (!c || !sent || replay || liveRef.current.stage !== 'result' || signingRef.current || fitBusy.current || adjRef.current[hit.key]) return;
+    setAdjNotes(({ [hit.key]: _old, ...rest }) => rest);
+    if (device !== 'available') return offerStarter(hit, c);
+    const run = runRef.current;
+    fitBusy.current = true;
+    setAdjBusy(hit.key);
+    try {
+      const got = await fitForChild({
+        step: hit.step,
+        constraint: c,
+        constraints: liveConstraints.filter((x) => x.confirmed && (x.id === c.id || !x.about || x.about === c.about)),
+        afterBell: afterBellActivities(note),
+      });
+      if (runRef.current !== run) return;
+      setFitWhere('ON_DEVICE');
+      if (got.ok) setAdj((a) => ({ ...a, [hit.key]: { text: got.suggestion, source: 'model', state: 'offered' } }));
+      else offerStarter(hit, c, 'The on-device model gave nothing that could be offered, so this is the starter.');
+    } catch {
+      if (runRef.current === run) offerStarter(hit, c, 'The on-device model did not answer, so this is the starter.');
+    } finally {
+      fitBusy.current = false;
+      if (runRef.current === run) setAdjBusy(null);
+    }
+  };
+
+  /** "Fit the lesson on this device": every hit with nothing offered yet, one after another. Each offer waits for the teacher. */
+  const fitLesson = async () => {
+    if (fitBusy.current || fittingLesson) return;
+    const run = runRef.current;
+    setFittingLesson(true);
+    for (const hit of [...hitsRef.current]) {
+      if (runRef.current !== run || liveRef.current.stage !== 'result') break;
+      if (!adjRef.current[hit.key] && hitsRef.current.some((h) => h.key === hit.key)) await suggestFor(hit);
+    }
+    if (runRef.current === run) setFittingLesson(false);
+  };
+
+  const hitActions = {
+    onSuggest: (hit: LessonHit) => void suggestFor(hit),
+    onAccept: (hit: LessonHit) => {
+      const c = liveConstraints.find((x) => x.id === hit.constraintId);
+      // Read by rule once more at the moment it is accepted: a constraint may have been switched since it was offered.
+      if (!fittingLive || !c || adjustmentProblem(adj[hit.key]?.text ?? '', c, liveConstraints, note)) return;
+      setAdj((a) => (a[hit.key] ? { ...a, [hit.key]: { ...a[hit.key], state: 'accepted', seen: true } } : a));
+    },
+    onSave: (hit: LessonHit, text: string) => {
+      const c = liveConstraints.find((x) => x.id === hit.constraintId);
+      if (!fittingLive || !c) return 'This step is no longer waiting for an adjustment.';
+      const problem = adjustmentProblem(text, c, liveConstraints, note);
+      if (problem) return problem;
+      const typed = text.replace(/\s+/g, ' ').trim();
+      setAdj((a) => ({ ...a, [hit.key]: { text: typed, source: a[hit.key]?.text === typed ? a[hit.key].source : 'teacher', state: 'accepted', seen: true } }));
+      return undefined;
+    },
+    onLeave: (hit: LessonHit) => fittingLive && setAdj((a) => ({ ...a, [hit.key]: { text: '', source: 'teacher', state: 'left' } })),
+    onReopen: (hit: LessonHit) =>
+      fittingLive &&
+      setAdj(({ [hit.key]: was, ...rest }) => (was && was.state === 'accepted' ? { ...rest, [hit.key]: { ...was, state: 'offered', seen: true } } : rest)),
+    onSeen: (key: string) => setAdj((a) => (a[key] && !a[key].seen ? { ...a, [key]: { ...a[key], seen: true } } : a)),
+    repeats: (hit: LessonHit, text: string) => {
+      const c = liveConstraints.find((x) => x.id === hit.constraintId);
+      return Boolean(sent && repeatsForChild(text, c?.about, sent.entities, liveConstraints).length > 0);
+    },
+  };
+
+  /** Accept every offer that has been shown. One that has not been on screen yet stays waiting. */
+  const acceptAll = () => {
+    for (const key of acceptable(hits, adj).keys) {
+      const hit = hits.find((h) => h.key === key);
+      if (hit) hitActions.onAccept(hit);
+    }
+  };
+
+  // ---------------------------------------------------------------- saved lessons, and the next one
+
+  const changeLessons = (next: SavedLesson[]) => {
+    setLessons(next);
+    storeLessons(next);
+  };
+
+  /** Open the write screen for the lesson after this one: same class, same subject, and what was done last time. */
+  const planNext = (from: SavedLesson) => {
+    if (replay) return;
+    clearRun();
+    setTask('lesson');
+    setLesson(nextLessonFields(from));
+    setComposing(true);
+    setView('desk');
+  };
+
   /** Confirm every constraint that is not yet confirmed. Each one withholds its words, as a single confirm does. */
   const confirmAll = () => {
     if (stage !== 'review' || replay) return;
@@ -942,6 +1140,9 @@ export function App() {
     const items = draft.items.filter((_, i) => kept[i] === true);
     return restore([draft.title, '', ...items.map((i) => `${i.heading}\n${i.text}\n`)].join('\n'), entities, sent?.tokens).trim();
   }, [draft, kept, entities, sent]);
+
+  /** The class plan of a lesson as it is copied: the kept stages with stand-ins as they came, so no name and no adjustment is in it. */
+  const classPlan = draft ? classPlanText({ title: draft.title, items: draft.items.filter((_, i) => kept[i] === true) }) : '';
 
   /** Copy to the clipboard and say plainly whether it worked. The browser can refuse. */
   const copy = async (what: 'all' | number, text: string) => {
@@ -994,6 +1195,10 @@ export function App() {
     setFits([]);
     setFitted([]);
     setCopyOn([]);
+    setAdj({});
+    setAdjBusy(null);
+    setFittingLesson(false);
+    setAdjNotes({});
     setFitWhere('NOT_RUN');
     setDraftFail(null);
     setCheckWhere('NOT_RUN');
@@ -1024,9 +1229,14 @@ export function App() {
     setNote('');
     setClassList([]);
     setConstraints([]);
+    setLesson(NO_LESSON);
+    setKeepClass(null);
     setComposing(false);
     constraintsNote.current = '';
     try {
+      localStorage.removeItem(CLASS_KEY);
+      localStorage.removeItem(KEEP_CLASS_KEY);
+      sessionStorage.removeItem(LESSON_KEY);
       sessionStorage.removeItem(CONSTRAINTS_KEY);
       sessionStorage.removeItem(NOTE_KEY);
       sessionStorage.removeItem(CLASS_LIST_KEY);
@@ -1094,7 +1304,7 @@ export function App() {
       setChecks(replay.checks);
       setFirstChecks(replay.checks);
       setModelChecks(replay.checks.map(modelSaid));
-      setKept(startsKept(replay.checks));
+      setKept(replay.task === 'lesson' ? replay.checks.map(() => true) : startsKept(replay.checks));
       setCheckWhere(replay.where.check);
     }
     if (to === 'signed' && sent && replay.rewrites && replay.rewrites.length > 0) {
@@ -1134,6 +1344,9 @@ export function App() {
         draftModel: result.model,
         rewrites: Object.entries(edits).map(([i, text]) => ({ itemIndex: Number(i), text })),
         fits,
+        ...(task === 'lesson'
+          ? { lesson, adjustments: acceptedAdjustments(hits, adj).map((a) => ({ itemIndex: a.itemIndex, constraintId: a.constraintId, text: a.text, source: a.source })) }
+          : {}),
       },
       new Date(),
       navigator.userAgent,
@@ -1152,6 +1365,8 @@ export function App() {
     // The invented class is planned a lesson: the main job of the app.
     setTask('lesson');
     setLesson(SAMPLE_LESSON);
+    // The invented class is kept on this device, so the next lesson starts from it.
+    setKeepClass(true);
     setComposing(true);
   };
 
@@ -1187,8 +1402,15 @@ export function App() {
   const canSend = readIt && (!nothingWithheld || asWritten) && (!partsUnread || unreadAcked) && violations.length === 0 && policyReady;
   /** The private details that were withheld: what a rules-only check does not compare a step with. */
   const privateHeld = entities.filter((e) => e.kind === 'private' && e.withheld && e.category !== RESERVED && !inside.has(e.id));
-  const order = resultOrder(checks, draft?.items.length ?? 0);
-  const flagged = order.filter((i) => checks[i]?.verdict === 'conflict' || checks[i]?.verdict === 'unsure');
+  const isLesson = task === 'lesson';
+  /** The adjustments on screen: the teacher's own, or in a replay the ones of the recorded run. */
+  const shownAdj = replay ? recordedAdjustments(hits, replay.adjustments ?? []) : adj;
+  const waitingHits = unsettled(hits, shownAdj);
+  const offers = acceptable(hits, shownAdj);
+  const acceptedNow = acceptedAdjustments(hits, shownAdj);
+  // A lesson is read in its own order. The other tasks show what was caught first.
+  const order = isLesson ? (draft?.items ?? []).map((_, i) => i) : resultOrder(checks, draft?.items.length ?? 0);
+  const flagged = isLesson ? [] : order.filter((i) => checks[i]?.verdict === 'conflict' || checks[i]?.verdict === 'unsure');
   const unflagged = order.filter((i) => !flagged.includes(i));
   /** The on-device model can be asked to fit a step: it is here, and this is a live run. */
   const canFitHere = stage === 'result' && !replay && device === 'available';
@@ -1385,7 +1607,7 @@ export function App() {
           onClick={() => (receipts.length > 0 ? setForgetAsk(true) : forgetNote(false))}
           title="Clears the note, the class list, the vault and the results from this page and from this browser."
         >
-          Forget this note
+          Forget this class
         </button>
       )}
     </span>
@@ -1482,12 +1704,16 @@ export function App() {
     const live = stage === 'result' && !replay;
     const whole = live && (conflict || doubt) && sent ? stepToRewrite(item, sent.entities, sent.tokens, c?.matched).whole : true;
     const box = rewriting[i];
+    /** For a lesson: the children this stage does not suit, by rule. */
+    const itemHits = isLesson ? hits.filter((h) => h.itemIndex === i) : [];
     /** In a replay: what the on-device model suggested for this item in the recorded run. Read-only. */
     const recordedFit = replay?.fits?.find((f) => f.itemIndex === i);
     return (
       <li
         key={i}
-        className={['item', kept[i] === null ? 'undecided' : kept[i] ? 'kept' : 'struck', conflict ? 'is-conflict' : doubt ? 'is-doubt' : ''].join(' ').trim()}
+        className={['item', kept[i] === null ? 'undecided' : kept[i] ? 'kept' : 'struck', isLesson ? (itemHits.length > 0 ? 'needs-fit' : '') : conflict ? 'is-conflict' : doubt ? 'is-doubt' : '']
+          .join(' ')
+          .trim()}
       >
         <h4>
           <DeviceText text={item.heading} entities={entities} allowed={sent?.tokens} />
@@ -1496,7 +1722,22 @@ export function App() {
         <p className="item-text">
           <DeviceText text={item.text} entities={entities} allowed={sent?.tokens} mark={conflict || (doubt && c?.constraintId) ? c?.matched : undefined} />
         </p>
-        {c && conflict && (
+        {isLesson && itemHits.length > 0 && (
+          <div className="verdict v-fit">
+            <b>{needsFitting(itemHits)}</b>
+            <LessonHits
+              hits={itemHits}
+              adjustments={shownAdj}
+              live={fittingLive}
+              canModel={device === 'available'}
+              busyKey={adjBusy}
+              notes={adjNotes}
+              recorded={Boolean(replay)}
+              actions={hitActions}
+            />
+          </div>
+        )}
+        {c && conflict && !isLesson && (
           <div className="verdict v-conflict">
             <b>{verdictLabel(c)}</b>
             <span>{c.reason}</span>
@@ -1509,7 +1750,7 @@ export function App() {
             <Caught check={c} constraint={sent?.constraints.find((x) => x.id === c.constraintId)} />
           </div>
         )}
-        {c && doubt && (
+        {c && doubt && !(isLesson && c.constraintId) && (
           <div className="verdict v-doubt">
             <b>{verdictLabel(c)}</b>
             <span>
@@ -1520,7 +1761,7 @@ export function App() {
             <Caught check={c} constraint={sent?.constraints.find((x) => x.id === c.constraintId)} />
           </div>
         )}
-        {c && !conflict && !doubt && (
+        {c && !conflict && !doubt && !(isLesson && itemHits.length > 0) && (
           <p className={`quiet-verdict q-${c.verdict.replace(' ', '-')}${byRuleOnly ? ' q-rule' : ''}`}>
             <b>{edited ? 'Checked by rule' : byRuleOnly ? 'No conflict found by rule' : verdictLabel(c)}</b>{' '}
             <span>
@@ -1610,7 +1851,7 @@ export function App() {
             )}
           </div>
         )}
-        {stage === 'result' && !(box && live) && (
+        {stage === 'result' && !(box && live) && !isLesson && (
           <div className="decide" role="group" aria-label="Keep or strike this item">
             <button
               className={kept[i] === true ? 'choice on' : 'choice'}
@@ -1680,6 +1921,12 @@ export function App() {
           <button className={view === 'desk' ? 'tab on' : 'tab'} onClick={() => setView('desk')}>
             Desk
           </button>
+          <button className={view === 'lessons' ? 'tab on' : 'tab'} onClick={() => setView('lessons')}>
+            Lessons
+            <span className={lessons.length > 0 ? 'count' : 'count none'} aria-hidden={lessons.length === 0}>
+              {lessons.length}
+            </span>
+          </button>
           <button className={view === 'receipts' ? 'tab on' : 'tab'} onClick={() => setView('receipts')}>
             Receipts
             {/* The badge keeps its place when there is nothing to count, so the header does not shift when it appears. */}
@@ -1724,6 +1971,15 @@ export function App() {
       )}
 
       {view === 'how' && <How policy={policy} device={device} />}
+      {view === 'lessons' && (
+        <Lessons
+          lessons={lessons}
+          onAfter={(id, after) => changeLessons(lessons.map((l) => (l.id === id ? { ...l, after } : l)))}
+          onNext={planNext}
+          onDelete={(id) => changeLessons(lessons.filter((l) => l.id !== id))}
+          onDeleteAll={() => changeLessons([])}
+        />
+      )}
       {view === 'receipts' && (
         <Receipts
           receipts={receipts}
@@ -1787,7 +2043,30 @@ export function App() {
               {(stage === 'result' || stage === 'signed') && result && draft && (
                 <article className="card result">
                   <p className="eyebrow">{restore(draft.title, entities, sent?.tokens)}</p>
-                  <h3 className="summary">{summaryLine(checks)}</h3>
+                  <h3 className="summary">
+                    {isLesson ? lessonSummary(hits, draft.items.length, liveConstraints.filter((x) => x.confirmed).length) : summaryLine(checks)}
+                  </h3>
+                  {isLesson && fittingLive && hits.length > 0 && (
+                    <div className="actions fit-all">
+                      {hits.some((h) => !adj[h.key]) && (
+                        <button className="primary small" disabled={signing || adjBusy !== null || fittingLesson} onClick={() => void fitLesson()}>
+                          {fittingLesson ? 'Fitting on this device…' : 'Fit the lesson on this device'}
+                        </button>
+                      )}
+                      {hits.filter((h) => adj[h.key]?.state === 'offered').length > 1 && (
+                        <button className="secondary small" disabled={signing || !offers.allSeen} onClick={acceptAll}>
+                          Accept all {hits.filter((h) => adj[h.key]?.state === 'offered').length}
+                        </button>
+                      )}
+                      <span className="hint">
+                        {!offers.allSeen
+                          ? 'Scroll to each suggestion first: one you have not seen cannot be accepted.'
+                          : device === 'available'
+                            ? 'Each child is fitted here, from your private note. Nothing is sent, and nothing lands until you accept it.'
+                            : 'No on-device model here, so the device offers starter wording by rule. Nothing lands until you accept it.'}
+                      </span>
+                    </div>
+                  )}
                   {canFitHere && (fittable.length > 1 || fittingAll) && (
                     <div className="actions fit-all">
                       <button className="primary small" disabled={signing || fitting !== null || fittingAll} onClick={() => void fitAll()}>
@@ -1813,8 +2092,13 @@ export function App() {
                       )}
                       <div className="actions">
                         {keptCount > 0 && task !== 'parents' && (
-                          <button className="primary" onClick={() => copy('all', finalText)} disabled={replyBlocked}>
-                            {copyLabel('all', 'Copy the text')}
+                          <button className="primary" onClick={() => copy('all', isLesson ? classPlan : finalText)} disabled={replyBlocked}>
+                            {copyLabel('all', isLesson ? 'Copy the class plan' : 'Copy the text')}
+                          </button>
+                        )}
+                        {isLesson && (
+                          <button className="link" onClick={() => setView('lessons')}>
+                            Lessons
                           </button>
                         )}
                         {canPrint && (
@@ -1826,6 +2110,12 @@ export function App() {
                           Start again
                         </button>
                       </div>
+                      {isLesson && keptCount > 0 && (
+                        <p className="hint">
+                          The class plan is copied and printed with no name and no adjustment. The adjustments print on a second page, for you.
+                          {keepCopies ? ' A lesson is not recorded in your account: its record stays in this browser.' : ''}
+                        </p>
+                      )}
                       {keptCount === 0 ? (
                         <p className="hint">You kept no item, so there is nothing to copy.</p>
                       ) : (
@@ -1916,6 +2206,14 @@ export function App() {
                     </div>
                   )}
                   {unflagged.length > 0 && <ol className="items">{unflagged.map(resultItem)}</ol>}
+
+                  {isLesson && stage === 'signed' && (
+                    <div className="strip">
+                      <h4>For these children</h4>
+                      <ForTheseChildren stages={draft.items} adjustments={acceptedNow} />
+                      <p className="hint">Kept on this device with the lesson. Never sent, and not in any record.</p>
+                    </div>
+                  )}
 
                   {capture && !replay && (
                     <div className="actions">
@@ -2035,7 +2333,7 @@ export function App() {
                       Class list <small>{classList.length > 0 ? `${classList.length} names` : 'optional'}</small>
                     </summary>
                     <p>
-                      One name per line, kept in this tab until you close it. A name on this list is{' '}
+                      One name per line, kept with your note. A name on this list is{' '}
                       {policy.lockedKinds.includes('student') ? 'always withheld' : 'withheld by default'}, with or without a model.
                     </p>
                     <textarea
@@ -2051,6 +2349,17 @@ export function App() {
                       aria-label="Class list"
                     />
                   </details>
+                  {!replay && (
+                    <label className="keep-class">
+                      <input type="checkbox" checked={keepClass === true} onChange={(e) => setKeepClass(e.target.checked)} />
+                      Keep this class on this device
+                      <small>
+                        {keepClass === true
+                          ? 'Your note, class list and constraints are kept in this browser’s storage on this computer. Nothing is sent.'
+                          : 'Off: they are kept in this tab only, and are gone when it closes.'}
+                      </small>
+                    </label>
+                  )}
                   {noModel && !replay && (
                     <p className="notice">
                       No on-device model in this browser, so the guard runs by rule: your class list, patterns, a short list of sensitive
@@ -2085,6 +2394,23 @@ export function App() {
                     </div>
                   )}
                 </article>
+              )}
+
+              {stage === 'review' && !replay && keepClass === null && (
+                <div className="confirm keep-ask" role="group" aria-label="Keep this class on this device">
+                  <p>
+                    Keep this class on this device? Your note, class list and constraints then stay in this browser’s storage, so the next
+                    lesson starts from them. Nothing is sent.
+                  </p>
+                  <div className="actions">
+                    <button className="secondary small" onClick={() => setKeepClass(true)}>
+                      Keep this class on this device
+                    </button>
+                    <button className="link" onClick={() => setKeepClass(false)}>
+                      Not now
+                    </button>
+                  </div>
+                </div>
               )}
 
               {/* ---- the constraints: the centre of the review */}
@@ -2383,19 +2709,23 @@ export function App() {
                     </div>
                   )}
                   <span className="hint bar-say">
-                    {undecided > 0
+                    {isLesson
+                      ? waitingHits.length > 0
+                        ? `${waitingHits.length} ${waitingHits.length === 1 ? 'child still waits' : 'children still wait'} for an adjustment, or for you to leave the step as it is.`
+                        : `${acceptedNow.length} ${acceptedNow.length === 1 ? 'adjustment' : 'adjustments'} accepted. They stay on this device.`
+                      : undecided > 0
                       ? `${undecided} of ${kept.length} still to decide. Nothing is kept until you keep it.`
                       : keptCount === 0
                         ? 'Every item is struck. Signing off now rejects the whole draft.'
                         : `${keptCount} kept, ${struckCount} struck.`}
                   </span>
-                  {toKeep > 0 && (
+                  {toKeep > 0 && !isLesson && (
                     <button className="secondary" disabled={signing} onClick={() => !signingRef.current && setKept((k) => keepNoConflict(k, checks))}>
                       Keep the {toKeep} {toKeep === 1 ? 'item' : 'items'} with no conflict found
                     </button>
                   )}
-                  <button className="primary" onClick={signOff} disabled={signing || undecided > 0 || replyBlocked}>
-                    {undecided === 0 && keptCount === 0 ? 'Reject the whole draft' : `Sign off ${keptCount} of ${kept.length} items`}
+                  <button className="primary" onClick={signOff} disabled={signing || undecided > 0 || replyBlocked || (isLesson && waitingHits.length > 0)}>
+                    {isLesson ? 'Sign off the lesson' : undecided === 0 && keptCount === 0 ? 'Reject the whole draft' : `Sign off ${keptCount} of ${kept.length} items`}
                   </button>
                 </>
               )}
@@ -2476,6 +2806,26 @@ export function App() {
                 <p>{restore(item.text, entities, sent?.tokens).trim()}</p>
               </div>
             ))
+          ) : isLesson ? (
+            <>
+              {/* Page 1: the class plan, stand-ins as they came. No name and no adjustment: it can be pinned up or shared. */}
+              <div className="print-page">
+                <h1>{draft.title}</h1>
+                <p>{[lesson.klass, lesson.subject, lesson.topic, `${lessonMinutes(lesson.minutes)} minutes`].filter(Boolean).join(' · ')}</p>
+                {draft.items.map((item, i) =>
+                  kept[i] === true ? (
+                    <div key={i}>
+                      <h2>{item.heading}</h2>
+                      <p>{item.text.trim()}</p>
+                    </div>
+                  ) : null,
+                )}
+              </div>
+              <div className="print-page">
+                <h1>Teacher's copy: adjustments. Keep this private.</h1>
+                <ForTheseChildren stages={draft.items} adjustments={acceptedNow} />
+              </div>
+            </>
           ) : (
             <div className="print-page">
               <h1>{restore(draft.title, entities, sent?.tokens)}</h1>

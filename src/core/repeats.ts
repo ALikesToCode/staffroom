@@ -52,7 +52,10 @@ export function repeatsPrivate(item: DraftItem, entities: Entity[], constraints:
     ...constraints.filter((c) => c.confirmed && mine(c.about)).map((c) => c.text),
     ...entities.filter((e) => e.kind === 'private' && e.withheld && e.category !== RESERVED && mine(e.about)).flatMap((e) => e.surfaces),
   ];
-  const read = restore(`${item.heading}\n${item.text}`, entities, allowed);
+  return repeatsOf(restore(`${item.heading}\n${item.text}`, entities, allowed), facts);
+}
+
+function repeatsOf(read: string, facts: readonly string[]): string[] {
   const words = contentWords(read);
   const said = new Set(sensitiveWords(read));
   const found = new Set<string>();
@@ -62,4 +65,16 @@ export function repeatsPrivate(item: DraftItem, entities: Entity[], constraints:
     for (const w of sensitiveWords(fact)) if (said.has(w)) found.add(w);
   }
   return [...found];
+}
+
+/** Said on an adjustment that repeats words of a confirmed constraint or a withheld private detail of that child. */
+export const ADJUSTMENT_REPEATS = 'This adjustment repeats words from your private note. Read it before you copy or print it.';
+
+/** The same for an adjustment: a text about one child (`about`), or about the class when there is none. Names are as typed. */
+export function repeatsForChild(text: string, about: string | undefined, entities: Entity[], constraints: readonly Constraint[]): string[] {
+  const mine = (id?: string) => !about || !id || id === about;
+  return repeatsOf(text, [
+    ...constraints.filter((c) => c.confirmed && mine(c.about)).map((c) => c.text),
+    ...entities.filter((e) => e.kind === 'private' && e.withheld && e.category !== RESERVED && mine(e.about)).flatMap((e) => e.surfaces),
+  ]);
 }

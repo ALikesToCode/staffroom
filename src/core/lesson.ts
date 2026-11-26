@@ -283,3 +283,78 @@ export function nextLessonFields(lesson: SavedLesson): LessonFields {
 export function classPlanText(draft: Pick<Draft, 'title'> & { items: DraftItem[] }): string {
   return [draft.title, ...draft.items.map((i) => `${i.heading}\n${i.text}`)].join('\n\n');
 }
+
+// ---------------------------------------------------------------- adjustments on the result screen
+
+/** One adjustment as it stands: offered and waiting, accepted, or the step left as it is for this child. */
+export interface Adjustment {
+  text: string;
+  source: AdjustmentSource;
+  state: 'offered' | 'accepted' | 'left';
+  /** True once an offer has been on screen. "Accept all" counts only offers that have been. */
+  seen?: boolean;
+  /** Said with the offer: why the words are a starter and not the model's. */
+  said?: string;
+}
+
+/** The adjustments of a run, by the key of the hit they answer. */
+export type Adjustments = Record<string, Adjustment>;
+
+/** Hits the teacher has not yet settled: nothing offered, or an offer still waiting. Sign-off waits for these. */
+export const unsettled = (hits: readonly LessonHit[], adj: Adjustments) => hits.filter((h) => !adj[h.key] || adj[h.key].state === 'offered');
+
+/** Offers that wait and have been shown, which "Accept all" may accept; and whether every waiting offer has been shown. */
+export function acceptable(hits: readonly LessonHit[], adj: Adjustments): { keys: string[]; allSeen: boolean } {
+  const offered = hits.filter((h) => adj[h.key]?.state === 'offered');
+  const keys = offered.filter((h) => adj[h.key].seen).map((h) => h.key);
+  return { keys, allSeen: keys.length === offered.length };
+}
+
+/** What a typed or changed adjustment must pass: not empty, not too long, and no rule firing on it for that child. Undefined: it may be accepted. */
+export function adjustmentProblem(text: string, constraint: Constraint, constraints: readonly Constraint[], note: string): string | undefined {
+  const typed = text.replace(/\s+/g, ' ').trim();
+  if (typed.length === 0) return 'Write what this child does instead.';
+  if (typed.length > ADJUSTMENT_MAX) return `Keep it to ${ADJUSTMENT_MAX} characters.`;
+  const hits = adjustmentHits(typed, constraint, constraints, note);
+  if (hits.length > 0) return `This still goes against what you confirmed (“${hits.map((h) => h.matched).join('”, “')}”). Change it.`;
+  return undefined;
+}
+
+/** The counts a receipt keeps about a lesson. Counts only: no words of any adjustment. */
+export function lessonCounts(hits: readonly LessonHit[], adj: Adjustments): { stepsNeedingFit: number; adjustmentsAccepted: number; adjustmentsByModel: number } {
+  const accepted = hits.filter((h) => adj[h.key]?.state === 'accepted');
+  return {
+    stepsNeedingFit: new Set(hits.map((h) => h.itemIndex)).size,
+    adjustmentsAccepted: accepted.length,
+    adjustmentsByModel: accepted.filter((h) => adj[h.key].source === 'model').length,
+  };
+}
+
+/** The accepted adjustments, in the lesson's order, as a saved lesson and a recorded run keep them. */
+export function acceptedAdjustments(hits: readonly LessonHit[], adj: Adjustments): SavedAdjustment[] {
+  return hits
+    .filter((h) => adj[h.key]?.state === 'accepted')
+    .map((h) => ({ itemIndex: h.itemIndex, constraintId: h.constraintId, child: h.child, text: adj[h.key].text, source: adj[h.key].source }));
+}
+
+/** "For these children": the accepted adjustments grouped by stage, in the lesson's order. */
+export function forTheseChildren(stages: readonly DraftItem[], adjustments: readonly SavedAdjustment[]): { stage: string; lines: { child: string; text: string }[] }[] {
+  return stages
+    .map((s, i) => ({ stage: stageName(s.heading), lines: adjustments.filter((a) => a.itemIndex === i).map((a) => ({ child: a.child, text: a.text })) }))
+    .filter((g) => g.lines.length > 0);
+}
+
+/** A signed lesson in the form it is kept in. */
+export function savedLesson(id: string, at: string, fields: LessonFields, title: string, stages: DraftItem[], adjustments: SavedAdjustment[], constraints: readonly Constraint[]): SavedLesson {
+  return { id, savedAt: at, fields: { ...fields, minutes: lessonMinutes(fields.minutes) }, title, stages, adjustments, constraintIds: constraints.filter((c) => c.confirmed).map((c) => c.id) };
+}
+
+/** In a replay: the adjustments of the recorded run, set against the hits the rules find in its draft. Each stands as accepted. */
+export function recordedAdjustments(hits: readonly LessonHit[], list: readonly { itemIndex: number; constraintId: string; text: string; source: AdjustmentSource }[]): Adjustments {
+  const out: Adjustments = {};
+  for (const a of list) {
+    const hit = hits.find((h) => h.itemIndex === a.itemIndex && h.constraintId === a.constraintId && !(h.key in out));
+    if (hit) out[hit.key] = { text: a.text, source: a.source, state: 'accepted', seen: true };
+  }
+  return out;
+}
