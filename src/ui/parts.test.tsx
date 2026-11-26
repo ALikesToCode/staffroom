@@ -156,11 +156,32 @@ describe('the lesson as the first job', () => {
     expect(html).toContain('Your device knows why.');
     expect(html).toContain('Plan tomorrow&#x27;s lesson for the whole class. The cloud writes for each need without knowing whose it is. Your device puts it beside the right child.');
     expect(html).toContain('Need B: no phone or internet at home');
-    // The name is on the device's side only.
+    // The name is on the device's side only, and the cloud's side has no sentence about one pupil.
     expect(html.slice(html.indexOf('mini cloud'))).not.toContain('Tanvi');
+    expect(html.slice(html.indexOf('mini cloud'))).not.toContain('[Student');
     expect(LESSON_STEPS).toEqual(['Write', 'What leaves', 'Lesson', 'Beside each child', 'Sign off']);
     expect(renderToStaticMarkup(<Stepper step={3} lesson />)).toContain('Beside each child');
     expect(renderToStaticMarkup(<Stepper step={3} />)).toContain(STEPS[3]);
+  });
+
+  it('without the on-device model, offers the recorded run as plainly as the invented class', async () => {
+    const { Hero } = await import('./Hero');
+    const buttons = (html: string) => [...html.matchAll(/<button class="([^"]+)"[^>]*>([^<]+)<\/button>/g)].map((m) => [m[1], m[2]]);
+    const without = renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} onWatch={() => {}} noModel />);
+    expect(buttons(without)).toEqual([
+      ['primary big', 'Try an invented class'],
+      ['primary big', 'Watch a recorded run with Gemini Nano'],
+      ['secondary big', 'Write a note'],
+    ]);
+    expect(without).toContain('This browser has no on-device model');
+    // With the model, the layout is as it was: the recorded run is a link.
+    expect(buttons(renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} onWatch={() => {}} noModel={false} />))).toEqual([
+      ['primary big', 'Try an invented class'],
+      ['secondary big', 'Write a note'],
+      ['link', 'Watch a recorded run'],
+    ]);
+    // With no recorded run to watch, nothing offers one.
+    expect(renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} noModel />)).not.toContain('Watch a recorded run');
   });
 });
 

@@ -29,19 +29,34 @@ export function Hero({
           Plan tomorrow's lesson for the whole class. The cloud writes for each need without knowing whose it is. Your device puts it beside
           the right child.
         </p>
-        <div className="actions">
-          <button className="primary big" onClick={onTry}>
-            Try an invented class
-          </button>
-          <button className="secondary big" onClick={onWrite}>
-            Write a note
-          </button>
-          {onWatch && (
-            <button className="link" onClick={onWatch}>
-              Watch a recorded run
+        {/* Without the on-device model, the recorded run is the way to see it at work, so it is as easy to find as the invented class. */}
+        {noModel && onWatch ? (
+          <div className="actions">
+            <button className="primary big" onClick={onTry}>
+              Try an invented class
             </button>
-          )}
-        </div>
+            <button className="primary big" onClick={onWatch}>
+              Watch a recorded run with Gemini Nano
+            </button>
+            <button className="secondary big" onClick={onWrite}>
+              Write a note
+            </button>
+          </div>
+        ) : (
+          <div className="actions">
+            <button className="primary big" onClick={onTry}>
+              Try an invented class
+            </button>
+            <button className="secondary big" onClick={onWrite}>
+              Write a note
+            </button>
+            {onWatch && (
+              <button className="link" onClick={onWatch}>
+                Watch a recorded run
+              </button>
+            )}
+          </div>
+        )}
         {noModel && (
           <p className="hint hero-mode">
             This browser has no on-device model, so the guard and the check run by rule here. The cloud draft works the same.
@@ -69,8 +84,9 @@ export function Hero({
         </div>
         <div className="mini cloud">
           <span className="mini-title">The cloud</span>
+          <p className="mini-wire">Lesson: English, describing a place.</p>
           <p className="mini-wire">
-            <span className="bar">[Student 5]</span>'s family <span className="bar">[withheld]</span>. Lesson: English, describing a place.
+            <b>Not sent</b> what the note says about one pupil
           </p>
           <p className="mini-wire">
             <b>The cloud is told</b> Need B: no phone or internet at home
