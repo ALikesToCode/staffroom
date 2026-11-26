@@ -2899,3 +2899,15 @@ mark.hit {
     margin-top: 14px;
   }
 }
+
+.confirm-btn {
+  padding: 5px 12px;
+}
+
+.need-switch {
+  gap: 6px;
+}
+
+.c-controls {
+  gap: 8px 10px;
+}
