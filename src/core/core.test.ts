@@ -28,7 +28,7 @@ const RULES_ONLY_SAMPLE = `Class 6B, week of 16 November. Notes for myself.
 
 [Student 1] has missed four days this month. [withheld]. He is bright in maths but has not handed in homework for two weeks.
 
-[Student 2] reads well aloud but freezes in written tests. She needs extra writing practice, and the remedial writing club meets after the last bell. [withheld]. Her [ID 1]. She walks six kilometres home to [Place 1] and must leave before dark.
+[Student 2] reads well aloud but freezes in written tests. She needs extra writing practice, and the remedial writing club meets after the last bell. [withheld]. Her [ID 1]. She walks six kilometres home to [Place 1] and has to leave school at the last bell to reach home before dark.
 
 [Student 3] and [Student 5] fight most days during group work. [withheld]. [Student 5] finishes early and gets bored.
 
