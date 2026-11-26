@@ -29,7 +29,8 @@
     </p>
     <p>
       <code>?set=rules</code>: the rule layer on its own, 62 fresh pairs of a step and a confirmed constraint. No model is used,
-      so it runs in any browser. A case the rules get wrong stays in the set and is counted.
+      so it runs in any browser. A case the rules get wrong stays in the set and is counted. Rules were later changed for cases
+      outside this set by someone who had seen it, so it is no longer fresh for those rules. Its counts did not move.
     </p>
     <p>
       <code>?set=full</code>: the whole sample note, a vault built from fixed entries, the constraints the rules propose (all
@@ -49,7 +50,9 @@
     <p>
       <code>?set=lesson</code>: five lesson plans in five subjects, written by hand as the cloud returns them, read by rule
       against the constraints of the sample class. Each stage that does not suit a child is labelled; the page counts what the
-      rules caught, missed and flagged wrongly. No model is used, so it runs in any browser.
+      rules caught, missed and flagged wrongly. No model is used, so it runs in any browser. As first measured: 10 of 13 caught,
+      3 missed, 1 flagged wrongly. Four rules were then changed after seeing these cases, so the set is no longer fresh for
+      them: what it shows now is that the fixes hold.
     </p>
     <p>
       One fact at a time is the default, as in the app; add <code>perFact=0</code> to ask about all of a child's facts in one
