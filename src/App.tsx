@@ -1030,7 +1030,7 @@ export function App() {
                 className="secondary"
                 onClick={() => {
                   setUnconfirmAsk(null);
-                  setConstraints((list) => list.map((c) => (c.detailId === e.id ? { ...c, confirmed: false } : c)));
+                  setConstraints((list) => list.map((c) => (c.detailId === e.id ? { ...c, confirmed: false, share: false } : c)));
                 }}
               >
                 Unconfirm the constraint
@@ -1977,8 +1977,8 @@ function How({ policy, device }: { policy: Policy; device: DeviceStatus }) {
       <h2>How it works</h2>
       <p className="lede">
         Two models, one door. The small model inside this browser reads your note and decides what may not leave. The large model in the
-        cloud does the writing, and only ever sees the text you approved. Then the small model checks the reply against what the cloud was
-        never told.
+        cloud does the writing, and only ever sees the text you approved. Then plain rules and the small model check the reply against
+        what the cloud was never told.
       </p>
       <table className="routes">
         <thead>
@@ -2000,7 +2000,7 @@ function How({ policy, device }: { policy: Policy; device: DeviceStatus }) {
           ))}
         </tbody>
       </table>
-      <h3>Three checks that are not a model</h3>
+      <h3>Four checks that are not a model</h3>
       <ul className="plain">
         <li>
           <b>The exit gate.</b> Plain code re-checks the outgoing text for every withheld item and for the phone, email and ID patterns.
@@ -2014,6 +2014,12 @@ function How({ policy, device }: { policy: Policy; device: DeviceStatus }) {
           <b>The return gate.</b> Plain code checks that the reply uses only the stand-ins that were in the text you approved,
           contains no withheld item, and brings in no word from the sensitive list that your approved text did not have. It blocks
           sign-off until you have read a flagged reply.
+        </li>
+        <li>
+          <b>The rule check.</b> Plain code compares each step of the draft with the constraints you confirmed: a step after the
+          last bell for a student who has to leave at it, a cost for a family that cannot pay. Only a rule marks an item as in
+          conflict. It knows a list of words and nothing else, so it misses a step that says the same thing another way. The
+          on-device model is the second layer: its "no" is shown as a doubt, for you to decide on.
         </li>
       </ul>
       <h3>What is in force now</h3>

@@ -1575,3 +1575,16 @@ footer {
 .replay-banner .link {
   color: inherit;
 }
+
+.need {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line, #d8cfba);
+}
+
+.need-line {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

@@ -26,6 +26,7 @@ All data in the sample is invented.
 - The take shown is one where the on-device check caught the conflict. It does not catch it every time: see the limits in the README.
 - In the struck item the cloud model repeated the marker `[withheld]` in its text. The fixed instructions now tell it not to, and the app now flags a reply that repeats it; the take was recorded just before that change.
 - The take was recorded before three later changes to the app. Shots 9 and 10: no item is kept by default now, so each item is kept or struck before signing off. Shot 11: a record and its receipt are now paired by a "record id" where the take shows a "matching value". Shot 5: the card now says the reply format is described, not quoted. A new take is needed for the video to show these.
+- The take was also recorded before the constraints: the teacher now confirms constraints before approving, a conflict is found by rule and is headed "Conflicts with a constraint you confirmed" (shot 9 shows "Conflicts with what you know"), and the on-device model's "no" is shown as a doubt. The sample note has one more clause ("the family cannot pay for anything extra this term").
 
 ## Notes for the voice
 
