@@ -66,9 +66,13 @@ export function checkOutgoing(text: string, entities: Entity[], note?: string): 
       }
     }
   }
-  const allowed = entities.filter((e) => !e.withheld && e.category !== RESERVED).flatMap((e) => e.surfaces.map(flat));
+  // A pattern hit is let through only when the teacher released that very item: the same text and the same
+  // kind. Releasing an identity number does not release the phone number written with the same digits.
+  const allowed = entities
+    .filter((e) => !e.withheld && e.category !== RESERVED)
+    .flatMap((e) => e.surfaces.map((s) => `${e.kind}:${flat(s)}`));
   for (const hit of findByRule(text)) {
-    if (allowed.includes(flat(hit.text))) continue;
+    if (allowed.includes(`${hit.kind}:${flat(hit.text)}`)) continue;
     violations.push({ what: hit.text, why: `looks like a ${hit.rule}` });
   }
   return violations;

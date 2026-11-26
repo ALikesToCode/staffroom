@@ -28,6 +28,14 @@ const RULES: Rule[] = [
   // Indian mobile numbers, with or without +91, and other long digit runs written as phone numbers.
   { name: 'phone number', kind: 'contact', re: new RegExp(`(?<![\\d-])(?:\\+?91${GAP}?|0)?[6-9]\\d{4}${GAP}?\\d{5}(?![\\d-])`, 'g') },
   { name: 'phone number', kind: 'contact', re: /(?<![\d-])\+\d{1,3}[ \t\u00A0\u2009\u202F-]?\d[\d \t\u00A0\u2009\u202F-]{7,12}\d(?![\d-])/g },
+  // A mobile number in any grouping: ten digits, the first 6 to 9, in at most five groups:
+  // "98 76 54 32 10", "987 654 3210", "987-654-3210".
+  {
+    name: 'phone number',
+    kind: 'contact',
+    re: new RegExp(`(?<![\\d-])(?:\\+?91${GAP}?|0)?([6-9](?:${GAP}?\\d){9})(?![\\d-])`, 'g'),
+    accept: (m) => m[1].replace(/\d/g, '').length <= 4,
+  },
   // A number with part of it in brackets: "(98765) 43210", "(+91) 98765 43210", "(022) 2345 6789".
   {
     name: 'phone number',
@@ -42,13 +50,14 @@ const RULES: Rule[] = [
     re: new RegExp(`(?<![\\d-])0\\d{2,4}${GAP}?\\d{3,4}${GAP}?\\d{3,4}(?![\\d-])`, 'g'),
     accept: (m) => digits(m[0]) >= 9 && digits(m[0]) <= 13,
   },
-  // After "roll", "admission" and the like. A single digit counts only after "no.", "number" or "#", so
+  // After "roll", "admission" and the like. After an explicit "no.", "number" or "#" every group of digits
+  // that follows is part of it ("Admission no. AB 12 345"). A single digit counts only after such a label, so
   // "the bread roll is 5 rupees" is left alone. The number may be written with a letter prefix and a space
   // ("AB 12345"); the prefix must be in capitals, so an ordinary word before a number is not taken for one.
   {
     name: 'roll or admission number',
     kind: 'id',
-    re: /\b(?:roll|admission|adm\.?|registration|reg\.?|enrolment|enrollment|student id|udise)\s*(?:(?:no\.?|number|#)\s*(?:(?:is|was)\s+)?[:#-]?\s*(?:([A-Z]{1,5})[ \u00A0\u202F])?(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]*|(?:(?:is|was)\s+)?[:#-]?\s*(?:([A-Z]{1,5})[ \u00A0\u202F])?(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,})/gi,
+    re: /\b(?:roll|admission|adm\.?|registration|reg\.?|enrolment|enrollment|student id|udise)\s*(?:(?:no\.?|number|#)\s*(?:(?:is|was)\s+)?[:#-]?\s*(?:([A-Z]{1,5})[ \u00A0\u202F])?(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]*(?:[ \u00A0\u202F]\d+(?![A-Za-z\d]))*|(?:(?:is|was)\s+)?[:#-]?\s*(?:([A-Z]{1,5})[ \u00A0\u202F])?(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,})/gi,
     accept: (m) => [m[1], m[2]].every((prefix) => prefix === undefined || prefix === prefix.toUpperCase()),
   },
   // A code of capital letters and at least five digits standing on its own: "AB 12345", "KV-204518".
@@ -63,8 +72,11 @@ const RULES: Rule[] = [
 /**
  * Find contact details and identity numbers by pattern. Hits that overlap
  * are all kept: where "Roll no. 98765 43210" is both a roll number and a
- * phone number, both are returned, so the whole of it is withheld. Only a
- * hit that lies wholly inside another is left out, since it adds nothing.
+ * phone number, both are returned, so the whole of it is withheld. A hit
+ * that lies wholly inside another of the same kind is left out, since it
+ * adds nothing. One of another kind is kept: the phone number inside
+ * "Roll no. 9876543210" is still a contact detail, and stays withheld
+ * under a lock on contact details when the identity number is released.
  */
 export function findByRule(text: string): RuleHit[] {
   const hits: RuleHit[] = [];
@@ -77,7 +89,7 @@ export function findByRule(text: string): RuleHit[] {
   hits.sort((a, b) => a.start - b.start || b.end - a.end);
   const kept: RuleHit[] = [];
   for (const h of hits) {
-    if (kept.some((k) => k.start <= h.start && h.end <= k.end)) continue;
+    if (kept.some((k) => k.kind === h.kind && k.start <= h.start && h.end <= k.end)) continue;
     kept.push(h);
   }
   return kept;
@@ -131,6 +143,8 @@ export function listedParts(name: string): string[] {
   return [...new Set([...joined, ...nameWords(name)])].filter((p) => [...p.normalize('NFC')].length >= 2);
 }
 
+const APOSTROPHE = /['\u2019\u02BC]/;
+
 /** Escape a string for use inside a regular expression. */
 export function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -150,6 +164,11 @@ export function patternFor(text: string): string {
       if (!out.endsWith('\\s+')) out += '\\s+';
       continue;
     }
+    // A straight and a curly apostrophe are the same letter of a name: "D'Souza" is "D’Souza".
+    if (APOSTROPHE.test(ch)) {
+      out += "['\u2019\u02BC]";
+      continue;
+    }
     const apart = ch.normalize('NFD');
     out += apart === ch ? escapeRe(ch) : `(?:${escapeRe(ch)}|${escapeRe(apart)})`;
   }
@@ -158,7 +177,7 @@ export function patternFor(text: string): string {
 
 /** The same text whichever way its accents and spacing were typed. Used to compare, never to locate. */
 export function sameForm(text: string): string {
-  return text.normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
+  return text.normalize('NFC').toLowerCase().replace(/['\u2019\u02BC]/g, "'").replace(/\s+/g, ' ').trim();
 }
 
 // A combining mark belongs to the letter before it, so it counts as part of the word on both sides.
@@ -190,7 +209,10 @@ const SENSITIVE: { category: string; terms: string[] }[] = [
   {
     category: 'health',
     terms: [
-      'epilepsy', 'seizure', 'asthma', 'diabetes', 'disability', 'disabled', 'medication', 'hospital', 'pregnant', 'pregnancy',
+      'epilepsy', 'seizure', 'asthma', 'diabetes', 'disability', 'disabled', 'medication', 'medicine', 'hospital', 'pregnant', 'pregnancy',
+      'adhd', 'allergy', 'allergies', 'allergic', 'mental health', 'therapy', 'counsellor', 'counselor',
+      // "fits" alone is an ordinary word ("this fits the class"), so it counts only as something a child has or gets.
+      'gets fits', 'get fits', 'getting fits', 'has fits', 'have fits', 'had fits', 'having fits',
       'cancer', 'hiv', 'tb', 'depression', 'depressed', 'anxiety', 'self-harm', 'self harm', 'suicide', 'suicidal',
       'autism', 'autistic', 'dyslexia', 'dyslexic',
     ],
@@ -198,7 +220,8 @@ const SENSITIVE: { category: string; terms: string[] }[] = [
   {
     category: 'family',
     terms: [
-      'separating', 'separated', 'divorce', 'divorced', 'died', 'death', 'orphan', 'lost his job', 'lost her job',
+      'separating', 'separated', 'divorce', 'divorced', 'died', 'death', 'passed away', 'orphan',
+      'stepfather', 'stepmother', 'step-father', 'step-mother', 'step father', 'step mother', 'lost his job', 'lost her job',
       'unemployed', 'debt', 'alcohol', 'alcoholic', 'drinks', 'drinking', 'drunk', 'abuse', 'abused', 'violence',
       'homeless', 'hungry',
     ],
@@ -313,10 +336,13 @@ export function findPossibleNames(text: string, classList: string[]): PossibleNa
   const listed = new Set(classList.flatMap((name) => nameWords(name).map((w) => w.toLowerCase())));
   const skip = (word: string) => listed.has(word.toLowerCase()) || NOT_A_PROPER_NAME.has(word.toLowerCase());
   const out: PossibleName[] = [];
-  const run = /(?<![\p{L}\p{N}])\p{Lu}[\p{L}\p{M}]+(?:[ \t]+\p{Lu}[\p{L}\p{M}]+)*(?![\p{L}\p{N}])/gu;
+  // A capitalised word. An apostrophe before another capital is inside the word ("D’Souza", "O'Brien");
+  // one before a small letter is not ("Sunita's").
+  const word = "\\p{Lu}(?:[\\p{L}\\p{M}]|['\\u2019\\u02BC](?=\\p{Lu}))+";
+  const run = new RegExp(`(?<![\\p{L}\\p{N}])${word}(?:[ \\t]+${word})*(?![\\p{L}\\p{N}])`, 'gu');
   for (const sentence of sentences(text)) {
     for (const m of sentence.text.matchAll(run)) {
-      const words = [...m[0].matchAll(/[\p{L}\p{M}]+/gu)].map((w) => ({ text: w[0], at: m.index + w.index }));
+      const words = [...m[0].matchAll(new RegExp(word, 'gu'))].map((w) => ({ text: w[0], at: m.index + w.index }));
       // Ordinary words at either end of a run are dropped; a run made only of them is no name.
       let from = 0;
       let to = words.length;

@@ -66,11 +66,11 @@ describe('pattern rules', () => {
   it('withholds the whole of two patterns that overlap', () => {
     const note = 'Roll no. 98765 43210 is hers.';
     expect(findByRule(note).map((h) => [h.rule, h.text])).toEqual([
-      ['roll or admission number', 'Roll no. 98765'],
+      ['roll or admission number', 'Roll no. 98765 43210'],
       ['phone number', '98765 43210'],
     ]);
     const v = buildVault(note, deterministicCandidates(note, []));
-    expect(redact(note, v)).toBe('[ID 1][Contact 1] is hers.');
+    expect(redact(note, v)).toBe('[ID 1] is hers.');
     expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
   });
 
@@ -1711,5 +1711,102 @@ describe('an occurrence the teacher marked by hand', () => {
     const v = mark(note, [], 20, 'Sunita', 'adult');
     expect(redact(note, v)).toBe('[Adult 1] rang. I told [Adult 1] to wait.');
     expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+  });
+});
+
+describe('pattern rules, second round', () => {
+  const vaultOf = (note: string, list: string[] = []) => buildVault(note, deterministicCandidates(note, list));
+
+  it('keeps a phone number that lies inside a roll number, as a contact detail', () => {
+    const note = 'Roll no. 9876543210 is new.';
+    expect(findByRule(note).map((h) => [h.kind, h.text])).toEqual([
+      ['id', 'Roll no. 9876543210'],
+      ['contact', '9876543210'],
+    ]);
+    const v = vaultOf(note);
+    expect(redact(note, v)).toBe('[ID 1] is new.');
+    // The identity number released, the contact detail locked: the digits stay withheld.
+    const released = applyLocks(v.map((e) => (e.kind === 'id' ? { ...e, withheld: false } : e)), ['contact']);
+    expect(redact(note, released)).toBe('Roll no. [Contact 1] is new.');
+    expect(checkOutgoing(redact(note, released), released, note)).toEqual([]);
+    // Both released by hand, the text may go; one alone does not excuse the other.
+    const both = v.map((e) => ({ ...e, withheld: false }));
+    expect(checkOutgoing(note, both, note)).toEqual([]);
+    const onlyId = v.map((e) => (e.kind === 'id' ? { ...e, withheld: false } : e));
+    expect(checkOutgoing(note, onlyId, note).map((x) => x.why)).toContain('looks like a phone number');
+  });
+
+  it('still drops a hit inside another of the same kind', () => {
+    expect(findByRule('Ring +91 98765 43210 today.').map((h) => h.text)).toEqual(['+91 98765 43210']);
+  });
+
+  it('withholds every digit group after an explicit label', () => {
+    for (const [note, out] of [
+      ['Admission no. AB 12 345 was given.', '[ID 1] was given.'],
+      ['Her roll number 12 345 is new.', 'Her [ID 1] is new.'],
+      ['Reg. no. KV 20 45 18.', '[ID 1].'],
+    ]) {
+      const v = vaultOf(note);
+      expect(redact(note, v), note).toBe(out);
+      expect(checkOutgoing(redact(note, v), v, note), note).toEqual([]);
+    }
+    // A number followed by a word is not swallowed.
+    expect(findByRule('Roll no. 23 has 4 absences.').map((h) => h.text)).toEqual(['Roll no. 23']);
+  });
+
+  it('finds a mobile number however its ten digits are grouped', () => {
+    for (const number of ['98 76 54 32 10', '987 654 3210', '987-654-3210', '9876 543 210', '98765-43210', '+91 987 654 3210']) {
+      const note = `Ring ${number} after four.`;
+      expect(findByRule(note).map((h) => [h.kind, h.text]), number).toEqual([['contact', number]]);
+      expect(redact(note, vaultOf(note)), number).toBe('Ring [Contact 1] after four.');
+      expect(checkOutgoing(note, []).map((x) => x.why), number).toEqual(['looks like a phone number']);
+    }
+    expect(findByRule('She counted 6 7 8 9 10 11 12 aloud. Marks were 42 and 38 and 45. Pages 12 to 18.')).toEqual([]);
+  });
+
+  it('takes a name with an apostrophe as one name, straight or curly', () => {
+    const note = "Then Mrs. D\u2019Souza rang. Mr. O'Brien came. Sunita's bag was left.";
+    expect(possibleNameCandidates(note, []).map((c) => c.text)).toEqual(['D\u2019Souza', "O'Brien", 'Sunita']);
+    const guessed = buildVault(note, possibleNameCandidates(note, []));
+    expect(redact(note, guessed)).toBe("Then Mrs. [Adult 1] rang. Mr. [Adult 2] came. [Adult 3]'s bag was left.");
+    // A model's name, and a class-list name typed with the other kind of apostrophe.
+    const byModel = buildVault(note, [{ kind: 'adult', text: 'Mrs. D\u2019Souza', source: 'on-device model' }]);
+    expect(redact(note, byModel)).toContain('Then [Adult 1] rang.');
+    const listNote = 'Maria D\u2019Souza was late. D\u2019Souza reads well.';
+    const listed = vaultOf(listNote, ["Maria D'Souza"]);
+    expect(redact(listNote, listed)).toBe('[Student 1] was late. [Student 1] reads well.');
+    expect(checkOutgoing(redact(listNote, listed), listed, listNote)).toEqual([]);
+    // Selecting part of such a name takes the whole of it.
+    const picked = addByTeacher(note, [], 'Souza', 'adult', { start: note.indexOf('Souza'), end: note.indexOf('Souza') + 5 });
+    expect(picked[0].surfaces[0]).toBe('D\u2019Souza');
+  });
+});
+
+describe('sensitive words, second round', () => {
+  it('withholds sentences with the added words', () => {
+    for (const line of [
+      'He has ADHD',
+      'She takes medicine at noon',
+      'He needs his medicines',
+      'She is on medication',
+      'He gets fits at night',
+      'She has had fits before',
+      'He has a milk allergy',
+      'She is allergic to dust',
+      'His grandfather passed away',
+      'She sees the counsellor',
+      'He meets a counselor weekly',
+      'There are mental health worries',
+      'She goes to therapy',
+      'His stepfather is strict',
+      'Her stepmother brings her',
+    ]) {
+      expect(findSensitive(`${line}.`).map((h) => h.text), line).toEqual([line]);
+    }
+  });
+
+  it('leaves the ordinary word "fits" alone, and the sample note as it was', () => {
+    expect(findSensitive('This plan fits the class. The desk fits by the door.')).toEqual([]);
+    expect(findSensitive(SAMPLE_NOTE)).toHaveLength(3);
   });
 });

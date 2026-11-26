@@ -100,8 +100,16 @@ export function wordSpan(note: string, from: number, to: number): [number, numbe
   let end = Math.max(start, Math.min(to, note.length));
   while (start < end && /\s/.test(note[start])) start++;
   while (end > start && /\s/.test(note[end - 1])) end--;
-  while (start > 0 && isWordChar(note[start - 1])) start--;
-  while (end < note.length && isWordChar(note[end])) end++;
+  const grow = () => {
+    while (start > 0 && isWordChar(note[start - 1])) start--;
+    while (end < note.length && isWordChar(note[end])) end++;
+  };
+  grow();
+  // An apostrophe between a letter and a capital is inside a name: "Souza" in "D’Souza" is widened to all of it.
+  const apostrophe = /['\u2019\u02BC]/;
+  if (start > 1 && apostrophe.test(note[start - 1]) && isWordChar(note[start - 2]) && /\p{Lu}/u.test(note[start] ?? '')) start -= 2;
+  if (end + 1 < note.length && apostrophe.test(note[end]) && /\p{Lu}/u.test(note[end + 1])) end += 2;
+  grow();
   return [start, end];
 }
 
