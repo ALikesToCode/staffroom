@@ -58,6 +58,11 @@ describe('ConstraintsPanel', () => {
     expect(text).toMatch(/Confirm\s+Tell the cloud the need \(not the reason\)/);
     expect(text).toMatch(/Confirmed\s+Tell the cloud the need \(not the reason\)/);
     expect(text).toContain('Adult: parents, not there to contact. Looked after by: grandmother');
+    const bare = renderToStaticMarkup(
+      <ConstraintsPanel constraints={[{ id: 'c', kind: 'contact', text: 'lives with her aunt', guardian: 'aunt', source: 'rule', confirmed: false }]} students={vault} editable selection="" actions={actions} needOf={needOf} />,
+    ).replace(/<[^>]+>/g, ' ');
+    expect(bare).toMatch(/lives with her aunt\s+the class\s+Who looks after the child/);
+    expect(bare).toContain('Looked after by: aunt. No adult is marked not to contact');
     expect(text).toContain('Add a constraint');
     // The need line that would be sent is shown beside the switch, before it is switched on.
     expect(text).toContain('Tell the cloud the need (not the reason)');

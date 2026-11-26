@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Constraint, ConstraintKind, Entity, ItemCheck } from '../core/types';
 import { CloudText } from './parts';
-import { ALL_KINDS as CONSTRAINT_KINDS, CONSTRAINT_LABEL } from '../core/constraints';
+import { ALL_KINDS as CONSTRAINT_KINDS, CONSTRAINT_LABEL, kindLabel } from '../core/constraints';
 
 export interface ConstraintActions {
   onConfirm: (id: string) => void;
@@ -36,7 +36,11 @@ const FOUND_BY: Record<Constraint['source'], string> = {
 export function constraintDetail(c: Constraint): string {
   if (c.kind === 'days-away') return (c.days ?? []).length > 0 ? `Days: ${c.days!.join(', ')}` : 'No day is named, so no rule can check this one.';
   if (c.kind === 'contact') {
-    if (!c.who) return 'No adult is named, so a step that contacts a parent is only queried.';
+    if (!c.who) {
+      return c.guardian
+        ? `Looked after by: ${c.guardian}. No adult is marked not to contact, so a step that contacts a parent is only queried.`
+        : 'No adult is named, so a step that contacts a parent is only queried.';
+    }
     return `Adult: ${c.who}${c.away ? ', not there to contact' : ', not to be contacted'}${c.guardian ? `. Looked after by: ${c.guardian}` : ''}`;
   }
   if (c.kind === 'other') return 'No rule can check this one. Only the on-device model can.';
@@ -169,7 +173,7 @@ function ConstraintRow({ c, who, need, editable, actions, lesson }: { c: Constra
       <div className="c-line">
         <q>{c.text}</q>
         <span className="c-who">{who}</span>
-        <span className="kind-chip">{CONSTRAINT_LABEL[c.kind]}</span>
+        <span className="kind-chip">{kindLabel(c)}</span>
       </div>
       <div className="c-controls">
         {editable ? (

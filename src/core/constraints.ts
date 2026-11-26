@@ -31,6 +31,9 @@ export const CONSTRAINT_LABEL: Record<ConstraintKind, string> = {
   learning: 'Learning need',
 };
 
+/** The kind of a row, as it is shown. A contact row that only says who looks after the child marks no adult not to contact. */
+export const kindLabel = (c: Pick<Constraint, 'kind' | 'who' | 'guardian'>) => (c.kind === 'contact' && !c.who && c.guardian ? 'Who looks after the child' : CONSTRAINT_LABEL[c.kind]);
+
 export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 const DAY = '(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)days?';
@@ -57,16 +60,22 @@ const LIVES_WITH = `(?:lives?|living|stays?|staying)\\s+with\\s+(?:his|her|their
 const GONE = '(?:has\\s+)?(?:died|passed away|is dead|is no more|left home|left the family|has left|is in prison|is in jail|works? away|works? abroad)';
 const APART = 'parents\\s+(?:are|have)\\s+(?:separating|separated|divorcing|divorced|split up|not together|living apart)';
 
-/** For a contact constraint: the adult, whether that adult is simply not there, and who looks after the child instead. */
+/**
+ * For a contact constraint: the adult, whether that adult is simply not
+ * there, and who looks after the child instead. Living with a grandmother
+ * says who looks after the child and nothing more: no adult is marked not
+ * to contact, and none as gone, unless the words say so.
+ */
 function contactOf(text: string): Pick<Constraint, 'who' | 'guardian' | 'away'> {
   const re = (source: string) => new RegExp(source, 'iu');
   let m = re(`\\b(${ROLE_WORDS})\\b[^;,]{0,60}?${NOT_CONTACTED}`).exec(text) ?? re(`${DO_NOT_CONTACT}\\s+(?:(?:his|her|their|the)\\s+)?(${ROLE_WORDS})\\b`).exec(text);
   if (m) return { who: role(m[1]) };
-  m = re(LIVES_WITH).exec(text);
-  if (m) return { who: 'parents', guardian: m[1].toLowerCase(), away: true };
+  const lives = re(LIVES_WITH).exec(text);
+  const guardian = lives ? { guardian: lives[1].toLowerCase() } : {};
   m = re(`\\b(${ROLE_WORDS})\\s+${GONE}`).exec(text);
-  if (m) return { who: role(m[1]), away: true };
-  if (re(APART).test(text)) return { who: 'parents', away: true };
+  if (m) return { who: role(m[1]), away: true, ...guardian };
+  if (re(APART).test(text)) return { who: 'parents', away: true, ...guardian };
+  if (lives) return guardian;
   m = re(`\\b(${ROLE_WORDS})\\b`).exec(text);
   return m ? { who: role(m[1]) } : {};
 }
@@ -164,6 +173,11 @@ export function proposeConstraints(note: string, entities: Entity[]): Constraint
       if (first) {
         // The same kind twice in one sentence is one constraint. The later match only fills in what the first lacks.
         first.guardian ??= extra.guardian;
+        // "Lives with his grandmother" and, in the same sentence, a parent who is gone: the adult comes from the later words.
+        if (first.who === undefined && extra.who !== undefined) {
+          first.who = extra.who;
+          if (extra.away) first.away = true;
+        }
         if (extra.triggers) first.triggers = [...new Set([...(first.triggers ?? []), ...extra.triggers])];
         continue;
       }

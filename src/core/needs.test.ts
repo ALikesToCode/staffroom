@@ -27,6 +27,11 @@ describe('the need line of a constraint', () => {
     expect(needTemplate(made({ kind: 'money', text: 'his father lost his job and cannot pay' }), entities)).toBe(`${aarav}'s family cannot pay for anything extra.`);
     expect(needTemplate(made({ kind: 'no-phone-internet' }), entities)).toBe(`${aarav} has no phone or internet at home.`);
     expect(needTemplate(of('contact'), entities)).toBe(`Write to ${student('Kabir').token}'s guardian, not to his parents.`);
+    // Only who looks after the child: write to that adult, and name no one not to contact.
+    expect(needTemplate(made({ kind: 'contact', text: 'lives with his grandmother', guardian: 'grandmother' }), entities)).toBe(`Write to ${student('Aarav').token}'s guardian.`);
+    expect(needTemplate(made({ kind: 'contact', text: 'his mother died; lives with his aunt', who: 'mother', away: true, guardian: 'aunt' }), entities)).toBe(
+      `Write to ${student('Aarav').token}'s guardian, not to his mother.`,
+    );
     expect(needTemplate(made({ kind: 'contact', who: 'father', text: 'Her father must not be contacted' }), entities)).toBe(`Do not contact ${aarav}'s father.`);
     expect(needTemplate(made({ kind: 'contact', who: 'mother', away: true, text: 'mother died' }), entities)).toBe(`Do not contact ${aarav}'s mother.`);
     for (const c of constraints) expect(needTemplate(c, entities) ?? '', c.kind).not.toContain(c.text);

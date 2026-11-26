@@ -41,9 +41,10 @@ export function needTemplate(c: Constraint, entities: Entity[]): string | undefi
     case 'no-phone-internet':
       return `${s} has no phone or internet at home.`;
     case 'contact': {
-      if (!c.who) return undefined;
+      // Only who looks after the child: messages go to that adult, and no one is named as not to contact.
+      if (!c.who) return c.guardian ? `Write to ${s}'s guardian.` : undefined;
       const their = /\b(?:he|his|him)\b/i.test(c.text) ? 'his' : /\b(?:she|her)\b/i.test(c.text) ? 'her' : 'their';
-      if (c.away && c.who === 'parents' && c.guardian) return `Write to ${s}'s guardian, not to ${their} parents.`;
+      if (c.away && c.guardian) return `Write to ${s}'s guardian, not to ${their} ${c.who}.`;
       return `Do not contact ${s}'s ${c.who}.`;
     }
     default:

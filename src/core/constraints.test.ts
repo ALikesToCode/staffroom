@@ -7,6 +7,7 @@ import { checkOutgoing } from './gate';
 import { ruleConflicts } from './conflicts';
 import {
   addConstraint,
+  kindLabel,
   confirmConstraint,
   constraintCounts,
   daysIn,
@@ -71,9 +72,24 @@ describe('constraints proposed by rule', () => {
   it('reads who is not there to contact, and who looks after the child', () => {
     const { found } = one('Farhan has been quiet. His mother died in March and he lives with his grandmother.', ['Farhan']);
     expect(found).toHaveLength(1);
-    expect(found[0]).toMatchObject({ kind: 'contact', who: 'parents', guardian: 'grandmother', away: true, text: 'lives with his grandmother' });
+    // The mother is gone, as the note says; the father is not said to be.
+    expect(found[0]).toMatchObject({ kind: 'contact', who: 'mother', guardian: 'grandmother', away: true, text: 'lives with his grandmother' });
     expect(one('Her father passed away last year.').found[0]).toMatchObject({ kind: 'contact', who: 'father', away: true });
     expect(one('Do not phone his mother at work.').found[0]).toMatchObject({ kind: 'contact', who: 'mother' });
+  });
+
+  it('reads "lives with her grandmother" as who looks after the child, and nothing more', () => {
+    const bare = one('Asha lives with her grandmother.', ['Asha']).found[0];
+    expect(bare).toMatchObject({ kind: 'contact', guardian: 'grandmother', text: 'lives with her grandmother' });
+    expect(bare.who).toBeUndefined();
+    expect(bare.away).toBeUndefined();
+    expect(kindLabel(bare)).toBe('Who looks after the child');
+    expect(kindLabel({ kind: 'contact', who: 'father' })).toBe('An adult not to contact');
+    // When the note says a parent is gone, apart or not to be contacted, that is read as before.
+    expect(one('Asha lives with her aunt while her parents work abroad.').found[0]).toMatchObject({ who: 'parents', guardian: 'aunt', away: true });
+    expect(one('Her parents are separated and she lives with her grandmother.').found[0]).toMatchObject({ who: 'parents', guardian: 'grandmother', away: true });
+    // One sentence, one contact constraint: the father is not to be contacted, and the uncle looks after her.
+    expect(one('She lives with her uncle; her father must not be contacted.').found.map((c) => [c.who, c.guardian, c.away])).toEqual([['father', 'uncle', undefined]]);
   });
 
   it('gives a health constraint the words its condition is known by, which the rule then finds in a step and not elsewhere', () => {
