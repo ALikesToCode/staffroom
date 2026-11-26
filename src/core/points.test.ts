@@ -1,0 +1,181 @@
+import { describe, expect, it } from 'vitest';
+import type { DraftItem } from './types';
+import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from './samples';
+import { addConstraint, confirmConstraint, lockConstraints, proposeConstraints, unconfirmConstraint } from './constraints';
+import { lessonHits } from './lesson';
+import { outgoingOf } from './needs';
+import { buildVault, deterministicCandidates, possibleNameCandidates } from './vault';
+import { acceptablePoints, acceptedPoints, byChild, childFitSaid, childNotes, fitSummary, inNoteOrder, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './points';
+
+const vault = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
+let held = { entities: vault, constraints: proposeConstraints(SAMPLE_NOTE, vault) };
+for (const c of held.constraints) held = confirmConstraint(SAMPLE_NOTE, held.entities, held.constraints, c.id);
+const constraints = held.constraints;
+const entities = lockConstraints(held.entities, constraints);
+const going = outgoingOf(SAMPLE_NOTE, entities, constraints);
+const student = (name: string) => entities.find((e) => e.kind === 'student' && e.surfaces.includes(name))!;
+
+const plan: DraftItem[] = [
+  { heading: 'Starter (5 minutes)', text: `Show a picture of a market. ${student('Meenal').token} reads the caption aloud.` },
+  { heading: 'Teach (10 minutes)', text: 'Model a four-sentence description of the school gate on the board. Pupils copy the sentence starters.' },
+  { heading: 'Practise (15 minutes)', text: 'Pupils write a description of a place they know, in pairs.' },
+  { heading: 'Check (10 minutes)', text: 'Three pairs read their description aloud' },
+  { heading: 'Homework', text: 'Pupils finish the description at home and add three sentences.' },
+];
+
+describe('what the note says about each child', () => {
+  const notes = childNotes(SAMPLE_NOTE, entities, constraints);
+
+  it('lists the children the note speaks of, in the note\'s order, and not a child it does not mention', () => {
+    expect(notes.map((n) => n.name)).toEqual(['Aarav Sharma', 'Meenal Joshi', 'Kabir Qureshi', 'Ishaan Verma', 'Tanvi Rao']);
+    expect(notes.map((n) => n.child)).toEqual(['Aarav Sharma', 'Meenal', 'Kabir', 'Ishaan', 'Tanvi']);
+    expect(notes.some((n) => n.name === 'Diya Sharma')).toBe(false);
+  });
+
+  it('gives each child their own sentences, with names and private details as written', () => {
+    const of = (name: string) => notes.find((n) => n.child === name)!;
+    expect(of('Meenal').sentences).toEqual([
+      'Meenal reads well aloud but freezes in written tests.',
+      'She needs extra writing practice, and the remedial writing club meets after the last bell.',
+      'She told me she has epilepsy and is afraid of having a seizure in the exam hall.',
+      'Her roll no. 6B/23.',
+      'She walks six kilometres home to Rampur Kalan and has to leave school at the last bell to reach home before dark.',
+    ]);
+    // A sentence that names two children is about both.
+    expect(of('Kabir').sentences[0]).toBe('Kabir and Ishaan fight most days during group work.');
+    expect(of('Ishaan').sentences).toEqual(['Kabir and Ishaan fight most days during group work.', 'Ishaan finishes early and gets bored.']);
+    expect(of('Tanvi').text).toContain('does not have a smartphone or an internet connection');
+    expect(of('Tanvi').text).not.toMatch(/Aarav|Meenal|epilepsy/);
+    expect(of('Aarav Sharma').constraints.map((c) => c.kind)).toEqual(['money', 'time-before']);
+    expect(of('Ishaan').constraints).toEqual([]);
+  });
+
+  it('adds a constraint the teacher typed that is not in the note', () => {
+    const more = addConstraint(SAMPLE_NOTE, entities, constraints, { kind: 'health', about: student('Ishaan').id, text: 'has asthma' });
+    const ishaan = childNotes(SAMPLE_NOTE, more.entities, more.constraints).find((n) => n.child === 'Ishaan')!;
+    expect(ishaan.text.endsWith('\nhas asthma')).toBe(true);
+    expect(ishaan.constraints).toHaveLength(1);
+  });
+
+  it('is empty for a note that names nobody', () => {
+    expect(childNotes('Class 6B did well this week.', [], [])).toEqual([]);
+  });
+});
+
+describe('the stages as the fit is told them', () => {
+  it('gives the name, the minutes and the first sentence, with names put back', () => {
+    expect(stageLines(plan, entities, going.tokens)).toEqual([
+      { name: 'Starter', minutes: 5, summary: 'Show a picture of a market.' },
+      { name: 'Teach', minutes: 10, summary: 'Model a four-sentence description of the school gate on the board.' },
+      { name: 'Practise', minutes: 15, summary: 'Pupils write a description of a place they know, in pairs.' },
+      { name: 'Check', minutes: 10, summary: 'Three pairs read their description aloud' },
+      { name: 'Homework', summary: 'Pupils finish the description at home and add three sentences.' },
+    ]);
+  });
+
+  it('cuts a long first sentence and numbers a name used twice', () => {
+    const lines = stageLines([{ heading: 'Teach (5 minutes)', text: 'x'.repeat(300) }, { heading: 'Teach (5 minutes)', text: 'Again.' }], entities, going.tokens);
+    expect(lines[0].summary).toHaveLength(160);
+    expect(lines.map((l) => l.name)).toEqual(['Teach', 'Teach 2']);
+  });
+});
+
+describe('a point for one child', () => {
+  const meenal = student('Meenal').id;
+  const tanvi = student('Tanvi').id;
+  const point = (over: Partial<Point>): Point => ({ key: 'p1', childId: meenal, child: 'Meenal', itemIndex: 2, text: 'Give her the writing frame first.', source: 'model', state: 'offered', ...over });
+
+  it('is read by rule against that child\'s constraints and the stage it is for', () => {
+    expect(pointHits('Keep her after school to finish.', meenal, 2, plan, constraints, SAMPLE_NOTE).map((h) => h.matched)).toEqual(['after school']);
+    expect(pointHits('Keep her after school to finish.', tanvi, 2, plan, constraints, SAMPLE_NOTE)).toEqual([]);
+    // Homework is at home, the other stages are in class.
+    expect(pointHits('Let her watch the video again.', tanvi, 4, plan, constraints, SAMPLE_NOTE)).toHaveLength(1);
+    expect(pointHits('Let her watch the video again.', tanvi, 1, plan, constraints, SAMPLE_NOTE)).toEqual([]);
+    expect(pointHits('Let her finish in class, not after the last bell.', meenal, 2, plan, constraints, SAMPLE_NOTE)).toEqual([]);
+  });
+
+  it('refuses a typed point with no stage, no words, too many, or against that child', () => {
+    expect(pointProblem('Sit her near the door.', meenal, 9, plan, constraints, SAMPLE_NOTE)).toBe('Choose a stage of the lesson.');
+    expect(pointProblem('  ', meenal, 2, plan, constraints, SAMPLE_NOTE)).toBe('Write what this child needs.');
+    expect(pointProblem('x'.repeat(201), meenal, 2, plan, constraints, SAMPLE_NOTE)).toBe('Keep it to 200 characters.');
+    expect(pointProblem('She stays back to finish.', meenal, 2, plan, constraints, SAMPLE_NOTE)).toBe('This goes against what you confirmed (“stays back”). Change it or drop it.');
+    expect(pointProblem('Sit her near the door.', meenal, 2, plan, constraints, SAMPLE_NOTE)).toBeUndefined();
+  });
+
+  it('goes back to waiting, with the reason, when a constraint switched on later makes a rule fire on it', () => {
+    const after = constraints.find((c) => c.kind === 'time-after')!;
+    const off = unconfirmConstraint(constraints, after.id);
+    const accepted = [point({ text: 'She can finish after school.', state: 'accepted', seen: true }), point({ key: 'p2', state: 'accepted' })];
+    // With the constraint off nothing fires, and the same array comes back.
+    expect(recheckPoints(accepted, plan, off, SAMPLE_NOTE)).toBe(accepted);
+    const back = recheckPoints(accepted, plan, constraints, SAMPLE_NOTE);
+    expect(back[0]).toMatchObject({ state: 'offered', why: 'This goes against what you confirmed (“after school”). Change it or drop it.' });
+    expect(back[1]).toBe(accepted[1]);
+    // A point that waits is left as it is: it is read again when it is accepted.
+    const waiting = [point({ text: 'She can finish after school.' })];
+    expect(recheckPoints(waiting, plan, constraints, SAMPLE_NOTE)).toBe(waiting);
+  });
+
+  it('lets "Accept all" take only points that have been shown', () => {
+    expect(acceptablePoints([point({ seen: true }), point({ key: 'p2' }), point({ key: 'p3', state: 'accepted' })])).toEqual({ keys: ['p1'], allSeen: false });
+    expect(acceptablePoints([point({ seen: true })])).toEqual({ keys: ['p1'], allSeen: true });
+  });
+
+  it('is kept, counted and grouped by child and then by stage, with the adjustments', () => {
+    const points = [point({ state: 'accepted', itemIndex: 4 }), point({ key: 'p2', state: 'accepted', itemIndex: 0, text: 'Let her read first.' }), point({ key: 'p3' })];
+    const kept = acceptedPoints(points);
+    expect(kept).toEqual([
+      { itemIndex: 0, childId: meenal, child: 'Meenal', text: 'Let her read first.', source: 'model' },
+      { itemIndex: 4, childId: meenal, child: 'Meenal', text: 'Give her the writing frame first.', source: 'model' },
+    ]);
+    expect(pointCounts(points, 3)).toEqual({ pointsSuggested: 3, pointsAccepted: 2 });
+    const adjustment = { itemIndex: 2, constraintId: 'c', childId: tanvi, child: 'Tanvi', text: 'Gets a printed copy.', source: 'starter' as const };
+    expect(byChild(plan, [adjustment, ...kept, { ...adjustment, itemIndex: 1, child: 'Meenal', text: 'Sits away from the lamp.' }])).toEqual([
+      { child: 'Tanvi', lines: [{ stage: 'Practise', text: 'Gets a printed copy.' }] },
+      {
+        child: 'Meenal',
+        lines: [
+          { stage: 'Starter', text: 'Let her read first.' },
+          { stage: 'Teach', text: 'Sits away from the lamp.' },
+          { stage: 'Homework', text: 'Give her the writing frame first.' },
+        ],
+      },
+    ]);
+    expect(byChild(plan, [])).toEqual([]);
+    // On the sheet the children stand in the note's order, whichever of the two a line is.
+    const notes = childNotes(SAMPLE_NOTE, entities, constraints);
+    expect(inNoteOrder([adjustment, ...kept, { ...adjustment, childId: undefined, child: 'The class' }], notes).map((a) => a.child)).toEqual(['Meenal', 'Meenal', 'Tanvi', 'The class']);
+  });
+
+  it('shows the recorded entries that answer no rule as accepted points', () => {
+    const notes = childNotes(SAMPLE_NOTE, entities, constraints);
+    expect(recordedPoints([{ itemIndex: 1, childId: meenal, text: 'Seat her near the front.', source: 'model' }, { itemIndex: 0, constraintId: 'c', childId: meenal, text: 'x', source: 'starter' }], notes)).toEqual([
+      { key: 'r:0', childId: meenal, child: 'Meenal', itemIndex: 1, text: 'Seat her near the front.', source: 'model', state: 'accepted', seen: true },
+    ]);
+  });
+});
+
+describe('the line over the lesson', () => {
+  const hits = lessonHits([{ heading: 'Homework', text: 'Pupils find a picture online. Each pupil buys a sheet of chart paper.' }], constraints, entities, going.tokens, SAMPLE_NOTE);
+
+  it('says how many children have notes, how many points were suggested and how many steps go against a constraint, leaving out what is zero', () => {
+    expect(fitSummary(5, 7, hits)).toBe('5 children have private notes. 7 points suggested on this device. 2 steps go against a constraint you confirmed.');
+    expect(fitSummary(1, 1, hits.slice(0, 1))).toBe('1 child has private notes. 1 point suggested on this device. 1 step goes against a constraint you confirmed.');
+    expect(fitSummary(5, 0, [])).toBe('5 children have private notes.');
+    expect(fitSummary(0, 0, [])).toBe('Your note says nothing about any one child, so there is nothing to fit.');
+    for (const said of [fitSummary(5, 0, []), fitSummary(5, 3, hits)]) expect(said).not.toMatch(/suit/);
+  });
+});
+
+describe('what is said after the device read the note about a child', () => {
+  it('says nothing when points came and none was left out, and never that the lesson suits the child', () => {
+    const got = { points: [{}], droppedByRule: 0, unknownStage: 0, read: true };
+    expect(childFitSaid('Meenal', got)).toBeUndefined();
+    expect(childFitSaid('Meenal', { ...got, points: [] })).toBe('The on-device model suggested nothing for Meenal in this lesson.');
+    expect(childFitSaid('Meenal', { ...got, droppedByRule: 1 })).toBe('1 point was left out: a rule found that it went against a constraint you confirmed.');
+    expect(childFitSaid('Meenal', { points: [], droppedByRule: 2, unknownStage: 1, read: true })).toBe(
+      'The on-device model suggested nothing for Meenal in this lesson. 2 points were left out: a rule found that it went against a constraint you confirmed. 1 point was left out: it named no stage of this lesson.',
+    );
+    expect(childFitSaid('Meenal', { ...got, read: false })).toBe('The on-device model gave no answer that could be read for Meenal. Write what Meenal needs yourself.');
+  });
+});

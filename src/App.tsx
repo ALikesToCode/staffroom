@@ -39,10 +39,10 @@ import { Hero, PROMISE } from './ui/Hero';
 import { DevicePill, How, Inspect, Receipts, WHERE_RAN, type Records } from './ui/pages';
 import { draftFailure, resultOrder, summaryLine } from './ui/say';
 import { keptAfterRecheck, modelSaid, recheckItems, rewriteStep, stepIndexOf, stepToRewrite } from './core/recheck';
-import { canFit, FIT_CHILD_FAILED, FIT_FAILED, FIT_LABEL, fitForChild, fitInputFor, fitStep } from './ai/fit';
+import { canFit, FIT_CHILD_FAILED, FIT_FAILED, FIT_LABEL, fitForChild, fitInputFor, fitLessonForChild, fitStep } from './ai/fit';
 import { useInstall, useUpdate } from './ui/pwa';
 import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
-import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, replayBanner, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
+import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, RECORDED_SOURCE, replayBanner, sourceOf, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyAfterRewrite, familyFor } from './core/family';
 import { REPEATS_NOTE, repeatsForChild, repeatsPrivate } from './core/repeats';
 import {
@@ -57,7 +57,6 @@ import {
   lessonHits,
   lessonMinutes,
   lessonReady,
-  lessonSummary,
   loadLessons,
   needsFitting,
   nextLessonFields,
@@ -73,7 +72,8 @@ import {
   type LessonHit,
   type SavedLesson,
 } from './core/lesson';
-import { ForTheseChildren, LessonHits, Lessons } from './ui/Lesson';
+import { ChildSections, ForTheseChildren, Lessons, type PointActions } from './ui/Lesson';
+import { acceptablePoints, acceptedPoints, childFitSaid, childNotes, fitSummary, inNoteOrder, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
@@ -275,6 +275,19 @@ export function App() {
   const [fittingLesson, setFittingLesson] = useState(false);
   /** Said under a hit for which nothing could be offered. */
   const [adjNotes, setAdjNotes] = useState<Record<string, string>>({});
+  /** For a lesson: what each child needs in it, offered by the on-device model or typed by the teacher. Never sent, and not in any record. */
+  const [points, setPoints] = useState<Point[]>([]);
+  /** How many points the on-device model suggested in this run. */
+  const [pointsSuggested, setPointsSuggested] = useState(0);
+  /** Said in a child's section after the device read the note about that child. */
+  const [childSaid, setChildSaid] = useState<Record<string, string>>({});
+  /** The child the device is writing points for now, and how far through the class it is. */
+  const [fitChild, setFitChild] = useState<{ id: string; done: number; total: number } | null>(null);
+  /** The children the on-device model has answered for in this run. */
+  const [fittedChildren, setFittedChildren] = useState<string[]>([]);
+  const pointSeq = useRef(0);
+  /** The run the device began fitting by itself, so that it begins once. */
+  const autoFit = useRef(-1);
   /** The lessons signed off on this device. */
   const [lessons, setLessons] = useState<SavedLesson[]>(loadLessons);
   /** Where the fit ran in this run. NOT_RUN until the on-device model has answered once. */
@@ -794,6 +807,11 @@ export function App() {
     setAdjBusy(null);
     setFittingLesson(false);
     setAdjNotes({});
+    setPoints([]);
+    setPointsSuggested(0);
+    setChildSaid({});
+    setFitChild(null);
+    setFittedChildren([]);
     setFitWhere('NOT_RUN');
     // An item in conflict starts struck. Every other item starts undecided: nothing is kept until the teacher keeps it.
     // A lesson is kept whole: a stage that does not suit one child is right for the class, and is fitted, not struck.
@@ -848,7 +866,7 @@ export function App() {
       constraints: { ...constraintCounts(liveConstraints), shared: sent.needs.length },
       rewritten: signed.filter((k, i) => k === true && i in edits).length,
       fittedOnDevice: signed.filter((k, i) => k === true && i in edits && fitted.includes(i)).length,
-      lesson: task === 'lesson' ? lessonCounts(hits, adj) : undefined,
+      lesson: task === 'lesson' ? { ...lessonCounts(hits, adj), ...pointCounts(points, pointsSuggested) } : undefined,
       kept: signed.filter((k) => k === true).length,
       struck: signed.filter((k) => k === false).length,
     });
@@ -860,7 +878,7 @@ export function App() {
     if (task === 'lesson' && draft) {
       // The signed lesson is kept on this device only: it has the adjustments in it, with names.
       const stages = draft.items.filter((_, i) => signed[i] === true);
-      const saved = savedLesson(receipt.id, receipt.createdAt, lesson, draft.title, stages, acceptedAdjustments(hits, adj), liveConstraints);
+      const saved = savedLesson(receipt.id, receipt.createdAt, lesson, draft.title, stages, inNoteOrder([...acceptedAdjustments(hits, adj), ...acceptedPoints(points)], notesByChild), liveConstraints);
       setLessons((l) => {
         const all = [saved, ...l];
         storeLessons(all);
@@ -1018,6 +1036,13 @@ export function App() {
   }, [task, draft, sent, liveConstraints, offIds, note]);
   const hitsRef = useRef(hits);
   hitsRef.current = hits;
+  /** The children the note says something about, and the stages in one line each. Both are read on this device only. */
+  const notesByChild = useMemo(() => (task === 'lesson' && draft && sent ? childNotes(note, sent.entities, liveConstraints) : []), [task, draft, sent, note, liveConstraints]);
+  const stageList = useMemo(() => (task === 'lesson' && draft && sent ? stageLines(draft.items, sent.entities, sent.tokens) : []), [task, draft, sent]);
+  const notesRef = useRef(notesByChild);
+  notesRef.current = notesByChild;
+  const fittedRef = useRef(fittedChildren);
+  fittedRef.current = fittedChildren;
   const adjRef = useRef(adj);
   adjRef.current = adj;
   const fittingLive = stage === 'result' && !replay;
@@ -1060,11 +1085,55 @@ export function App() {
     }
   };
 
-  /** "Fit the lesson on this device": every hit with nothing offered yet, one after another. Each offer waits for the teacher. */
+  /**
+   * What each child needs in this lesson: one request for each child the note says something about, one
+   * after another, on the fit route. A point is read by rule against that child's constraints before it is
+   * offered. Nothing lands: each point waits for the teacher.
+   */
+  const fitChildren = async () => {
+    const now = liveRef.current;
+    if (!sent || !now.draft || replay || device !== 'available') return;
+    const run = runRef.current;
+    const items = now.draft.items;
+    const todo = notesRef.current.filter((n) => !fittedRef.current.includes(n.id));
+    let done = 0;
+    for (const n of todo) {
+      if (runRef.current !== run || liveRef.current.stage !== 'result' || signingRef.current) break;
+      done++;
+      setFitChild({ id: n.id, done, total: todo.length });
+      setChildSaid(({ [n.id]: _old, ...rest }) => rest);
+      fitBusy.current = true;
+      try {
+        const got = await fitLessonForChild({ childName: n.child, childNote: n.text, stages: stageList }, (p) =>
+          pointHits(p.text, n.id, p.itemIndex, items, liveRef.current.liveConstraints, note).map((h) => h.matched),
+        );
+        if (runRef.current !== run) return;
+        setFitWhere('ON_DEVICE');
+        setFittedChildren((f) => [...f, n.id]);
+        setPointsSuggested((c) => c + got.points.length);
+        setPoints((ps) => [
+          ...ps,
+          ...got.points
+            .filter((p) => !ps.some((x) => x.childId === n.id && x.itemIndex === p.itemIndex && x.text === p.text))
+            .map((p): Point => ({ key: `p:${n.id}:${++pointSeq.current}`, childId: n.id, child: n.child, itemIndex: p.itemIndex, text: p.text, source: 'model', state: 'offered' })),
+        ]);
+        const said = childFitSaid(n.child, got);
+        if (said) setChildSaid((c) => ({ ...c, [n.id]: said }));
+      } catch {
+        if (runRef.current === run) setChildSaid((c) => ({ ...c, [n.id]: `The on-device model did not answer for ${n.child}. Write what ${n.child} needs yourself.` }));
+      } finally {
+        fitBusy.current = false;
+      }
+    }
+    if (runRef.current === run) setFitChild(null);
+  };
+
+  /** "Fit the lesson on this device": each child with a note, then every hit with nothing offered yet, one after another. Each offer waits for the teacher. */
   const fitLesson = async () => {
     if (fitBusy.current || fittingLesson) return;
     const run = runRef.current;
     setFittingLesson(true);
+    await fitChildren();
     for (const hit of [...hitsRef.current]) {
       if (runRef.current !== run || liveRef.current.stage !== 'result') break;
       if (!adjRef.current[hit.key] && hitsRef.current.some((h) => h.key === hit.key)) await suggestFor(hit);
@@ -1100,13 +1169,67 @@ export function App() {
     },
   };
 
+  const pointActions: PointActions = {
+    onAccept: (key) => {
+      const items = draft?.items;
+      if (!fittingLive || !items) return;
+      // Read by rule once more at the moment it is accepted: a constraint may have been switched since it was offered.
+      setPoints((ps) =>
+        ps.map((p) => {
+          if (p.key !== key) return p;
+          const problem = pointProblem(p.text, p.childId, p.itemIndex, items, liveConstraints, note);
+          const { why: _why, ...rest } = p;
+          return problem ? { ...rest, seen: true, why: problem } : { ...rest, state: 'accepted', seen: true };
+        }),
+      );
+    },
+    onSave: (key, itemIndex, text) => {
+      const p = points.find((x) => x.key === key);
+      if (!fittingLive || !draft || !p) return 'This point is no longer here.';
+      const problem = pointProblem(text, p.childId, itemIndex, draft.items, liveConstraints, note);
+      if (problem) return problem;
+      const typed = text.replace(/\s+/g, ' ').trim();
+      setPoints((ps) => ps.map((x) => (x.key === key ? { key, childId: x.childId, child: x.child, itemIndex, text: typed, source: x.text === typed ? x.source : 'teacher', state: 'accepted', seen: true } : x)));
+      return undefined;
+    },
+    onAdd: (childId, itemIndex, text) => {
+      const n = notesByChild.find((x) => x.id === childId);
+      if (!fittingLive || !draft || !n) return 'This lesson can no longer be changed.';
+      const problem = pointProblem(text, childId, itemIndex, draft.items, liveConstraints, note);
+      if (problem) return problem;
+      const typed = text.replace(/\s+/g, ' ').trim();
+      setPoints((ps) => [...ps, { key: `p:${childId}:${++pointSeq.current}`, childId, child: n.child, itemIndex, text: typed, source: 'teacher', state: 'accepted', seen: true }]);
+      return undefined;
+    },
+    onDrop: (key) => fittingLive && setPoints((ps) => ps.filter((p) => p.key !== key)),
+    onReopen: (key) => fittingLive && setPoints((ps) => ps.map((p) => (p.key === key ? { ...p, state: 'offered', seen: true } : p))),
+    onSeen: (key) => setPoints((ps) => (ps.some((p) => p.key === key && !p.seen) ? ps.map((p) => (p.key === key ? { ...p, seen: true } : p)) : ps)),
+    repeats: (childId, text) => Boolean(sent && repeatsForChild(text, childId, sent.entities, liveConstraints).length > 0),
+  };
+
   /** Accept every offer that has been shown. One that has not been on screen yet stays waiting. */
   const acceptAll = () => {
     for (const key of acceptable(hits, adj).keys) {
       const hit = hits.find((h) => h.key === key);
       if (hit) hitActions.onAccept(hit);
     }
+    for (const key of acceptablePoints(points).keys) pointActions.onAccept(key);
   };
+
+  // The device begins by itself, once for a run: it reads the note about each child as soon as the lesson is here.
+  useEffect(() => {
+    if (stage !== 'result' || task !== 'lesson' || replay || device !== 'available' || !draft || !sent || autoFit.current === runRef.current) return;
+    autoFit.current = runRef.current;
+    void fitLesson();
+    // Begun once for a run; what fitLesson reads it reads through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, task, replay, device, draft, sent]);
+
+  // A constraint switched on the result screen: an accepted point that a rule now fires on goes back to waiting.
+  useEffect(() => {
+    if (task !== 'lesson' || !draft || stage !== 'result' || replay) return;
+    setPoints((ps) => recheckPoints(ps, draft.items, liveConstraints, note));
+  }, [task, draft, stage, replay, liveConstraints, note]);
 
   // ---------------------------------------------------------------- saved lessons, and the next one
 
@@ -1198,6 +1321,11 @@ export function App() {
     setAdjBusy(null);
     setFittingLesson(false);
     setAdjNotes({});
+    setPoints([]);
+    setPointsSuggested(0);
+    setChildSaid({});
+    setFitChild(null);
+    setFittedChildren([]);
     setFitWhere('NOT_RUN');
     setDraftFail(null);
     setCheckWhere('NOT_RUN');
@@ -1344,7 +1472,17 @@ export function App() {
         rewrites: Object.entries(edits).map(([i, text]) => ({ itemIndex: Number(i), text })),
         fits,
         ...(task === 'lesson'
-          ? { lesson, adjustments: acceptedAdjustments(hits, adj).map((a) => ({ itemIndex: a.itemIndex, constraintId: a.constraintId, text: a.text, source: a.source })) }
+          ? {
+              lesson,
+              adjustments: inNoteOrder([...acceptedAdjustments(hits, adj), ...acceptedPoints(points)], notesByChild).map((a) => ({
+                itemIndex: a.itemIndex,
+                ...(stageList[a.itemIndex] ? { stage: stageList[a.itemIndex].name } : {}),
+                ...(a.childId ? { childId: a.childId } : {}),
+                ...(a.constraintId ? { constraintId: a.constraintId } : {}),
+                text: a.text,
+                source: RECORDED_SOURCE[a.source],
+              })),
+            }
           : {}),
       },
       new Date(),
@@ -1403,10 +1541,17 @@ export function App() {
   const privateHeld = entities.filter((e) => e.kind === 'private' && e.withheld && e.category !== RESERVED && !inside.has(e.id));
   const isLesson = task === 'lesson';
   /** The adjustments on screen: the teacher's own, or in a replay the ones of the recorded run. */
-  const shownAdj = replay ? recordedAdjustments(hits, replay.adjustments ?? []) : adj;
+  const recordedAdj = (replay?.adjustments ?? []).map((a) => ({ ...a, source: sourceOf(a.source) }));
+  const shownAdj = replay ? recordedAdjustments(hits, recordedAdj) : adj;
+  const shownPoints = replay ? recordedPoints(recordedAdj, notesByChild) : points;
   const waitingHits = unsettled(hits, shownAdj);
+  const waitingPoints = shownPoints.filter((p) => p.state === 'offered');
   const offers = acceptable(hits, shownAdj);
-  const acceptedNow = acceptedAdjustments(hits, shownAdj);
+  const pointOffers = acceptablePoints(shownPoints);
+  const offered = hits.filter((h) => shownAdj[h.key]?.state === 'offered').length + waitingPoints.length;
+  const acceptedNow = inNoteOrder([...acceptedAdjustments(hits, shownAdj), ...acceptedPoints(shownPoints)], notesByChild);
+  /** Something the device can still write: a child it has not answered for, or a hit with nothing offered. */
+  const toFit = (device === 'available' && notesByChild.some((n) => !fittedChildren.includes(n.id))) || hits.some((h) => !adj[h.key]);
   // A lesson is read in its own order. The other tasks show what was caught first.
   const order = isLesson ? (draft?.items ?? []).map((_, i) => i) : resultOrder(checks, draft?.items.length ?? 0);
   const flagged = isLesson ? [] : order.filter((i) => checks[i]?.verdict === 'conflict' || checks[i]?.verdict === 'unsure');
@@ -1666,6 +1811,9 @@ export function App() {
         <p>
           <b>Checked by rule only.</b> No on-device model ran here, so each step was compared with the constraints you confirmed and
           nothing else. Read the items against your other private details yourself.
+          {isLesson
+            ? ' Where the on-device model is present, this device writes what each child needs in the lesson itself, from your note. Here you write it, and the rules read it.'
+            : ''}
         </p>
         {privateHeld.length > 0 && (
           <details>
@@ -1724,16 +1872,7 @@ export function App() {
         {isLesson && itemHits.length > 0 && (
           <div className="verdict v-fit">
             <b>{needsFitting(itemHits)}</b>
-            <LessonHits
-              hits={itemHits}
-              adjustments={shownAdj}
-              live={fittingLive}
-              canModel={device === 'available'}
-              busyKey={adjBusy}
-              notes={adjNotes}
-              recorded={Boolean(replay)}
-              actions={hitActions}
-            />
+            <span>{[...new Set(itemHits.map((h) => h.child))].join(', ')}: see above, under each name.</span>
           </div>
         )}
         {c && conflict && !isLesson && (
@@ -2043,28 +2182,50 @@ export function App() {
                 <article className="card result">
                   <p className="eyebrow">{restore(draft.title, entities, sent?.tokens)}</p>
                   <h3 className="summary">
-                    {isLesson ? lessonSummary(hits, draft.items.length, liveConstraints.filter((x) => x.confirmed).length) : summaryLine(checks)}
+                    {isLesson ? fitSummary(notesByChild.length, replay ? shownPoints.length : pointsSuggested, hits) : summaryLine(checks)}
                   </h3>
-                  {isLesson && fittingLive && hits.length > 0 && (
+                  {isLesson && fittingLive && (notesByChild.length > 0 || hits.length > 0) && (
                     <div className="actions fit-all">
-                      {hits.some((h) => !adj[h.key]) && (
+                      {(toFit || fittingLesson) && (
                         <button className="primary small" disabled={signing || adjBusy !== null || fittingLesson} onClick={() => void fitLesson()}>
-                          {fittingLesson ? 'Fitting on this device…' : 'Fit the lesson on this device'}
+                          {fitChild
+                            ? `Fitting for ${fitChild.done} of ${fitChild.total} ${fitChild.total === 1 ? 'child' : 'children'}…`
+                            : fittingLesson
+                              ? 'Fitting on this device…'
+                              : 'Fit the lesson on this device'}
                         </button>
                       )}
-                      {hits.filter((h) => adj[h.key]?.state === 'offered').length > 1 && (
-                        <button className="secondary small" disabled={signing || !offers.allSeen} onClick={acceptAll}>
-                          Accept all {hits.filter((h) => adj[h.key]?.state === 'offered').length}
+                      {offered > 1 && (
+                        <button className="secondary small" disabled={signing || !offers.allSeen || !pointOffers.allSeen} onClick={acceptAll}>
+                          Accept all {offered}
                         </button>
                       )}
                       <span className="hint">
-                        {!offers.allSeen
+                        {!offers.allSeen || !pointOffers.allSeen
                           ? 'Scroll to each suggestion first: one you have not seen cannot be accepted.'
                           : device === 'available'
                             ? 'Each child is fitted here, from your private note. Nothing is sent, and nothing lands until you accept it.'
-                            : 'No on-device model here, so the device offers starter wording by rule. Nothing lands until you accept it.'}
+                            : 'No on-device model here. Write what a child needs yourself; a step that goes against a constraint gets starter wording by rule. Nothing lands until you accept it.'}
                       </span>
                     </div>
+                  )}
+                  {isLesson && stage === 'result' && (notesByChild.length > 0 || hits.length > 0) && (
+                    <ChildSections
+                      notes={notesByChild}
+                      stages={stageList.map((x) => x.name)}
+                      hits={hits}
+                      adjustments={shownAdj}
+                      points={shownPoints}
+                      live={fittingLive}
+                      canModel={device === 'available'}
+                      busyKey={adjBusy}
+                      busyChild={fitChild?.id ?? null}
+                      hitNotes={adjNotes}
+                      said={childSaid}
+                      recorded={Boolean(replay)}
+                      hitActions={hitActions}
+                      pointActions={pointActions}
+                    />
                   )}
                   {canFitHere && (fittable.length > 1 || fittingAll) && (
                     <div className="actions fit-all">
@@ -2111,7 +2272,7 @@ export function App() {
                       </div>
                       {isLesson && keptCount > 0 && (
                         <p className="hint">
-                          The class plan is copied and printed with no name and no adjustment. The adjustments print on a second page, for you.
+                          The class plan is copied and printed with no name and nothing written for a child. What you accepted for each child prints on a second page, for you.
                         </p>
                       )}
                       {keptCount === 0 ? (
@@ -2710,7 +2871,9 @@ export function App() {
                     {isLesson
                       ? waitingHits.length > 0
                         ? `${waitingHits.length} ${waitingHits.length === 1 ? 'child still waits' : 'children still wait'} for an adjustment, or for you to leave the step as it is.`
-                        : `${acceptedNow.length} ${acceptedNow.length === 1 ? 'adjustment' : 'adjustments'} accepted. They stay on this device.`
+                        : `${acceptedNow.length} accepted for ${new Set(acceptedNow.map((a) => a.child)).size} ${new Set(acceptedNow.map((a) => a.child)).size === 1 ? 'child' : 'children'}. They stay on this device.${
+                            waitingPoints.length > 0 ? ` ${waitingPoints.length} ${waitingPoints.length === 1 ? 'point still waits' : 'points still wait'}: one you do not accept is left out.` : ''
+                          }`
                       : undecided > 0
                       ? `${undecided} of ${kept.length} still to decide. Nothing is kept until you keep it.`
                       : keptCount === 0

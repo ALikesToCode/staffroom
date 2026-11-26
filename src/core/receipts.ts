@@ -101,7 +101,7 @@ interface Run {
   /** Kept items whose rewrite began as a suggestion of the on-device model. A count: no words of any suggestion. */
   fittedOnDevice?: number;
   /** For a lesson: how many stages needed fitting, how many adjustments were accepted, and how many of those the on-device model wrote. */
-  lesson?: { stepsNeedingFit: number; adjustmentsAccepted: number; adjustmentsByModel: number };
+  lesson?: { stepsNeedingFit: number; adjustmentsAccepted: number; adjustmentsByModel: number; pointsSuggested?: number; pointsAccepted?: number };
 }
 
 /** Build the receipt of a run. Counts and the approved text only: nothing from the vault. */

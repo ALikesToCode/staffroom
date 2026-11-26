@@ -29,10 +29,21 @@ export interface RecordedRewrite {
 /** What one child does instead of a step of the lesson, as it stood when the run was saved. Names are written out: it never left the device. */
 export interface RecordedAdjustment {
   itemIndex: number;
-  constraintId: string;
+  /** The name of the stage, for a reader of the file. */
+  stage?: string;
+  /** The student it is for. */
+  childId?: string;
+  /** The constraint the step went against. Absent for a point that answers no rule. */
+  constraintId?: string;
   text: string;
-  source: AdjustmentSource;
+  source: RecordedSource;
 }
+
+/** Who wrote an adjustment, as the file says it. */
+export type RecordedSource = 'on-device model' | 'rule starter' | 'teacher';
+export const RECORDED_SOURCE: Record<AdjustmentSource, RecordedSource> = { model: 'on-device model', starter: 'rule starter', teacher: 'teacher' };
+/** The same the other way, for a replay. */
+export const sourceOf = (s: RecordedSource): AdjustmentSource => (s === 'on-device model' ? 'model' : s === 'rule starter' ? 'starter' : 'teacher');
 
 /** The most characters of a rewritten item that a recorded run holds. */
 const REWRITE_MAX = 4000;
@@ -172,13 +183,19 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
   const adjustments = d.adjustments;
   if (adjustments !== undefined) {
     const ids = new Set(d.constraints.map((c) => c.id));
+    const students = new Set(d.entities.filter((e) => e.kind === 'student').map((e) => e.id));
     const fine =
       d.task === 'lesson' &&
       Array.isArray(adjustments) &&
       adjustments.every(
         (a) =>
-          obj(a) && num(a.itemIndex) && a.itemIndex < count && str(a.constraintId) && ids.has(a.constraintId) &&
-          str(a.text) && a.text.trim().length > 0 && a.text.length <= ADJUSTMENT_MAX && ['model', 'starter', 'teacher'].includes(a.source as string),
+          obj(a) && num(a.itemIndex) && a.itemIndex < count &&
+          optional(a.constraintId, (x) => str(x) && ids.has(x)) &&
+          optional(a.childId, (x) => str(x) && students.has(x)) &&
+          // It answers a constraint or is for a child: an entry that is neither belongs to nothing.
+          (a.constraintId !== undefined || a.childId !== undefined) &&
+          optional(a.stage, (x) => str(x) && x.length <= FIELD_MAX) &&
+          str(a.text) && a.text.trim().length > 0 && a.text.length <= ADJUSTMENT_MAX && Object.values(RECORDED_SOURCE).includes(a.source as RecordedSource),
       );
     if (!fine) return undefined;
   }
@@ -203,7 +220,14 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
       : {}),
     ...(adjustments
       ? {
-          adjustments: (adjustments as RecordedAdjustment[]).map((a) => ({ itemIndex: a.itemIndex, constraintId: a.constraintId, text: a.text, source: a.source })),
+          adjustments: (adjustments as RecordedAdjustment[]).map((a) => ({
+            itemIndex: a.itemIndex,
+            ...(a.stage !== undefined ? { stage: a.stage } : {}),
+            ...(a.childId !== undefined ? { childId: a.childId } : {}),
+            ...(a.constraintId !== undefined ? { constraintId: a.constraintId } : {}),
+            text: a.text,
+            source: a.source,
+          })),
         }
       : {}),
   };

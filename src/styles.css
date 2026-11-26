@@ -3016,7 +3016,8 @@ mark.hit {
   gap: 10px;
 }
 
-.items li.child-hit {
+.items li.child-hit,
+.hits li.child-hit {
   counter-increment: none;
   grid-template-columns: none;
   display: flex;
@@ -3028,7 +3029,8 @@ mark.hit {
   border: 1px solid var(--paper-line);
 }
 
-.items li.child-hit.accepted {
+.items li.child-hit.accepted,
+.hits li.child-hit.accepted {
   border-color: var(--pass);
 }
 
@@ -3148,4 +3150,53 @@ mark.hit {
 
 .items li.child-hit::before {
   content: none;
+}
+
+/* Fit to each child: one section for each child the note says something about. */
+.children {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.child {
+  border: 1px solid var(--paper-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.child > h4 {
+  margin: 0;
+}
+
+.from-note > summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.from-note .quotes {
+  margin: 6px 0 0;
+  font-size: 0.92rem;
+}
+
+.stage-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 0 7px;
+  border: 1px solid var(--paper-line);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-family: var(--sans, inherit);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.child .rewrite select {
+  max-width: 100%;
 }

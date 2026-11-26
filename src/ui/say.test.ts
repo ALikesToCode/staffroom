@@ -19,6 +19,12 @@ describe('the lines of a receipt', () => {
     expect(foundLine({ student: 0, adult: 0, place: 0, contact: 0, id: 0, private: 0 })).toBe('nothing found');
   });
 
+  it('says the points of a lesson first, when the receipt has them', () => {
+    expect(lessonLine({ stepsNeedingFit: 0, adjustmentsAccepted: 0, adjustmentsByModel: 0, pointsSuggested: 7, pointsAccepted: 5 })).toBe(
+      '7 points suggested on this device, 5 accepted. 0 steps needed fitting. 0 adjustments accepted, 0 of them written by the on-device model. These counts are kept in this browser only.',
+    );
+  });
+
   it('says what a lesson needed, in counts', () => {
     expect(lessonLine({ stepsNeedingFit: 1, adjustmentsAccepted: 3, adjustmentsByModel: 2 })).toBe(
       '1 step needed fitting. 3 adjustments accepted, 2 of them written by the on-device model. These counts are kept in this browser only.',

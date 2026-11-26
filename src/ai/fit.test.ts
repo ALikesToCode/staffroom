@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Constraint } from '../core/types';
-import { childFitPrompt, FIT_CHILD_FAILED, FIT_CHILD_SYSTEM, fitForChild, canFit, factWordsIn, FIT_FAILED, FIT_MAX, FIT_SCHEMA, FIT_SYSTEM, fitHits, fitInputFor, fitPrompt, fitStep, readFit, type FitAsk } from './fit';
+import { childFitPrompt, FIT_CHILD_FAILED, FIT_CHILD_SYSTEM, fitForChild, canFit, factWordsIn, FIT_FAILED, FIT_MAX, FIT_SCHEMA, FIT_SYSTEM, fitHits, fitInputFor, fitPrompt, fitStep, readFit, FIT_LESSON_SYSTEM, fitLessonForChild, fitLessonPrompt, fitLessonSchema, readPoints, type FitAsk, type FitPoint, type FitStage } from './fit';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from '../core/samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redactWithTokens } from '../core/vault';
 import { confirmConstraint, proposeConstraints } from '../core/constraints';
@@ -174,5 +174,87 @@ describe('what one child does instead of a step of the lesson', () => {
   it('gives up after two requests, and stops when an answer is not from the device', async () => {
     expect(await fitForChild(child, fake([says('Stays back on Friday.'), says('Stays late on Friday.')]).ask)).toEqual({ ok: false, say: FIT_CHILD_FAILED, asked: 2 });
     await expect(fitForChild(child, fake([{ text: says('x y z'), onDevice: false }]).ask)).rejects.toThrow('The fit did not run on the device. Stopped.');
+  });
+});
+
+describe('what one child needs in a lesson', () => {
+  const stages: FitStage[] = [
+    { name: 'Starter', minutes: 5, summary: 'Show a picture of a market.' },
+    { name: 'Practise', minutes: 15, summary: 'Pupils write a description in pairs.' },
+    { name: 'Homework', summary: 'Pupils finish the description at home.' },
+  ];
+  const child = { childName: 'Meenal', childNote: 'Meenal reads well aloud but freezes in written tests. She has to leave school at the last bell.', stages };
+  const points = (...list: [string, string][]) => JSON.stringify({ points: list.map(([stage, d]) => ({ stage, do: d })) });
+  const rule = (p: FitPoint) => fitHits(p.text, { constraint: leave, studentName: 'Meenal' }).map((h) => h.matched);
+
+  it('asks with a short instruction, the child, the notes and one line for each stage, and an answer of two points at most', () => {
+    expect(FIT_LESSON_SYSTEM.length).toBeLessThan(420);
+    expect(FIT_LESSON_SYSTEM).toContain('If the lesson already suits the child, give no points.');
+    expect(fitLessonPrompt(child)).toBe(
+      'Child: Meenal\nNotes about the child:\nMeenal reads well aloud but freezes in written tests. She has to leave school at the last bell.\nLesson plan:\nStarter (5 minutes): Show a picture of a market.\nPractise (15 minutes): Pupils write a description in pairs.\nHomework: Pupils finish the description at home.\nWhat should the teacher do differently for this child in this lesson?',
+    );
+    expect(fitLessonPrompt(child, ['after school'])).toMatch(/\nIt must not involve: after school$/);
+    const schema = fitLessonSchema(stages) as { properties: { points: { maxItems: number; items: { properties: { stage: { enum: string[] }; do: { maxLength: number } } } } } };
+    expect(schema.properties.points.maxItems).toBe(2);
+    expect(schema.properties.points.items.properties.stage.enum).toEqual(['Starter', 'Practise', 'Homework']);
+    expect(schema.properties.points.items.properties.do.maxLength).toBe(200);
+  });
+
+  it('reads points that name a stage of this lesson, and leaves out the empty, the repeated, the third and the unknown', () => {
+    expect(readPoints(points(['practise', ' Give her   a writing frame. '], ['Homework', 'Let her say it aloud first.']), stages)).toEqual({
+      points: [
+        { itemIndex: 1, stage: 'Practise', text: 'Give her a writing frame.' },
+        { itemIndex: 2, stage: 'Homework', text: 'Let her say it aloud first.' },
+      ],
+      unknown: 0,
+    });
+    expect(readPoints(points(['Plenary', 'Ask her first.'], ['Starter', '  '], ['Starter', 'Seat her at the front.'], ['Starter', 'seat her at the front.']), stages)).toEqual({
+      points: [{ itemIndex: 0, stage: 'Starter', text: 'Seat her at the front.' }],
+      unknown: 1,
+    });
+    expect(readPoints(points(['Starter', 'One.'], ['Practise', 'Two.'], ['Homework', 'Three.']), stages)!.points).toHaveLength(2);
+    expect(readPoints(points(['Starter', `${'A short sentence. '.repeat(20)}`]), stages)!.points[0].text.length).toBeLessThanOrEqual(200);
+    expect(readPoints(JSON.stringify({ points: [] }), stages)).toEqual({ points: [], unknown: 0 });
+    for (const raw of ['', 'not json', '{"points":"none"}', 'null']) expect(readPoints(raw, stages), raw).toBeUndefined();
+  });
+
+  it('offers what the rules pass, with one request', async () => {
+    const model = fake([points(['Practise', 'Give her a writing frame.'])]);
+    expect(await fitLessonForChild(child, rule, model.ask)).toEqual({
+      points: [{ itemIndex: 1, stage: 'Practise', text: 'Give her a writing frame.' }],
+      droppedByRule: 0,
+      unknownStage: 0,
+      read: true,
+      asked: 1,
+    });
+    expect(model.prompts).toHaveLength(1);
+  });
+
+  it('gives no points when the model says the lesson suits the child', async () => {
+    expect(await fitLessonForChild(child, rule, fake([points()]).ask)).toMatchObject({ points: [], read: true, asked: 1, droppedByRule: 0 });
+  });
+
+  it('asks once more when a rule fires, names the matched words, and keeps the good point of the first answer', async () => {
+    const model = fake([points(['Practise', 'Give her a writing frame.'], ['Homework', 'Let her finish it after school with you.']), points(['Homework', 'Let her finish it at lunch.'])]);
+    const got = await fitLessonForChild(child, rule, model.ask);
+    expect(got.points.map((p) => p.text)).toEqual(['Give her a writing frame.', 'Let her finish it at lunch.']);
+    expect(got).toMatchObject({ droppedByRule: 0, asked: 2 });
+    expect(model.prompts[1]).toMatch(/It must not involve: after school$/);
+  });
+
+  it('drops a point a rule still fires on after the second request, and counts it', async () => {
+    const twice = fake([points(['Homework', 'Keep her after school.']), points(['Homework', 'She stays back to finish.'])]);
+    expect(await fitLessonForChild(child, rule, twice.ask)).toMatchObject({ points: [], droppedByRule: 1, read: true, asked: 2 });
+    const silent = fake([points(['Starter', 'Seat her at the front.'], ['Homework', 'Keep her after school.']), 'not json']);
+    expect(await fitLessonForChild(child, rule, silent.ask)).toMatchObject({ points: [{ text: 'Seat her at the front.' }], droppedByRule: 1, asked: 2 });
+  });
+
+  it('says so when no answer can be read, and stops when an answer did not come from the device', async () => {
+    expect(await fitLessonForChild(child, rule, fake(['not json']).ask)).toEqual({ points: [], droppedByRule: 0, unknownStage: 0, read: false, asked: 1 });
+    await expect(fitLessonForChild(child, rule, fake([{ text: points(['Starter', 'Seat her at the front.']), onDevice: false }]).ask)).rejects.toThrow('did not run on the device');
+  });
+
+  it('makes no request without an on-device model', async () => {
+    await expect(fitLessonForChild(child)).rejects.toThrow();
   });
 });

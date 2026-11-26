@@ -140,8 +140,8 @@ export function factWordsIn(text: string, constraint: Pick<Constraint, 'text'>):
 }
 
 /** The one way a fit prompt is put to a model: on the ONLY_ON_DEVICE route. Throws before any request when the browser has no on-device model. */
-export function onDeviceFit(system: string = FIT_SYSTEM): FitAsk {
-  const model = modelFor('fit', { system, schema: FIT_SCHEMA });
+export function onDeviceFit(system: string = FIT_SYSTEM, schema: Record<string, unknown> = FIT_SCHEMA): FitAsk {
+  const model = modelFor('fit', { system, schema });
   return async (prompt) => {
     const result = await model.generateContent(prompt);
     const onDevice = result.response.inferenceSource === 'on_device';
@@ -231,4 +231,162 @@ export async function fitForChild(input: ChildFitInput, ask?: FitAsk): Promise<F
     mustNot = [...new Set([...mustNot, ...hits.map((h) => h.matched.toLowerCase())])];
   }
   return { ok: false, say: FIT_CHILD_FAILED, asked };
+}
+
+// ---------------------------------------------------------------- a lesson: what one child needs in it
+
+/** Kept short, like FIT_SYSTEM. The lesson stays as it is for the class; the answer is for the teacher, about one child. */
+export const FIT_LESSON_SYSTEM =
+  'A teacher has a lesson plan for the whole class and private notes about one child. Say what the teacher should do differently for this child in this lesson. At most two points. Each point names one stage of the lesson and gives one short instruction for the teacher. Use only what the notes say. If the lesson already suits the child, give no points. No diagnosis.';
+export const FIT_LESSON_CHILD = 'Child: ';
+export const FIT_LESSON_NOTES = 'Notes about the child:';
+export const FIT_LESSON_PLAN = 'Lesson plan:';
+export const FIT_LESSON_ASK = 'What should the teacher do differently for this child in this lesson?';
+/** The most points one child is offered from one fit. */
+export const FIT_LESSON_POINTS = 2;
+/** The most characters of one point. */
+export const FIT_POINT_MAX = 200;
+
+/** One stage as the prompt has it. */
+export interface FitStage {
+  name: string;
+  minutes?: number;
+  summary: string;
+}
+
+export interface LessonFitInput {
+  /** The child's name as the note has it. */
+  childName: string;
+  /** What the note says about the child, names and private details as written. It is read on the device only. */
+  childNote: string;
+  stages: FitStage[];
+}
+
+/** The answer's form: at most two points, each for one of this lesson's stages. */
+export function fitLessonSchema(stages: readonly FitStage[]): Record<string, unknown> {
+  return {
+    type: 'object',
+    properties: {
+      points: {
+        type: 'array',
+        maxItems: FIT_LESSON_POINTS,
+        items: {
+          type: 'object',
+          properties: { stage: { type: 'string', enum: stages.map((s) => s.name) }, do: { type: 'string', maxLength: FIT_POINT_MAX } },
+          required: ['stage', 'do'],
+        },
+      },
+    },
+    required: ['points'],
+  };
+}
+
+/** The prompt for one child and the whole lesson. `mustNot`: the words a rule matched in the answer before this one. */
+export function fitLessonPrompt(input: LessonFitInput, mustNot: string[] = []): string {
+  const lines = [
+    `${FIT_LESSON_CHILD}${input.childName}`,
+    FIT_LESSON_NOTES,
+    input.childNote,
+    FIT_LESSON_PLAN,
+    ...input.stages.map((s) => `${s.name}${s.minutes ? ` (${s.minutes} minutes)` : ''}: ${s.summary}`),
+    FIT_LESSON_ASK,
+  ];
+  if (mustNot.length > 0) lines.push(`${FIT_MUST_NOT}${mustNot.join(', ')}`);
+  return lines.join('\n');
+}
+
+/** One point as it was read: the stage it names, counted from 0, and the instruction. */
+export interface FitPoint {
+  itemIndex: number;
+  stage: string;
+  text: string;
+}
+
+/**
+ * Read the model's answer. A point is kept when it names one of the
+ * lesson's stages (any case) and has words; a second point with the same
+ * words for the same stage is dropped, and so is anything past two. A
+ * point longer than FIT_POINT_MAX is cut at the end of a sentence when
+ * there is one. `unknown` counts the points that named no stage of this
+ * lesson. Undefined: the answer could not be read at all.
+ */
+export function readPoints(raw: string, stages: readonly FitStage[]): { points: FitPoint[]; unknown: number } | undefined {
+  let parsed: { points?: unknown } | null;
+  try {
+    parsed = JSON.parse(raw) as { points?: unknown } | null;
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.points)) return undefined;
+  const points: FitPoint[] = [];
+  let unknown = 0;
+  for (const p of parsed.points as { stage?: unknown; do?: unknown }[]) {
+    if (!p || typeof p !== 'object' || typeof p.do !== 'string') continue;
+    let text = p.do.replace(/\s+/g, ' ').trim();
+    if (text.length > FIT_POINT_MAX) {
+      const cut = text.slice(0, FIT_POINT_MAX);
+      const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+      text = (end > 0 ? cut.slice(0, end + 1) : cut).trim();
+    }
+    if (text.length === 0) continue;
+    const named = typeof p.stage === 'string' ? p.stage.replace(/\s+/g, ' ').trim().toLowerCase() : '';
+    const itemIndex = stages.findIndex((s) => s.name.toLowerCase() === named);
+    if (itemIndex < 0) {
+      unknown++;
+      continue;
+    }
+    if (points.some((x) => x.itemIndex === itemIndex && same(x.text, text))) continue;
+    if (points.length < FIT_LESSON_POINTS) points.push({ itemIndex, stage: stages[itemIndex].name, text });
+  }
+  return { points, unknown };
+}
+
+export interface LessonFitResult {
+  /** The points that may be offered. */
+  points: FitPoint[];
+  /** Points left out because a rule still fired on them after the second request. */
+  droppedByRule: number;
+  /** Points left out because they named no stage of this lesson. */
+  unknownStage: number;
+  /** False when no answer could be read. */
+  read: boolean;
+  /** How many requests were made. */
+  asked: number;
+}
+
+/**
+ * Ask the on-device model what one child needs in this lesson, from what
+ * the note says about that child. The same route and the same refusals as
+ * fitStep: no on-device model, no request; an answer from anywhere else
+ * stops the fit and its text is never read.
+ *
+ * `check` gives the words a rule matches in a point, against that child's
+ * confirmed constraints. A point with none may be offered. If a rule fires
+ * on any, the model is asked once more with the matched words named; a
+ * point a rule still fires on is then left out and counted.
+ *
+ * Nothing here changes the lesson. What comes back is an offer to the teacher.
+ */
+export async function fitLessonForChild(input: LessonFitInput, check: (point: FitPoint) => string[] = () => [], ask?: FitAsk): Promise<LessonFitResult> {
+  // Built before anything else: with no on-device model this throws, and no request exists.
+  const put = ask ?? onDeviceFit(FIT_LESSON_SYSTEM, fitLessonSchema(input.stages));
+  const answer = async (mustNot: string[]) => {
+    const got = await put(fitLessonPrompt(input, mustNot));
+    if (!got.onDevice) throw new Error('The fit did not run on the device. Stopped.');
+    return readPoints(got.text, input.stages);
+  };
+  const first = await answer([]);
+  if (!first) return { points: [], droppedByRule: 0, unknownStage: 0, read: false, asked: 1 };
+  const matched = first.points.flatMap(check).map((w) => w.toLowerCase());
+  if (matched.length === 0) return { points: first.points, droppedByRule: 0, unknownStage: first.unknown, read: true, asked: 1 };
+  const good = first.points.filter((p) => check(p).length === 0);
+  const second = await answer([...new Set(matched)]);
+  // No second answer: the points a rule fired on are the ones left out.
+  if (!second) return { points: good, droppedByRule: first.points.length - good.length, unknownStage: first.unknown, read: true, asked: 2 };
+  let droppedByRule = 0;
+  for (const p of second.points) {
+    if (check(p).length > 0) droppedByRule++;
+    else if (good.length < FIT_LESSON_POINTS && !good.some((x) => x.itemIndex === p.itemIndex && same(x.text, p.text))) good.push(p);
+  }
+  return { points: good, droppedByRule, unknownStage: first.unknown + second.unknown, read: true, asked: 2 };
 }

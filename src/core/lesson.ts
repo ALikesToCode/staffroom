@@ -94,6 +94,8 @@ export interface LessonHit {
   stepIndex: number;
   step: string;
   constraintId: string;
+  /** The student the constraint is about. Absent for a constraint about everyone. */
+  childId?: string;
   /** The child's name as the note has it, or "The class" for a constraint about everyone. */
   child: string;
   matched: string;
@@ -123,6 +125,7 @@ export function lessonHits(
         stepIndex,
         step,
         constraintId: constraint.id,
+        ...(student ? { childId: student.id } : {}),
         child,
         matched: hit.matched,
         verdict: hit.verdict,
@@ -138,18 +141,6 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 export function needsFitting(hits: readonly LessonHit[]): string {
   const children = new Set(hits.map((h) => h.child)).size;
   return `Needs fitting for ${count(children, 'child', 'children')}`;
-}
-
-/** The line over the lesson: how many stages need fitting, for how many children, and how many suit everyone. */
-export function lessonSummary(hits: readonly LessonHit[], stages: number, constraintsCompared: number): string {
-  if (constraintsCompared === 0) return 'You confirmed no constraint, so no rule compared the lesson with any child.';
-  const fit = new Set(hits.map((h) => h.itemIndex)).size;
-  const children = new Set(hits.map((h) => h.child)).size;
-  const rest = stages - fit;
-  const out: string[] = [];
-  if (fit > 0) out.push(`${count(fit, 'step needs', 'steps need')} fitting for ${count(children, 'child', 'children')}.`);
-  if (rest > 0) out.push(`${count(rest, 'step suits', 'steps suit')} everyone, by rule.`);
-  return out.join(' ');
 }
 
 // ---------------------------------------------------------------- the fit: an adjustment for one child
@@ -196,7 +187,10 @@ export const STAGE_DONE: Record<StageDone, string> = { done: 'Done', partly: 'Pa
 
 export interface SavedAdjustment {
   itemIndex: number;
-  constraintId: string;
+  /** The constraint the step went against. Absent for a point: something the child needs that answers no rule. */
+  constraintId?: string;
+  /** The student it is for. Absent for the class, and in a lesson saved before this was kept. */
+  childId?: string;
   /** The child's name. A saved lesson is on this device only. */
   child: string;
   text: string;
@@ -349,14 +343,7 @@ export function lessonCounts(hits: readonly LessonHit[], adj: Adjustments): { st
 export function acceptedAdjustments(hits: readonly LessonHit[], adj: Adjustments): SavedAdjustment[] {
   return hits
     .filter((h) => adj[h.key]?.state === 'accepted')
-    .map((h) => ({ itemIndex: h.itemIndex, constraintId: h.constraintId, child: h.child, text: adj[h.key].text, source: adj[h.key].source }));
-}
-
-/** "For these children": the accepted adjustments grouped by stage, in the lesson's order. */
-export function forTheseChildren(stages: readonly DraftItem[], adjustments: readonly SavedAdjustment[]): { stage: string; lines: { child: string; text: string }[] }[] {
-  return stages
-    .map((s, i) => ({ stage: stageName(s.heading), lines: adjustments.filter((a) => a.itemIndex === i).map((a) => ({ child: a.child, text: a.text })) }))
-    .filter((g) => g.lines.length > 0);
+    .map((h) => ({ itemIndex: h.itemIndex, constraintId: h.constraintId, ...(h.childId ? { childId: h.childId } : {}), child: h.child, text: adj[h.key].text, source: adj[h.key].source }));
 }
 
 /** A signed lesson in the form it is kept in. */
@@ -365,9 +352,10 @@ export function savedLesson(id: string, at: string, fields: LessonFields, title:
 }
 
 /** In a replay: the adjustments of the recorded run, set against the hits the rules find in its draft. Each stands as accepted. */
-export function recordedAdjustments(hits: readonly LessonHit[], list: readonly { itemIndex: number; constraintId: string; text: string; source: AdjustmentSource }[]): Adjustments {
+export function recordedAdjustments(hits: readonly LessonHit[], list: readonly { itemIndex: number; constraintId?: string; text: string; source: AdjustmentSource }[]): Adjustments {
   const out: Adjustments = {};
   for (const a of list) {
+    if (a.constraintId === undefined) continue;
     const hit = hits.find((h) => h.itemIndex === a.itemIndex && h.constraintId === a.constraintId && !(h.key in out));
     if (hit) out[hit.key] = { text: a.text, source: a.source, state: 'accepted', seen: true };
   }

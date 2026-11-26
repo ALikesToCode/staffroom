@@ -4,7 +4,7 @@ import { buildVault, deterministicCandidates, possibleNameCandidates } from './v
 import { confirmConstraint, lockConstraints, proposeConstraints } from './constraints';
 import { outgoingOf } from './needs';
 import { DEFAULT_POLICY } from './policy';
-import { asRecordedRun, browserName, captureRun, RECORDED_FILE, replayBanner, replayNext, type RecordedRun } from './recorded';
+import { asRecordedRun, browserName, captureRun, RECORDED_FILE, replayBanner, replayNext, type RecordedRun, RECORDED_SOURCE, sourceOf } from './recorded';
 
 const vault = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
 let held = { entities: vault, constraints: proposeConstraints(SAMPLE_NOTE, vault) };
@@ -71,7 +71,9 @@ describe('a recorded run with rewrites and suggestions', () => {
 
 describe('a recorded lesson', () => {
   const lesson = { klass: 'Class 6', subject: 'English', topic: 'Describing a place', minutes: 40, lastTime: '' };
-  const adjustment = { itemIndex: 0, constraintId: held.constraints[0].id, text: 'Uses chart paper from the class set.', source: 'starter' as const };
+  const adjustment = { itemIndex: 0, constraintId: held.constraints[0].id, text: 'Uses chart paper from the class set.', source: 'rule starter' as const };
+  const student = held.entities.find((e) => e.kind === 'student')!;
+  const point = { itemIndex: 0, stage: 'Teach', childId: student.id, text: 'Seat her near the front for the demonstration.', source: 'on-device model' as const };
   const base = () => ({ ...(JSON.parse(JSON.stringify(run)) as Record<string, unknown>), task: 'lesson', lesson });
 
   it('holds the lines that were sent and the adjustments as they stood, and reads them back', () => {
@@ -83,6 +85,14 @@ describe('a recorded lesson', () => {
     expect(captureRun({ ...run, task: 'lesson', lesson, adjustments: [] }, new Date(run.recordedAt), 'x')).not.toHaveProperty('adjustments');
     // The same child may have more than one adjustment in a stage, for different constraints.
     expect(asRecordedRun({ ...base(), adjustments: [adjustment, { ...adjustment, constraintId: held.constraints[1].id }] })!.adjustments).toHaveLength(2);
+    // A point answers no constraint: it is for a child, in a stage, and says who wrote it.
+    expect(asRecordedRun({ ...base(), adjustments: [point, { ...adjustment, stage: 'Starter', childId: student.id }] })!.adjustments).toEqual([
+      point,
+      { itemIndex: 0, stage: 'Starter', childId: student.id, constraintId: held.constraints[0].id, text: adjustment.text, source: 'rule starter' },
+    ]);
+    expect(sourceOf('on-device model')).toBe('model');
+    expect(sourceOf(RECORDED_SOURCE.starter)).toBe('starter');
+    expect(sourceOf('teacher')).toBe('teacher');
   });
 
   it('is refused when the lines or an adjustment are not in form', () => {
@@ -97,6 +107,11 @@ describe('a recorded lesson', () => {
       { ...adjustment, text: ' ' },
       { ...adjustment, text: 'x'.repeat(301) },
       { ...adjustment, source: 'cloud' },
+      { ...adjustment, source: 'model' },
+      { ...point, childId: 'nobody' },
+      { ...point, childId: held.entities.find((e) => e.kind !== 'student')?.id ?? 'x' },
+      { itemIndex: 0, text: 'For nobody.', source: 'teacher' },
+      { ...point, stage: 7 },
     ]) expect(asRecordedRun({ ...base(), adjustments: [bad] }), JSON.stringify(bad).slice(0, 60)).toBeUndefined();
     expect(asRecordedRun({ ...(JSON.parse(JSON.stringify(run)) as object), adjustments: [adjustment] })).toBeUndefined();
   });

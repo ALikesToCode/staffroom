@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { DraftItem } from '../core/types';
 import {
   ADJUSTMENT_MAX,
-  forTheseChildren,
   STAGE_DONE,
   STARTER_LABEL,
   stageName,
@@ -13,6 +12,7 @@ import {
   type SavedLesson,
   type StageDone,
 } from '../core/lesson';
+import { byChild, POINT_MAX, type ChildNote, type Point } from '../core/points';
 import { ADJUSTMENT_REPEATS } from '../core/repeats';
 import { RECORDED_FIT_LABEL } from '../core/recorded';
 
@@ -36,7 +36,7 @@ export interface HitActions {
 }
 
 /** One child a step does not suit: why, and the adjustment as it stands. */
-function HitRow({ hit, adj, live, canModel, busy, said, recorded, actions }: { hit: LessonHit; adj?: Adjustment; live: boolean; canModel: boolean; busy: boolean; said?: string; recorded: boolean; actions: HitActions }) {
+function HitRow({ hit, adj, live, canModel, busy, said, recorded, stage, actions }: { hit: LessonHit; adj?: Adjustment; live: boolean; canModel: boolean; busy: boolean; said?: string; recorded: boolean; stage?: string; actions: HitActions }) {
   const [typing, setTyping] = useState<string | null>(null);
   const [wrong, setWrong] = useState<string | undefined>();
   const [leaving, setLeaving] = useState(false);
@@ -64,7 +64,10 @@ function HitRow({ hit, adj, live, canModel, busy, said, recorded, actions }: { h
 
   return (
     <li className={`child-hit ${adj?.state ?? 'open'}`}>
-      <p className="hit-why">{hit.line}</p>
+      <p className="hit-why">
+        {stage && <span className="stage-tag">{stage}</span>}
+        {hit.line}
+      </p>
       {adj && adj.state !== 'left' && typing === null && (
         <div className="adjustment" ref={offer}>
           <span className="adj-source">{recorded && adj.source === 'model' ? RECORDED_FIT_LABEL : SOURCE_LABEL[adj.source]}</span>
@@ -151,9 +154,12 @@ export function LessonHits({
   busyKey,
   notes = {},
   recorded = false,
+  stages,
   actions,
 }: {
   hits: LessonHit[];
+  /** The names of the stages, to tag each hit with its own. */
+  stages?: readonly string[];
   adjustments: Adjustments;
   /** False after sign-off and in a replay: nothing can be changed. */
   live: boolean;
@@ -170,24 +176,224 @@ export function LessonHits({
   return (
     <ul className="hits">
       {hits.map((h) => (
-        <HitRow key={h.key} hit={h} adj={adjustments[h.key]} live={live} canModel={canModel} busy={busyKey === h.key} said={notes[h.key]} recorded={recorded} actions={actions} />
+        <HitRow key={h.key} hit={h} adj={adjustments[h.key]} live={live} canModel={canModel} busy={busyKey === h.key} said={notes[h.key]} recorded={recorded} stage={stages?.[h.itemIndex]} actions={actions} />
       ))}
     </ul>
   );
 }
 
-/** "For these children": what was accepted, by stage. Names are written out: this part is for the teacher only. */
+export interface PointActions {
+  onAccept: (key: string) => void;
+  /** Save changed words, or another stage, for a point. Returns what is wrong, or undefined when it was accepted. */
+  onSave: (key: string, itemIndex: number, text: string) => string | undefined;
+  /** Add a point the teacher typed. Returns what is wrong, or undefined when it was added. */
+  onAdd: (childId: string, itemIndex: number, text: string) => string | undefined;
+  onDrop: (key: string) => void;
+  /** Open an accepted point again. */
+  onReopen: (key: string) => void;
+  onSeen: (key: string) => void;
+  repeats: (childId: string, text: string) => boolean;
+}
+
+/** The stage and the words of a point, typed by the teacher. */
+function PointForm({ child, stages, from, onSave, onCancel }: { child: string; stages: readonly string[]; from?: Point; onSave: (itemIndex: number, text: string) => string | undefined; onCancel: () => void }) {
+  const [itemIndex, setItemIndex] = useState(from?.itemIndex ?? 0);
+  const [text, setText] = useState(from?.text ?? '');
+  const [wrong, setWrong] = useState<string | undefined>();
+  return (
+    <div className="rewrite">
+      <label>
+        Stage
+        <select value={itemIndex} onChange={(e) => setItemIndex(Number(e.target.value))}>
+          {stages.map((name, i) => (
+            <option key={i} value={i}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        What {child} needs in this stage
+        <textarea rows={2} value={text} maxLength={POINT_MAX} onChange={(e) => setText(e.target.value)} spellCheck={false} autoComplete="off" />
+      </label>
+      {wrong && <span className="caution">{wrong}</span>}
+      <div className="actions">
+        <button
+          className="secondary small"
+          onClick={() => {
+            const said = onSave(itemIndex, text);
+            setWrong(said);
+            if (!said) onCancel();
+          }}
+        >
+          Save and check by rule
+        </button>
+        <button className="link" onClick={onCancel}>
+          Cancel
+        </button>
+        <span className="hint">It stays on this device.</span>
+      </div>
+    </div>
+  );
+}
+
+/** One thing a child needs in one stage: the words, who wrote them, and the teacher's choice. */
+function PointRow({ point, stages, live, recorded, actions }: { point: Point; stages: readonly string[]; live: boolean; recorded: boolean; actions: PointActions }) {
+  const [changing, setChanging] = useState(false);
+  const offer = useRef<HTMLDivElement>(null);
+  const waiting = point.state === 'offered' && !point.seen;
+
+  // A point counts as shown once it has been on screen.
+  useEffect(() => {
+    const el = offer.current;
+    if (!waiting || !el) return;
+    if (typeof IntersectionObserver === 'undefined') return actions.onSeen(point.key);
+    const seen = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && actions.onSeen(point.key), { threshold: 0.6 });
+    seen.observe(el);
+    return () => seen.disconnect();
+    // The handlers are new on every render; the point and its key are what matter here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, point.key]);
+
+  return (
+    <li className={`child-hit ${point.state}`}>
+      {!changing && (
+        <div className="adjustment" ref={offer}>
+          <span className="adj-source">{recorded && point.source === 'model' ? RECORDED_FIT_LABEL : SOURCE_LABEL[point.source]}</span>
+          <p>
+            <span className="stage-tag">{stages[point.itemIndex]}</span>
+            {point.text}
+          </p>
+          {point.why && <span className="caution">{point.why}</span>}
+          {actions.repeats(point.childId, point.text) && <span className="caution">{ADJUSTMENT_REPEATS}</span>}
+        </div>
+      )}
+      {live && changing && <PointForm child={point.child} stages={stages} from={point} onSave={(i, text) => actions.onSave(point.key, i, text)} onCancel={() => setChanging(false)} />}
+      {live && !changing && (
+        <div className="actions hit-actions">
+          {point.state === 'offered' ? (
+            <>
+              <button className="primary small" onClick={() => actions.onAccept(point.key)}>
+                Accept
+              </button>
+              <button className="link" onClick={() => setChanging(true)}>
+                Change
+              </button>
+            </>
+          ) : (
+            <button className="link" onClick={() => actions.onReopen(point.key)}>
+              Change
+            </button>
+          )}
+          <button className="link" onClick={() => actions.onDrop(point.key)}>
+            Drop
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+/**
+ * "Fit to each child": one section for each child the note says something
+ * about. What the note says, folded; then the steps that go against a
+ * constraint the teacher confirmed, then the points offered for that child.
+ */
+export function ChildSections({
+  notes,
+  stages,
+  hits,
+  adjustments,
+  points,
+  live,
+  canModel,
+  busyKey,
+  busyChild,
+  hitNotes,
+  said,
+  recorded = false,
+  hitActions,
+  pointActions,
+}: {
+  notes: readonly ChildNote[];
+  /** The names of the stages, in the lesson's order. */
+  stages: readonly string[];
+  hits: LessonHit[];
+  adjustments: Adjustments;
+  points: readonly Point[];
+  live: boolean;
+  canModel: boolean;
+  busyKey: string | null;
+  /** The child the device is writing points for now. */
+  busyChild: string | null;
+  hitNotes: Record<string, string>;
+  /** Said in a child's section after a fit: nothing suggested, a point dropped, no answer. */
+  said: Record<string, string>;
+  recorded?: boolean;
+  hitActions: HitActions;
+  pointActions: PointActions;
+}) {
+  const [adding, setAdding] = useState<string | null>(null);
+  const forClass = hits.filter((h) => !h.childId || !notes.some((n) => n.id === h.childId));
+  const rows = (list: LessonHit[]) => (
+    <LessonHits hits={list} adjustments={adjustments} live={live} canModel={canModel} busyKey={busyKey} notes={hitNotes} recorded={recorded} stages={stages} actions={hitActions} />
+  );
+  return (
+    <div className="children">
+      {notes.map((n) => {
+        const mine = points.filter((p) => p.childId === n.id);
+        return (
+          <section key={n.id} className="child" aria-label={n.name}>
+            <h4>{n.name}</h4>
+            <details className="from-note">
+              <summary>From your note</summary>
+              <ul className="quotes">
+                {n.sentences.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </details>
+            {rows(hits.filter((h) => h.childId === n.id))}
+            {mine.length > 0 && (
+              <ul className="hits">
+                {mine.map((p) => (
+                  <PointRow key={p.key} point={p} stages={stages} live={live} recorded={recorded} actions={pointActions} />
+                ))}
+              </ul>
+            )}
+            {busyChild === n.id && <p className="hint">Reading the note about {n.child} on this device…</p>}
+            {said[n.id] && <p className="hint">{said[n.id]}</p>}
+            {live && adding === n.id && <PointForm child={n.child} stages={stages} onSave={(i, text) => pointActions.onAdd(n.id, i, text)} onCancel={() => setAdding(null)} />}
+            {live && adding !== n.id && (
+              <button className="link" onClick={() => setAdding(n.id)}>
+                Write what {n.child} needs
+              </button>
+            )}
+          </section>
+        );
+      })}
+      {forClass.length > 0 && (
+        <section className="child" aria-label="The class">
+          <h4>The class</h4>
+          {rows(forClass)}
+        </section>
+      )}
+    </div>
+  );
+}
+
+/** "For these children": what was accepted, by child and then by stage. Names are written out: this part is for the teacher only. */
 export function ForTheseChildren({ stages, adjustments }: { stages: readonly DraftItem[]; adjustments: readonly SavedAdjustment[] }) {
-  const groups = forTheseChildren(stages, adjustments);
-  if (groups.length === 0) return <p className="hint">No adjustment was accepted for this lesson.</p>;
+  const groups = byChild(stages, adjustments);
+  if (groups.length === 0) return <p className="hint">Nothing was accepted for any child in this lesson.</p>;
   return (
     <dl className="for-children">
       {groups.map((g) => (
-        <div key={g.stage}>
-          <dt>{g.stage}</dt>
+        <div key={g.child}>
+          <dt>{g.child}</dt>
           {g.lines.map((l, i) => (
             <dd key={i}>
-              <b>{l.child}:</b> {l.text}
+              <b>{l.stage}:</b> {l.text}
             </dd>
           ))}
         </div>

@@ -10,7 +10,6 @@ import {
   acceptedAdjustments,
   adjustmentHits,
   adjustmentProblem,
-  forTheseChildren,
   lessonCounts,
   savedLesson,
   unsettled,
@@ -22,7 +21,6 @@ import {
   lessonIssues,
   lessonMinutes,
   lessonReady,
-  lessonSummary,
   loadLessons,
   needsFitting,
   continueTopic,
@@ -33,6 +31,7 @@ import {
   withLesson,
   type SavedLesson,
 } from './lesson';
+import { byChild } from './points';
 
 const vault = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
 let held = { entities: vault, constraints: proposeConstraints(SAMPLE_NOTE, vault) };
@@ -127,10 +126,6 @@ describe('a step for the class against every child', () => {
   });
 
   it('says how many steps need fitting, for how many children, in the order of the lesson', () => {
-    expect(lessonSummary(hits, plan.length, 6)).toBe('2 steps need fitting for 3 children. 3 steps suit everyone, by rule.');
-    expect(lessonSummary(hits.slice(0, 1), 5, 6)).toBe('1 step needs fitting for 1 child. 4 steps suit everyone, by rule.');
-    expect(lessonSummary([], 5, 6)).toBe('5 steps suit everyone, by rule.');
-    expect(lessonSummary([], 5, 0)).toBe('You confirmed no constraint, so no rule compared the lesson with any child.');
     expect(needsFitting(hits.filter((h) => h.itemIndex === 4))).toBe('Needs fitting for 2 children');
     expect(needsFitting(hits.slice(0, 1))).toBe('Needs fitting for 1 child');
   });
@@ -267,9 +262,9 @@ describe('adjustments on the result screen', () => {
 
   it('groups what was accepted by stage for the teacher\'s copy, and keeps a signed lesson', () => {
     const accepted = acceptedAdjustments(hits, { ...adj, [tanvi.key]: { ...adj[tanvi.key], state: 'accepted' } });
-    expect(forTheseChildren(plan, accepted)).toEqual([
-      { stage: 'Practise', lines: [{ child: 'Aarav Sharma', text: 'Uses chart paper from the class set.' }] },
-      { stage: 'Homework', lines: [{ child: 'Tanvi', text: 'Gets two printed pictures to write from.' }] },
+    expect(byChild(plan, accepted)).toEqual([
+      { child: 'Aarav Sharma', lines: [{ stage: 'Practise', text: 'Uses chart paper from the class set.' }] },
+      { child: 'Tanvi', lines: [{ stage: 'Homework', text: 'Gets two printed pictures to write from.' }] },
     ]);
     const kept = savedLesson('l9', '2026-11-26T10:00:00.000Z', SAMPLE_LESSON, 'Describing a place', plan, accepted, constraints);
     expect(kept.constraintIds).toHaveLength(6);
