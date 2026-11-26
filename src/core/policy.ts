@@ -4,9 +4,13 @@ import type { Kind } from './types';
  * What one approval is for: the exact outgoing text, the kinds the policy
  * keeps withheld and the model that will draft. The teacher's tick holds
  * only while all three are what they were when it was given.
+ *
+ * `asWritten` marks the second tick, asked for when nothing at all is
+ * withheld: "I am sending my note as written". It is a different key, so
+ * the ordinary tick can never stand in for it.
  */
-export function approvalKey(text: string, lockedKinds: Kind[], cloudModel: string): string {
-  return JSON.stringify([text, [...lockedKinds].sort(), cloudModel]);
+export function approvalKey(text: string, lockedKinds: Kind[], cloudModel: string, asWritten = false): string {
+  return JSON.stringify([text, [...lockedKinds].sort(), cloudModel, asWritten]);
 }
 
 /** Wait for a value for at most `ms`. After that, or if it fails, use the fallback. Never rejects. */

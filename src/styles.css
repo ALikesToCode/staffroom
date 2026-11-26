@@ -1454,3 +1454,40 @@ footer {
 .vault li .release-ask {
   grid-column: 1 / -1;
 }
+
+/* Said above the note in every mode. */
+.demo-notice {
+  background: var(--amber-soft);
+  color: #5d3d00;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.note-count.full {
+  color: #8a2a12;
+  font-weight: 600;
+}
+
+/* Nothing is withheld: the strongest warning on the approval card. */
+.caution.strong {
+  font-weight: 600;
+  border-left: 4px solid #b3401c;
+}
+
+/* Private details that lie inside a longer one are folded under it. */
+.vault li details.inside {
+  grid-column: 1 / -1;
+  padding-left: 24px;
+  font-size: 0.86rem;
+}
+
+.vault li details.inside summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.vault .parts-held {
+  color: var(--seal);
+}

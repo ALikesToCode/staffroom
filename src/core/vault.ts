@@ -383,6 +383,31 @@ export function segment(note: string, entities: Entity[]): Segment[] {
   return out;
 }
 
+/**
+ * Private details that lie wholly inside a longer private detail: a phrase
+ * the model picked out of a sentence the rules hold back whole. Returns the
+ * id of each such detail with the id of the longest detail around it, so
+ * the vault can show the short one under the long one and not as a row of
+ * its own. Nothing about what is withheld changes.
+ */
+export function insidePrivate(note: string, entities: Entity[]): Map<string, string> {
+  const spans = entities
+    .filter((e) => e.kind === 'private' && e.surfaces.length > 0)
+    .map((e) => {
+      const start = e.at ?? (wholeWordMatcher(e.surfaces)?.exec(note)?.index ?? -1);
+      return { e, start, end: start + e.surfaces[0].length };
+    })
+    .filter((s) => s.start >= 0);
+  const inside = new Map<string, string>();
+  for (const inner of spans) {
+    const around = spans
+      .filter((o) => o !== inner && o.start <= inner.start && inner.end <= o.end && o.end - o.start > inner.end - inner.start)
+      .sort((a, b) => b.end - b.start - (a.end - a.start))[0];
+    if (around) inside.set(inner.e.id, around.e.id);
+  }
+  return inside;
+}
+
 /** The outgoing text, with the exact set of stand-ins the redactor wrote into it. */
 export interface Redaction {
   text: string;

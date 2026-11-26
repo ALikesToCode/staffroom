@@ -44,8 +44,8 @@ interface Run {
   approvedAt: string;
   draftWhere: Where;
   draftModel: string;
-  /** When the device wrote the draft: whether the request went out and got no answer, or could not go out. */
-  draftCloud?: 'no answer' | 'not reached';
+  /** When the device wrote the draft because the cloud draft failed: what the browser reported about the network at approval. */
+  cloudFailedWhile?: 'online' | 'offline';
   checkWhere: Where;
   /** Requests the check made to the on-device model, and how many failed. */
   checkRequests?: { asked: number; failed: number };
@@ -81,7 +81,11 @@ export function makeReceipt(run: Run): Receipt {
       droppedDetails: run.droppedDetails,
     },
     sent: { text: run.sentText, chars: run.sentText.length, sha256: run.sentSha256, approvedAt: run.approvedAt, gate: 'passed' },
-    draft: { where: run.draftWhere, model: run.draftModel, ...(run.draftCloud ? { cloud: run.draftCloud } : {}) },
+    draft: {
+      where: run.draftWhere,
+      model: run.draftModel,
+      ...(run.cloudFailedWhile ? { cloud: 'failed' as const, browser: run.cloudFailedWhile } : {}),
+    },
     check: {
       where: run.checkWhere,
       replyGate: run.replyFlagged ? 'flagged' : 'passed',
@@ -94,6 +98,13 @@ export function makeReceipt(run: Run): Receipt {
     },
     signOff: { kept: run.kept, struck: run.struck, at: now },
   };
+}
+
+/** Where the draft was written, in words. The failure and the network state are two facts and are said apart. */
+export function draftLine(draft: Receipt['draft']): string {
+  if (draft.where === 'IN_CLOUD') return `${draft.model}, in the cloud`;
+  const browser = draft.browser ? ` Browser reported: ${draft.browser}.` : '';
+  return `${draft.model}, on the device. The cloud draft failed, so the on-device model wrote it.${browser}`;
 }
 
 /**

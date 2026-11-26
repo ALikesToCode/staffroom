@@ -221,6 +221,29 @@ export interface GuardReport {
   stopped?: string;
 }
 
+/** What a guard run amounts to: whether a model read the note, and where it fell short. */
+export interface GuardOutcome {
+  /** ON_DEVICE when the model read at least one piece. RULES_ONLY when it read none. */
+  where: 'ON_DEVICE' | 'RULES_ONLY';
+  unread: number[];
+  dropped: number;
+  partial: number;
+}
+
+/**
+ * Sum up a guard run. When the model read nothing, the run is a rules-only
+ * run, and it still says how many pieces the model was asked to read and
+ * could not: that is not the same as a run where no model was there.
+ */
+export function guardOutcome(report: GuardReport): GuardOutcome {
+  return {
+    where: report.unread.length >= report.total ? 'RULES_ONLY' : 'ON_DEVICE',
+    unread: report.unread,
+    dropped: report.dropped,
+    partial: report.partial,
+  };
+}
+
 /** The model's answer for one piece, and whether it came from the device. */
 export interface ChunkAnswer {
   text: string;

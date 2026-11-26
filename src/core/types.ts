@@ -95,7 +95,17 @@ export interface Receipt {
     approvedAt: string;
     gate: 'passed';
   };
-  draft: { where: Where; model: string; cloud?: 'no answer' | 'not reached' };
+  draft: {
+    where: Where;
+    model: string;
+    /**
+     * Set when the device wrote the draft. 'failed': the cloud draft failed, for a reason the app cannot know.
+     * Older receipts say 'no answer' or 'not reached', which claimed more than the app could tell.
+     */
+    cloud?: 'failed' | 'no answer' | 'not reached';
+    /** What the browser reported about the network at approval. A separate fact, not the cause. */
+    browser?: 'online' | 'offline';
+  };
   check: {
     where: Where;
     replyGate: 'passed' | 'flagged';

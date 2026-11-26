@@ -8,20 +8,21 @@ import {
   buildVault,
   CAPITALISED,
   deterministicCandidates,
+  insidePrivate,
   possibleNameCandidates,
-  redact,
   redactWithTokens,
   RESERVED,
   restore,
   segment,
 } from './core/vault';
 import { checkOutgoing, checkReply, type Violation } from './core/gate';
-import { digestPrefix, loadReceipts, makeReceipt, sha256Hex, storeReceipts, type ReceiptRecord } from './core/receipts';
+import { digestPrefix, draftLine, loadReceipts, makeReceipt, sha256Hex, storeReceipts, type ReceiptRecord } from './core/receipts';
 import { approvalKey } from './core/policy';
 import { familyFor } from './core/family';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
-import { guardOnDevice, paragraphs } from './ai/guard';
+import { guardOnDevice, guardOutcome, paragraphs } from './ai/guard';
+import { NOTE_MAX } from './core/text';
 import {
   DRAFT_FORMAT,
   DRAFT_NOTES_HEADING,
@@ -122,6 +123,8 @@ export function App() {
   const [selectionNote, setSelectionNote] = useState('');
   /** The exact outgoing text the teacher ticked as read. The tick holds only while this is still the outgoing text. */
   const [readKey, setReadKey] = useState<string | null>(null);
+  /** The second tick, asked for when nothing is withheld: "I am sending my note as written". Bound to the same text and policy. */
+  const [asWrittenKey, setAsWrittenKey] = useState<string | null>(null);
   /** What was approved: the text, when, and the vault as it stood at that moment. */
   const [sent, setSent] = useState<{
     text: string;
@@ -217,13 +220,21 @@ export function App() {
     () => sent?.entities ?? applyLocks(rawEntities, policy.lockedKinds),
     [sent, rawEntities, policy.lockedKinds],
   );
-  const outgoing = useMemo(() => redact(note, entities), [note, entities]);
+  const redaction = useMemo(() => redactWithTokens(note, entities), [note, entities]);
+  const outgoing = redaction.text;
+  /** True when not one stand-in was written: the outgoing text is the note as the teacher wrote it. */
+  const nothingWithheld = redaction.tokens.length === 0;
   const violations = useMemo(() => checkOutgoing(outgoing, entities, note), [outgoing, entities, note]);
   const approval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel);
+  const asWrittenApproval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel, true);
   const readIt = readKey !== null && readKey === approval;
+  const asWritten = asWrittenKey !== null && asWrittenKey === asWrittenApproval;
 
-  // The tick is for one exact text under one policy. If either changes, it is cleared.
-  useEffect(() => setReadKey(null), [approval]);
+  // The ticks are for one exact text under one policy. If either changes, they are cleared.
+  useEffect(() => {
+    setReadKey(null);
+    setAsWrittenKey(null);
+  }, [approval]);
 
   // ---------------------------------------------------------------- the on-device model
 
@@ -258,6 +269,7 @@ export function App() {
     setStage('guarding');
     setSelection('');
     setReadKey(null);
+    setAsWrittenKey(null);
     setSent(null);
     setResult(null);
     const candidates = deterministicCandidates(note, classList);
@@ -270,21 +282,25 @@ export function App() {
           setProgress(`The on-device model is reading part ${Math.min(done + 1, total)} of ${total}`),
         );
         candidates.push(...report.candidates);
-        if (report.unread.length >= report.total) {
-          // The model read nothing, so this run is a rules-only run and is called one everywhere.
+        const outcome = guardOutcome(report);
+        where = outcome.where;
+        // The parts the model could not read are kept even when it read none: the run is then a rules-only
+        // run, and the page and the receipt still say the model was asked and failed.
+        gaps = { unread: outcome.unread, dropped: outcome.dropped, partial: outcome.partial };
+        if (where === 'RULES_ONLY') {
           setError(
             `${report.stopped ?? 'The on-device model could not read any part of the note.'} Only the rules were applied. Read the outgoing text with care.`,
           );
-        } else {
-          where = 'ON_DEVICE';
-          gaps = { unread: report.unread, dropped: report.dropped, partial: report.partial };
-          if (report.stopped) setError(`The on-device guard stopped early: ${report.stopped} Check the parts it did not read.`);
+        } else if (report.stopped) {
+          setError(`The on-device guard stopped early: ${report.stopped} Check the parts it did not read.`);
         }
       } catch (e) {
+        // The run broke before it could report. Every part counts as unread.
+        gaps = { unread: paragraphs(note).map((_, i) => i), dropped: 0, partial: 0 };
         setError(`The on-device guard stopped: ${message(e)} Only the rules were applied. Read the outgoing text with care.`);
       }
     }
-    // With no model, a capitalised word in mid-sentence is held back as a possible name. A guess: it can be released.
+    // With no model, a capitalised word that is not an ordinary sentence opener is held back as a possible name. A guess: it can be released.
     if (where === 'RULES_ONLY') candidates.push(...possibleNameCandidates(note, classList));
     setEntities(buildVault(note, candidates));
     setGuardWhere(where);
@@ -383,9 +399,15 @@ export function App() {
     const { text, tokens } = redactWithTokens(note, current);
     const stopped = checkOutgoing(text, current, note);
     // The tick was for one text, one set of locks and one drafting model. Any of them changed: no send.
-    const same = readKey !== null && readKey === approvalKey(text, sentPolicy.lockedKinds, sentPolicy.cloudModel);
+    const read = readKey !== null && readKey === approvalKey(text, sentPolicy.lockedKinds, sentPolicy.cloudModel);
+    // With nothing withheld the note goes out as written, and that needs its own tick for this same text.
+    const written =
+      tokens.length > 0 ||
+      (asWrittenKey !== null && asWrittenKey === approvalKey(text, sentPolicy.lockedKinds, sentPolicy.cloudModel, true));
+    const same = read && written;
     if (stage !== 'review' || !same || stopped.length > 0) {
       setReadKey(null);
+      setAsWrittenKey(null);
       setError(
         stopped.length > 0
           ? 'The exit gate stopped the text. Nothing was sent.'
@@ -495,7 +517,7 @@ export function App() {
       approvedAt: sent.at,
       draftWhere: result.where,
       draftModel: result.model,
-      draftCloud: result.where === 'ON_DEVICE' ? (sent.online ? 'no answer' : 'not reached') : undefined,
+      cloudFailedWhile: result.where === 'ON_DEVICE' ? (sent.online ? 'online' : 'offline') : undefined,
       checkWhere,
       checkRequests: checkRequests ?? undefined,
       replyFlagged: replyIssues.length > 0,
@@ -570,6 +592,7 @@ export function App() {
     setSelectionNote('');
     setReleaseAsk(null);
     setReadKey(null);
+    setAsWrittenKey(null);
     setSent(null);
     setResult(null);
     setChecks([]);
@@ -621,6 +644,10 @@ export function App() {
   const withheld = entities.filter((e) => e.withheld);
   /** A reply flagged at the return gate cannot be signed off or copied until the teacher has read it. */
   const replyBlocked = replyIssues.length > 0 && !replyRead;
+  /** Private details that lie inside a longer one: shown under it in the vault. */
+  const inside = useMemo(() => insidePrivate(note, entities), [note, entities]);
+  /** The parts the on-device model reads the note in. */
+  const noteParts = useMemo(() => paragraphs(note), [note]);
   /** Items the teacher has not yet chosen to keep or strike. */
   const undecided = kept.filter((k) => k === null).length;
   const editing = stage === 'write';
@@ -641,92 +668,120 @@ export function App() {
         <pre className="wire small">{DRAFT_NOTES_HEADING}</pre>
         <p className="hint">
           The shape of the answer is fixed too: a title and a list of items, each with a heading and a text. One more
-          call names the receipt. It runs on this device when it can; when it cannot, the cloud model is sent the first{' '}
-          {LABEL_CHARS.toLocaleString()} characters of the text below with this instruction:
+          call names the receipt. It runs on this device when it can; when it cannot, the cloud model is sent the line
+          “Note:” and under it the first {LABEL_CHARS.toLocaleString()} characters of the text below, word for word, with this
+          instruction:
         </p>
         <pre className="wire small">{LABEL_SYSTEM}</pre>
       </details>
     </>
   );
 
+  /** One row of the vault. `nested` rows are private details that lie inside the longer one above them. */
+  const vaultRow = (e: Entity, nested: boolean) => {
+    const reserved = e.category === RESERVED;
+    const locked = reserved || policy.lockedKinds.includes(e.kind);
+    const guess = e.source === 'rule' && e.category === CAPITALISED;
+    const about = entities.find((s) => s.id === e.about);
+    const parts = nested ? [] : entities.filter((x) => inside.get(x.id) === e.id);
+    const partsHeld = parts.filter((x) => x.withheld).length;
+    return (
+      <li key={e.id} className={e.withheld ? '' : 'off'}>
+        <span className={`dot k-${e.kind}`} />
+        <div className="what">
+          <strong>{e.surfaces[0]}</strong>
+          <small>
+            {reserved ? 'Looks like a stand-in' : KIND_LABEL[e.kind]}
+            {e.category && !guess && !reserved ? `, ${e.category}` : ''}
+            {about && !reserved ? `, about ${about.surfaces[0]}` : ''} · found by {guess ? 'rule: capitalised word' : e.source}
+            {nested ? ' · inside the sentence above' : ''}
+          </small>
+          {!e.withheld && partsHeld > 0 && (
+            <small className="parts-held">
+              {partsHeld} {partsHeld === 1 ? 'part' : 'parts'} inside {partsHeld === 1 ? 'stays' : 'stay'} withheld.
+            </small>
+          )}
+        </div>
+        <code className="token">{e.withheld ? e.token : 'released'}</code>
+        <label
+          className="switch"
+          title={
+            reserved
+              ? 'Text that looks like one of the stand-ins is always withheld, so it cannot be mistaken for one'
+              : locked
+                ? 'A setting the school publishes: the app keeps this kind withheld'
+                : ''
+          }
+        >
+          <input
+            type="checkbox"
+            checked={e.withheld}
+            disabled={locked || stage !== 'review'}
+            onChange={() => toggle(e)}
+            aria-label={`Withhold ${e.surfaces[0]}`}
+          />
+          <span />
+          {locked && <em>locked</em>}
+        </label>
+        {releaseAsk === e.id && e.withheld && !locked && stage === 'review' && (
+          <div className="confirm release-ask" role="group" aria-label={`Release ${e.surfaces[0]}`}>
+            <p>
+              Your school's policy is not in force: the app is using its built-in defaults, so it cannot tell whether your school
+              allows this to be sent. Release “{e.surfaces[0].length > 60 ? `${e.surfaces[0].slice(0, 60)}…` : e.surfaces[0]}” anyway?
+            </p>
+            <div className="actions">
+              <button
+                className="secondary"
+                onClick={() => {
+                  setReleaseAsk(null);
+                  flip(e.id);
+                }}
+              >
+                Release it
+              </button>
+              <button className="link" onClick={() => setReleaseAsk(null)}>
+                Keep it withheld
+              </button>
+            </div>
+          </div>
+        )}
+        {parts.length > 0 && (
+          <details className="inside">
+            <summary>
+              {parts.length} {parts.length === 1 ? 'part' : 'parts'} inside the sentence above
+            </summary>
+            <ul className="vault">{parts.map((x) => vaultRow(x, true))}</ul>
+          </details>
+        )}
+      </li>
+    );
+  };
+
   const vaultBody = (
     <>
       {guardWhere === 'RULES_ONLY' && (
         <p className="caution">
-          No on-device model ran, so the raw note was not shown to any model. Only your class list, the pattern rules and a
-          short list of sensitive words were applied. Names that are not on the list were not looked for, and nor were
-          private details beyond those words: select them in your note.
+          {guardGaps.unread.length > 0
+            ? 'The on-device model was asked and could not read any part of your note, so no model has read it.'
+            : 'No on-device model ran, so the raw note was not shown to any model.'}{' '}
+          Only your class list, the pattern rules, a short list of sensitive words and a rule for capitalised words were applied.
+          That rule holds back, as a possible name, a word that begins with a capital letter and is not an ordinary sentence
+          opener, a day or a month. It cannot tell a name from any other capitalised word, and it misses a name written without a
+          capital. Private details beyond the listed words were not looked for: select them in your note.
         </p>
       )}
+      {/* The parts the model could not read are quoted here, on the device side: the words are from the raw note. */}
+      {guardWhere === 'ON_DEVICE' &&
+        guardGaps.unread.map((i) => (
+          <p className="caution" key={i}>
+            The on-device model could not read part {i + 1} of your note
+            {noteParts[i] ? ` (it begins “${noteParts[i].slice(0, 40).trim()}…”)` : ''}. Check it yourself before you approve.
+          </p>
+        ))}
       {entities.length === 0 ? (
         <p className="empty">Nothing was found to withhold.</p>
       ) : (
-        <ul className="vault">
-          {entities.map((e) => {
-            const reserved = e.category === RESERVED;
-            const locked = reserved || policy.lockedKinds.includes(e.kind);
-            const guess = e.source === 'rule' && e.category === CAPITALISED;
-            const about = entities.find((s) => s.id === e.about);
-            return (
-              <li key={e.id} className={e.withheld ? '' : 'off'}>
-                <span className={`dot k-${e.kind}`} />
-                <div className="what">
-                  <strong>{e.surfaces[0]}</strong>
-                  <small>
-                    {reserved ? 'Looks like a stand-in' : KIND_LABEL[e.kind]}
-                    {e.category && !guess && !reserved ? `, ${e.category}` : ''}
-                    {about && !reserved ? `, about ${about.surfaces[0]}` : ''} · found by{' '}
-                    {guess ? 'rule: capitalised word' : e.source}
-                  </small>
-                </div>
-                <code className="token">{e.withheld ? e.token : 'released'}</code>
-                <label
-                  className="switch"
-                  title={
-                    reserved
-                      ? 'Text that looks like one of the stand-ins is always withheld, so it cannot be mistaken for one'
-                      : locked
-                        ? 'A setting the school publishes: the app keeps this kind withheld'
-                        : ''
-                  }
-                >
-                  <input
-                    type="checkbox"
-                    checked={e.withheld}
-                    disabled={locked || stage !== 'review'}
-                    onChange={() => toggle(e)}
-                    aria-label={`Withhold ${e.surfaces[0]}`}
-                  />
-                  <span />
-                  {locked && <em>locked</em>}
-                </label>
-                {releaseAsk === e.id && e.withheld && !locked && stage === 'review' && (
-                  <div className="confirm release-ask" role="group" aria-label={`Release ${e.surfaces[0]}`}>
-                    <p>
-                      Your school's policy is not in force: the app is using its built-in defaults, so it cannot tell whether your
-                      school allows this to be sent. Release “{e.surfaces[0].length > 60 ? `${e.surfaces[0].slice(0, 60)}…` : e.surfaces[0]}”
-                      anyway?
-                    </p>
-                    <div className="actions">
-                      <button
-                        className="secondary"
-                        onClick={() => {
-                          setReleaseAsk(null);
-                          flip(e.id);
-                        }}
-                      >
-                        Release it
-                      </button>
-                      <button className="link" onClick={() => setReleaseAsk(null)}>
-                        Keep it withheld
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <ul className="vault">{entities.filter((e) => !inside.has(e.id)).map((e) => vaultRow(e, false))}</ul>
       )}
     </>
   );
@@ -847,11 +902,14 @@ export function App() {
                   </div>
                 )}
 
+                <p className="demo-notice">Demonstration. Use invented details only. Do not enter real pupils' records.</p>
+
                 {editing ? (
                   <>
                     <textarea
                       value={note}
-                      onChange={(e) => setNote(e.target.value)}
+                      maxLength={NOTE_MAX}
+                      onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
                       placeholder="Write what you noticed this week, as you would in your own notebook. Names, family matters, health: write it all. The guard reads it here, on this device, before anything is sent."
                       rows={13}
                       spellCheck={false}
@@ -860,6 +918,11 @@ export function App() {
                       autoComplete="off"
                       aria-label="Your note"
                     />
+                    <p className={note.length >= NOTE_MAX ? 'hint note-count full' : 'hint note-count'}>
+                      {note.length.toLocaleString()} of {NOTE_MAX.toLocaleString()} characters. A note is limited to{' '}
+                      {NOTE_MAX.toLocaleString()} because the on-device model reads it in small parts, one at a time, and you must read
+                      every word of the outgoing text before you approve it. Put a longer note through in two runs.
+                    </p>
                     <details className="class-list" open={listOpen} onToggle={(e) => setListOpen(e.currentTarget.open)}>
                       <summary>
                         Class list <small>{classList.length > 0 ? `${classList.length} names, kept in this tab until you close it` : 'optional, kept in this tab until you close it'}</small>
@@ -892,8 +955,9 @@ export function App() {
                     </fieldset>
                     {(device === 'unsupported' || device === 'unavailable') && (
                       <p className="notice">
-                        This browser has no built-in model. Staffroom will use your class list, the pattern rules and a short list of
-                        sensitive words only, and you must mark private details yourself. For the full guard and check, open this page
+                        This browser has no built-in model. Staffroom will use your class list, the pattern rules, a short list of
+                        sensitive words and a rule that holds back capitalised words as possible names, and nothing else. You must mark
+                        private details yourself. For the full guard and check, open this page
                         in Chrome on a desktop computer.
                       </p>
                     )}
@@ -904,7 +968,7 @@ export function App() {
                       </p>
                     )}
                     <div className="actions">
-                      <button className="primary" disabled={note.trim().length < 20} onClick={runGuard}>
+                      <button className="primary" disabled={note.trim().length < 20 || note.length > NOTE_MAX} onClick={runGuard}>
                         Run the guard
                       </button>
                       <span className="hint">Nothing is sent. The guard runs here.</span>
@@ -1167,7 +1231,7 @@ export function App() {
                       )}
                       {copyState === 'pending' && (
                         <p className="hint">
-                          {online ? 'Saving the record to your account.' : 'The record will be saved when the network is back.'}
+                          {online ? 'Saving the record to your account.' : 'The record will be saved when the network is back. Keep this tab open.'}
                         </p>
                       )}
                       {copyState === 'saved' && <p className="hint">The receipt's record (no text) was saved to your account.</p>}
@@ -1206,6 +1270,42 @@ export function App() {
                       {violations.length === 0 ? 'Exit gate: clear' : `Exit gate: ${violations.length} stopped`}
                     </span>
                   </div>
+                  {/* What the guard did not cover is said here, beside the gate: before the text, and above the tick. */}
+                  {nothingWithheld && (
+                    <p className="caution strong" role="alert">
+                      Nothing is withheld. The text below is your note exactly as you wrote it: every name and every detail in it
+                      will be sent to the cloud model.
+                    </p>
+                  )}
+                  {guardWhere === 'RULES_ONLY' && (
+                    <p className="caution">
+                      No model has read this note. Anything you have not marked yourself will be sent exactly as written below.
+                    </p>
+                  )}
+                  {guardGaps.unread.length > 0 && (
+                    <p className="caution">
+                      {guardWhere === 'RULES_ONLY'
+                        ? `The on-device model was asked and could not read any of the ${guardGaps.unread.length} ${guardGaps.unread.length === 1 ? 'part' : 'parts'} of your note.`
+                        : `The on-device model could not read ${guardGaps.unread.length} of the ${noteParts.length} parts of your note (${guardGaps.unread
+                            .map((i) => `part ${i + 1}`)
+                            .join(', ')}). They are listed beside the vault, on the device side.`}{' '}
+                      Check {guardGaps.unread.length === 1 && guardWhere !== 'RULES_ONLY' ? 'it' : 'them'} yourself before you approve.
+                    </p>
+                  )}
+                  {guardGaps.dropped > 0 && (
+                    <p className="caution">
+                      The on-device model reported {guardGaps.dropped} {guardGaps.dropped === 1 ? 'item' : 'items'} (a name, a place
+                      or a private detail) that could not be matched to the words of your note, so{' '}
+                      {guardGaps.dropped === 1 ? 'it was' : 'they were'} not withheld. Look for names and private details yourself
+                      before you approve.
+                    </p>
+                  )}
+                  {guardGaps.partial > 0 && (
+                    <p className="caution">
+                      {guardGaps.partial} private {guardGaps.partial === 1 ? 'detail was' : 'details were'} matched to your note only
+                      in part. The matching words were withheld. Read the text around each private detail and mark what is left.
+                    </p>
+                  )}
                   {sentWith}
                   <p className="hint">This is the exact text that will be sent, for: {currentTask.label.toLowerCase()}.</p>
                   <pre className="wire">
@@ -1223,40 +1323,26 @@ export function App() {
                       ))}
                     </ul>
                   )}
-                  {guardGaps.unread.map((i) => (
-                    <p className="caution" key={i}>
-                      The on-device model could not read part {i + 1} of your note
-                      {paragraphs(note)[i] ? ` (it begins “${paragraphs(note)[i].slice(0, 40).trim()}…”)` : ''}. Check it yourself
-                      before you approve.
-                    </p>
-                  ))}
-                  {guardGaps.dropped > 0 && (
-                    <p className="caution">
-                      The on-device model reported {guardGaps.dropped} {guardGaps.dropped === 1 ? 'item' : 'items'} (a name, a place
-                      or a private detail) that could not be matched to the words of your note, so{' '}
-                      {guardGaps.dropped === 1 ? 'it was' : 'they were'} not withheld. Look for names and private details yourself
-                      before you approve.
-                    </p>
-                  )}
-                  {guardGaps.partial > 0 && (
-                    <p className="caution">
-                      {guardGaps.partial} private {guardGaps.partial === 1 ? 'detail was' : 'details were'} matched to your note only
-                      in part. The matching words were withheld. Read the text around each private detail and mark what is left.
-                    </p>
-                  )}
-                  {guardWhere === 'RULES_ONLY' && (
-                    <p className="caution">
-                      No model has read this note. Anything you have not marked yourself will be sent exactly as written below.
-                    </p>
-                  )}
                   <label className="read-it">
                     <input type="checkbox" checked={readIt} onChange={(e) => setReadKey(e.target.checked ? approval : null)} />
                     {guardWhere === 'RULES_ONLY'
                       ? 'No model looked for private details. I have read this text and marked them myself.'
                       : 'I have read this text and I am content to send it.'}
                   </label>
+                  {nothingWithheld && (
+                    <label className="read-it as-written">
+                      <input
+                        type="checkbox"
+                        checked={asWritten}
+                        onChange={(e) => setAsWrittenKey(e.target.checked ? asWrittenApproval : null)}
+                      />
+                      Nothing has been withheld. I am sending my note as written.
+                    </label>
+                  )}
                   <div className="actions">
-                    <button className="primary send" disabled={!readIt || violations.length > 0 || !policyReady} onClick={approveAndSend}>
+                    <button className="primary send" disabled={!readIt || (nothingWithheld && !asWritten) || violations.length > 0 || !policyReady}
+                      onClick={approveAndSend}
+                    >
                       Approve and send
                     </button>
                     <span className="hint">
@@ -1269,8 +1355,8 @@ export function App() {
               {sent && stage !== 'review' && (
                 <article className="card outbox">
                   <div className="card-head">
-                    {/* "Sent" whenever the request went out, answered or not. With no network it never left. */}
-                    <h3>{sent.online || result?.where === 'IN_CLOUD' ? 'Sent' : 'Approved by you'}</h3>
+                    {/* "Sent" only once the cloud has answered. Until then, and when it never did, the app cannot say the text arrived. */}
+                    <h3>{result?.where === 'IN_CLOUD' ? 'Sent' : 'Approved by you'}</h3>
                     <span className="gate pass">
                       Approved {time(sent.at)} · {sent.text.length.toLocaleString()} characters
                     </span>
@@ -1287,7 +1373,15 @@ export function App() {
 
               {stage === 'drafting' && (
                 <article className="card">
-                  <Spinner label={online ? `Asking ${policy.cloudModel} to write the draft` : 'No signal. The on-device model is writing the draft'} />
+                  <Spinner
+                    label={
+                      online
+                        ? `Asking ${policy.cloudModel} to write the draft`
+                        : device === 'available'
+                          ? 'No signal. The on-device model is writing the draft'
+                          : `No signal, and no on-device model is ready. Trying ${policy.cloudModel} all the same`
+                    }
+                  />
                 </article>
               )}
 
@@ -1298,11 +1392,13 @@ export function App() {
                     <RouteChip route="draft" where={result.where} />
                   </div>
                   {result.where === 'ON_DEVICE' && (
-                    <p className="caution">
-                      {sent?.online
-                        ? 'The request was sent but the cloud model did not answer, so the on-device model wrote this draft from the same approved text.'
-                        : 'The cloud could not be reached, so the on-device model wrote this draft from the same approved text.'}
-                    </p>
+                    <>
+                      <p className="caution">
+                        The cloud draft failed, so the on-device model wrote this draft from the same approved text.
+                      </p>
+                      {/* A separate fact. The app does not know why the cloud draft failed. */}
+                      <p className="hint">Browser reported when you approved: {sent?.online ? 'online' : 'offline'}.</p>
+                    </>
                   )}
                   <p className="hint">
                     {result.model}. The reply uses the stand-ins. Names are put back on your side of the door.
@@ -1485,8 +1581,8 @@ function Receipts({
     <main className="page">
       <h2>Receipts</h2>
       <p className="lede">
-        A receipt holds the exact text you approved, counts of what was withheld, which model ran where, and what you signed off. It never
-        holds your raw note or anything you withheld.
+        A receipt holds the exact text you approved, counts of what was withheld, which model ran where, and how many items you kept and
+        how many you struck. It does not hold the draft, your raw note or anything you withheld.
       </p>
       <label className="read-it">
         <input type="checkbox" checked={keepCopies} disabled={!signedIn} onChange={(e) => setKeepCopies(e.target.checked)} />
@@ -1539,7 +1635,7 @@ function Receipts({
                       <strong>{r.label}</strong>
                       <span>{new Date(r.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
                       <span>{total} withheld</span>
-                      <span>{r.signOff.kept} signed off</span>
+                      <span>{r.signOff.kept} kept</span>
                     </summary>
                     <dl className="facts">
                       <dt>Name</dt>
@@ -1564,12 +1660,7 @@ function Receipts({
                       </dd>
                       <dt>Draft</dt>
                       <dd>
-                        {r.draft.model},{' '}
-                        {r.draft.where === 'IN_CLOUD'
-                          ? 'in the cloud'
-                          : r.draft.cloud === 'no answer'
-                            ? 'on the device (cloud did not answer)'
-                            : 'on the device (cloud not reached)'}
+                        {draftLine(r.draft)}
                       </dd>
                       <dt>Check</dt>
                       <dd>

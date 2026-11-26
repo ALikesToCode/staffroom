@@ -6,6 +6,7 @@ import {
   applyLocks,
   bracketBare,
   bracketDraft,
+  insidePrivate,
   buildVault,
   deterministicCandidates,
   possibleNameCandidates,
@@ -19,7 +20,7 @@ import {
 import { checkOutgoing, checkReply } from './gate';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './samples';
 import { DRAFT_FORMAT, DRAFT_NOTES_HEADING, draftPrompt, LABEL_CHARS, labelPrompt } from '../ai/draft';
-import { plainText } from './text';
+import { NOTE_MAX, plainText } from './text';
 
 /** The sample note as it goes out when no model read it: class list, patterns, sensitive words and capitalised words only. */
 const RULES_ONLY_SAMPLE = `Class 6B, week of 16 November. Notes for myself.
@@ -586,9 +587,9 @@ describe('vault', () => {
   });
 });
 
-import { anchor, anchorQuote, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
+import { anchor, anchorQuote, guardOutcome, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
 import { anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, NOT_ANSWERED, readVerdict, startsKept, studentsNamed, UNCLEAR, worse } from '../ai/check';
-import { asReceiptRecord, digestPrefix, makeReceipt, receiptRecord, recordModelName, sha256Hex } from './receipts';
+import { asReceiptRecord, digestPrefix, draftLine, makeReceipt, receiptRecord, recordModelName, sha256Hex } from './receipts';
 import { approvalKey, DEFAULT_POLICY, fallbackPolicy, readSaved, toSave, withTimeout } from './policy';
 import { familyFor, ownersOf } from './family';
 
@@ -1145,6 +1146,9 @@ describe('approval and policy', () => {
     expect(approvalKey('Hello [Student 1].', ['contact'], 'gemini-3.5-flash-lite')).not.toBe(key);
     expect(approvalKey('Hello [Student 1].', ['contact', 'id', 'student'], 'gemini-3.5-flash-lite')).not.toBe(key);
     expect(approvalKey('Hello [Student 1].', ['contact', 'id'], 'another-model')).not.toBe(key);
+    // The tick for "I am sending my note as written" is another key: the ordinary tick cannot stand in for it.
+    expect(approvalKey('Hello [Student 1].', ['contact', 'id'], 'gemini-3.5-flash-lite', false)).toBe(key);
+    expect(approvalKey('Hello [Student 1].', ['contact', 'id'], 'gemini-3.5-flash-lite', true)).not.toBe(key);
   });
 
   it('falls back to the defaults when the policy is slow or fails', async () => {
@@ -1431,5 +1435,104 @@ describe('school policy that does not load in time', () => {
     ]) {
       expect(readSaved(raw), String(raw)).toBeUndefined();
     }
+  });
+});
+
+describe('a guard run in which every request failed', () => {
+  const parts = ['One.', 'Two.', 'Three.'];
+
+  it('is a rules-only run that still counts the parts the model could not read', async () => {
+    const report = await readChunks(parts, async () => {
+      throw new Error('the model stopped');
+    });
+    expect(guardOutcome(report)).toEqual({ where: 'RULES_ONLY', unread: [0, 1, 2], dropped: 0, partial: 0 });
+  });
+
+  it('is an on-device run when the model read at least one part', async () => {
+    let asked = 0;
+    const report = await readChunks(parts, async () => {
+      if (++asked === 2) throw new Error('the model stopped');
+      return { text: '{"people":[],"places":[],"private":[]}', onDevice: true };
+    });
+    expect(guardOutcome(report)).toEqual({ where: 'ON_DEVICE', unread: [1], dropped: 0, partial: 0 });
+  });
+
+  it('keeps the count on the receipt of a rules-only run', () => {
+    const r = makeReceipt({
+      task: 'plan',
+      label: 'x',
+      labelWhere: 'FALLBACK',
+      entities: [],
+      guardWhere: 'RULES_ONLY',
+      unreadParagraphs: 3,
+      droppedDetails: 0,
+      sentText: 'x',
+      sentSha256: '',
+      approvedAt: new Date().toISOString(),
+      draftWhere: 'ON_DEVICE',
+      draftModel: 'Gemini Nano (Chrome built-in)',
+      cloudFailedWhile: 'offline',
+      checkWhere: 'SKIPPED',
+      replyFlagged: false,
+      checks: [],
+      kept: 1,
+      struck: 0,
+    });
+    expect([r.guard.where, r.guard.unreadParagraphs]).toEqual(['RULES_ONLY', 3]);
+    expect(r.draft).toEqual({ where: 'ON_DEVICE', model: 'Gemini Nano (Chrome built-in)', cloud: 'failed', browser: 'offline' });
+  });
+});
+
+describe('the draft line of a receipt', () => {
+  it('says the cloud draft failed and gives the network state as a separate fact', () => {
+    expect(draftLine({ where: 'IN_CLOUD', model: 'gemini-3.5-flash-lite' })).toBe('gemini-3.5-flash-lite, in the cloud');
+    expect(draftLine({ where: 'ON_DEVICE', model: 'Gemini Nano (Chrome built-in)', cloud: 'failed', browser: 'offline' })).toBe(
+      'Gemini Nano (Chrome built-in), on the device. The cloud draft failed, so the on-device model wrote it. Browser reported: offline.',
+    );
+    expect(draftLine({ where: 'ON_DEVICE', model: 'Gemini Nano (Chrome built-in)', cloud: 'failed', browser: 'online' })).toMatch(/Browser reported: online\.$/);
+    // A receipt from before: the cause it named is not repeated.
+    expect(draftLine({ where: 'ON_DEVICE', model: 'Gemini Nano (Chrome built-in)', cloud: 'not reached' })).toBe(
+      'Gemini Nano (Chrome built-in), on the device. The cloud draft failed, so the on-device model wrote it.',
+    );
+  });
+});
+
+describe('note length', () => {
+  it('has room for the sample note many times over', () => {
+    expect(NOTE_MAX).toBe(8000);
+    expect(SAMPLE_NOTE.length).toBeLessThan(NOTE_MAX / 4);
+  });
+});
+
+describe('a private detail inside another', () => {
+  const note = 'Meenal reads well. She told me she has epilepsy and is afraid of a seizure. Tanvi is shy. Her father is unemployed.';
+  const v = buildVault(note, [
+    { kind: 'student', text: 'Meenal', source: 'class list' },
+    { kind: 'private', text: 'She told me she has epilepsy and is afraid of a seizure', source: 'rule', category: 'health' },
+    { kind: 'private', text: 'has epilepsy', source: 'on-device model', category: 'health' },
+    { kind: 'private', text: 'afraid of a seizure', source: 'on-device model', category: 'health' },
+    { kind: 'private', text: 'Her father is unemployed', source: 'rule', category: 'family' },
+  ]);
+  const id = (text: string) => v.find((e) => e.surfaces[0] === text)!.id;
+
+  it('is listed under the longer one', () => {
+    expect([...insidePrivate(note, v)]).toEqual([
+      [id('has epilepsy'), id('She told me she has epilepsy and is afraid of a seizure')],
+      [id('afraid of a seizure'), id('She told me she has epilepsy and is afraid of a seizure')],
+    ]);
+  });
+
+  it('changes no count and nothing that is sent', () => {
+    expect(v.filter((e) => e.withheld && e.kind === 'private')).toHaveLength(4);
+    expect(redact(note, v)).toBe('[Student 1] reads well. [withheld]. Tanvi is shy. [withheld].');
+    // With the sentence released, the parts inside it stay withheld.
+    const released = v.map((e) => (e.id === id('She told me she has epilepsy and is afraid of a seizure') ? { ...e, withheld: false } : e));
+    expect(redact(note, released)).toBe('[Student 1] reads well. She told me she [withheld] and is [withheld]. Tanvi is shy. [withheld].');
+  });
+
+  it('does not nest the same words in two places, or details side by side', () => {
+    const twice = 'He is unwell. Later: he is unwell again.';
+    const tv = buildVault(twice, [{ kind: 'private', text: 'he is unwell', source: 'teacher' }]);
+    expect(insidePrivate(twice, tv).size).toBe(0);
   });
 });

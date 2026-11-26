@@ -16,3 +16,10 @@ export function plainText(text: string): string {
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
+
+/**
+ * The longest note the app takes. The on-device model reads a note in small
+ * parts, one request each, and the teacher has to read every word of the
+ * outgoing text before approving it; past this length neither is practical.
+ */
+export const NOTE_MAX = 8000;
