@@ -96,6 +96,8 @@ interface Run {
   constraints?: { confirmed: number; byKind: Partial<Record<ConstraintKind, number>>; shared?: number };
   kept: number;
   struck: number;
+  /** Kept items whose text the teacher rewrote on the device. */
+  rewritten?: number;
 }
 
 /** Build the receipt of a run. Counts and the approved text only: nothing from the vault. */
@@ -141,7 +143,7 @@ export function makeReceipt(run: Run): Receipt {
       ...layerCounts(run.checks),
     },
     constraints: run.constraints ?? { confirmed: 0, byKind: {} },
-    signOff: { kept: run.kept, struck: run.struck, at: now },
+    signOff: { kept: run.kept, struck: run.struck, at: now, ...(run.rewritten ? { rewritten: run.rewritten } : {}) },
   };
 }
 
