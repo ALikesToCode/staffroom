@@ -1,5 +1,5 @@
 import type { Entity, Kind, Source } from './types';
-import { findByRule, nameParts, wholeWordMatcher } from './rules';
+import { findByRule, nameParts, nameWords, wholeWordMatcher } from './rules';
 
 const TOKEN_NAME: Record<Kind, string> = {
   student: 'Student',
@@ -48,14 +48,15 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
     if (!text || !appearsIn(note, text)) return undefined;
 
     if (isPerson(c.kind)) {
-      const parts = nameParts(text).map(norm);
+      // Every word counts here, short ones too: "Om" and "Jo" are two people.
+      const parts = nameWords(text).map(norm);
       if (parts.length === 0) return undefined;
       // "Aarav" and "Aarav Sharma" are one person. "Aarav Sharma" and
       // "Diya Sharma" are two: neither name is contained in the other.
       const within = (a: string[], b: string[]) => a.every((p) => b.includes(p));
       const same = entities.find((e) => {
         if (!isPerson(e.kind)) return false;
-        const theirs = [...new Set(e.surfaces.flatMap((s) => nameParts(s).map(norm)))];
+        const theirs = [...new Set(e.surfaces.flatMap((s) => nameWords(s).map(norm)))];
         return within(parts, theirs) || within(theirs, parts);
       });
       if (same) {
@@ -84,6 +85,7 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
     return entity;
   };
 
+  // The whole name is always a surface, however short. Only the parts are filtered.
   const addSurfaces = (e: Entity, text: string) => {
     const all = isPerson(e.kind) ? [text, ...nameParts(text)] : [text];
     for (const s of all) {
@@ -95,7 +97,7 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
   for (const c of candidates.filter((c) => c.kind === 'private')) {
     const e = add(c);
     if (e && c.aboutName) {
-      const parts = nameParts(c.aboutName).map(norm);
+      const parts = [norm(c.aboutName), ...nameWords(c.aboutName).map(norm)];
       const person = entities.find(
         (p) => p.kind === 'student' && p.surfaces.some((s) => parts.includes(norm(s))),
       );
@@ -108,23 +110,26 @@ export function buildVault(note: string, candidates: Candidate[]): Entity[] {
 
 /**
  * A private detail with no known subject is attached to the student named
- * nearest before it in the same paragraph.
+ * inside it, or else to the student named nearest before it in the same
+ * paragraph. Names are matched as whole words.
  */
 function attachPrivateDetails(note: string, entities: Entity[]) {
   const lower = note.toLowerCase();
   const students = entities.filter((e) => e.kind === 'student');
+  const mentions = (text: string, last: boolean) => {
+    let best: { id: string; pos: number } | undefined;
+    for (const s of students) {
+      for (const m of text.matchAll(wholeWordMatcher(s.surfaces)!)) {
+        if (!best || (last ? m.index > best.pos : m.index < best.pos)) best = { id: s.id, pos: m.index };
+      }
+    }
+    return best;
+  };
   for (const p of entities.filter((e) => e.kind === 'private' && !e.about)) {
     const at = lower.indexOf(p.surfaces[0].toLowerCase());
     if (at < 0) continue;
     const paragraphStart = lower.lastIndexOf('\n', at) + 1;
-    const before = lower.slice(paragraphStart, at);
-    let best: { id: string; pos: number } | undefined;
-    for (const s of students) {
-      for (const surface of s.surfaces) {
-        const pos = before.lastIndexOf(surface.toLowerCase());
-        if (pos >= 0 && (!best || pos > best.pos)) best = { id: s.id, pos };
-      }
-    }
+    const best = mentions(p.surfaces[0], false) ?? mentions(note.slice(paragraphStart, at), true);
     if (best) p.about = best.id;
   }
 }

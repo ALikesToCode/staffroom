@@ -60,14 +60,24 @@ const HONORIFICS = new Set([
 ]);
 
 /**
- * The parts of a name that identify a person on their own.
- * "Mrs. Kavita Rao" gives ["Kavita", "Rao"].
+ * Every word of a name, short ones included, without honorifics.
+ * "Mrs. Om Rao" gives ["Om", "Rao"]. Used to tell two people apart.
  */
-export function nameParts(name: string): string[] {
+export function nameWords(name: string): string[] {
   return name
     .split(/[\s.,]+/)
     .map((p) => p.trim())
-    .filter((p) => p.length >= 3 && !HONORIFICS.has(p.toLowerCase()));
+    .filter((p) => p.length > 0 && !HONORIFICS.has(p.toLowerCase()));
+}
+
+/**
+ * The parts of a name that are withheld when they stand alone.
+ * "Mrs. Kavita Rao" gives ["Kavita", "Rao"]. A part shorter than three
+ * letters is left out, because on its own it is too often an ordinary word.
+ * The whole name is always withheld, however short: see buildVault.
+ */
+export function nameParts(name: string): string[] {
+  return nameWords(name).filter((p) => p.length >= 3);
 }
 
 /** Escape a string for use inside a regular expression. */

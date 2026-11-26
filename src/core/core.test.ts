@@ -105,6 +105,20 @@ describe('vault', () => {
     expect(segment(SAMPLE_NOTE, vault).map((s) => s.text).join('')).toBe(SAMPLE_NOTE);
   });
 
+  it('withholds a short class-list name as a whole word only', () => {
+    const note = 'Om has missed school. Jo is ill. Some children join late.';
+    const v = buildVault(note, deterministicCandidates(note, ['Om', 'Jo']));
+    expect(v.map((e) => e.surfaces)).toEqual([['Om'], ['Jo']]);
+    expect(redact(note, v)).toBe('[Student 1] has missed school. [Student 2] is ill. Some children join late.');
+    expect(checkOutgoing(redact(note, v), v)).toEqual([]);
+  });
+
+  it('keeps two students apart when only a short first name differs', () => {
+    const note = 'Om Rao sits with Jo Rao.';
+    const v = buildVault(note, deterministicCandidates(note, ['Om Rao', 'Jo Rao']));
+    expect(redact(note, v)).toBe('[Student 1] sits with [Student 2].');
+  });
+
   describe('exit gate', () => {
     it('passes the redacted text', () => {
       expect(checkOutgoing(redacted, vault)).toEqual([]);
