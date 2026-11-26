@@ -6,7 +6,7 @@ import { checkOutgoing, checkReply, type Violation } from './core/gate';
 import { loadReceipts, makeReceipt, storeReceipts } from './core/receipts';
 import { configured, DEFAULT_POLICY, loadPolicy, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
-import { guardOnDevice } from './ai/guard';
+import { guardOnDevice, paragraphs } from './ai/guard';
 import { labelReceipt, writeDraft, type DraftResult } from './ai/draft';
 import { checkOnDevice, detailsFor } from './ai/check';
 import { CloudText, DeviceText, KIND_LABEL, RouteChip, Spinner, Stepper } from './ui/parts';
@@ -24,6 +24,8 @@ const stored = <T,>(key: string, fallback: T): T => {
     return fallback;
   }
 };
+
+const NO_GAPS: { unread: number[]; dropped: number } = { unread: [], dropped: 0 };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -44,6 +46,7 @@ export function App() {
 
   const [entities, setEntities] = useState<Entity[]>([]);
   const [guardWhere, setGuardWhere] = useState<Where>('NOT_RUN');
+  const [guardGaps, setGuardGaps] = useState<{ unread: number[]; dropped: number }>(NO_GAPS);
   const [progress, setProgress] = useState('');
   const [selection, setSelection] = useState('');
   const [readIt, setReadIt] = useState(false);
@@ -117,13 +120,15 @@ export function App() {
     setResult(null);
     const candidates = deterministicCandidates(note, classList);
     let where: Where = 'RULES_ONLY';
+    let gaps = NO_GAPS;
     setProgress('Checking the class list and the pattern rules');
     if (await turnOnDevice()) {
       try {
-        const found = await guardOnDevice(note, (done, total) =>
+        const report = await guardOnDevice(note, (done, total) =>
           setProgress(`The on-device model is reading paragraph ${Math.min(done + 1, total)} of ${total}`),
         );
-        candidates.push(...found);
+        candidates.push(...report.candidates);
+        gaps = { unread: report.unread, dropped: report.dropped };
         where = 'ON_DEVICE';
       } catch (e) {
         setError(`The on-device guard stopped: ${message(e)} Only the rules were applied. Read the outgoing text with care.`);
@@ -131,6 +136,7 @@ export function App() {
     }
     setEntities(buildVault(note, candidates));
     setGuardWhere(where);
+    setGuardGaps(gaps);
     setStage('review');
   };
 
@@ -208,6 +214,8 @@ export function App() {
       label: label || currentTask.label,
       entities,
       guardWhere,
+      unreadParagraphs: guardGaps.unread.length,
+      droppedDetails: guardGaps.dropped,
       sentText: sent.text,
       approvedAt: sent.at,
       draftWhere: result.where,
@@ -611,6 +619,20 @@ export function App() {
                       ))}
                     </ul>
                   )}
+                  {guardGaps.unread.map((i) => (
+                    <p className="caution" key={i}>
+                      The on-device model could not read paragraph {i + 1}
+                      {paragraphs(note)[i] ? ` (it begins “${paragraphs(note)[i].slice(0, 40).trim()}…”)` : ''}. Check it yourself
+                      before you approve.
+                    </p>
+                  ))}
+                  {guardGaps.dropped > 0 && (
+                    <p className="caution">
+                      The on-device model reported {guardGaps.dropped} private {guardGaps.dropped === 1 ? 'detail' : 'details'} that
+                      could not be matched to the words of your note, so {guardGaps.dropped === 1 ? 'it was' : 'they were'} not
+                      withheld. Look for private details yourself before you approve.
+                    </p>
+                  )}
                   {guardWhere === 'RULES_ONLY' && (
                     <p className="caution">
                       No model has read this note. Anything you have not marked yourself will be sent exactly as written below.
@@ -853,6 +875,10 @@ function Receipts({
                           .map(([k, n]) => `${n} ${KIND_LABEL[k as Kind].toLowerCase()}`)
                           .join(', ') || 'nothing found'}
                         {r.guard.allowedByTeacher > 0 && `. ${r.guard.allowedByTeacher} released by the teacher`}
+                        {(r.guard.unreadParagraphs ?? 0) > 0 &&
+                          `. The on-device model could not read ${r.guard.unreadParagraphs} ${r.guard.unreadParagraphs === 1 ? 'paragraph' : 'paragraphs'}`}
+                        {(r.guard.droppedDetails ?? 0) > 0 &&
+                          `. ${r.guard.droppedDetails} reported private ${r.guard.droppedDetails === 1 ? 'detail' : 'details'} could not be matched to the note`}
                       </dd>
                       <dt>Approved</dt>
                       <dd>

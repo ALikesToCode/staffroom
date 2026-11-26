@@ -184,7 +184,7 @@ describe('vault', () => {
   });
 });
 
-import { anchorQuote, paragraphs } from '../ai/guard';
+import { anchorQuote, paragraphs, readGuardAnswer } from '../ai/guard';
 import { detailsFor } from '../ai/check';
 import { makeReceipt } from './receipts';
 
@@ -201,6 +201,30 @@ describe('guard helpers', () => {
 
   it('drops a quote that is not in the note', () => {
     expect(anchorQuote(para, 'he has asthma')).toBeUndefined();
+  });
+
+  it('reads a well-formed answer and counts a detail it cannot find in the note', () => {
+    const reading = readGuardAnswer(
+      para,
+      JSON.stringify({
+        people: [{ name: 'Kabir', role: 'student' }],
+        places: [],
+        private: [
+          { quote: "Kabir's parents are separating", category: 'family', about: 'Kabir' },
+          { quote: 'he has asthma', category: 'health', about: 'Kabir' },
+        ],
+      }),
+    );
+    expect(reading?.candidates.map((c) => c.text)).toEqual(['Kabir', "Kabir's parents are separating"]);
+    expect(reading?.dropped).toBe(1);
+  });
+
+  it('reports an answer it cannot read instead of treating it as empty', () => {
+    expect(readGuardAnswer(para, '{"people": [')).toBeUndefined();
+    expect(readGuardAnswer(para, 'null')).toBeUndefined();
+    expect(readGuardAnswer(para, '[]')).toBeUndefined();
+    expect(readGuardAnswer(para, '{"people": "Kabir", "places": [], "private": []}')).toBeUndefined();
+    expect(readGuardAnswer(para, '{"people": [], "places": [], "private": []}')).toEqual({ candidates: [], dropped: 0 });
   });
 
   it('splits on blank lines', () => {
@@ -227,6 +251,8 @@ describe('check and receipt', () => {
       label: 'Support plan',
       entities: vault,
       guardWhere: 'ON_DEVICE',
+      unreadParagraphs: 1,
+      droppedDetails: 0,
       sentText: redact(note, vault),
       approvedAt: new Date().toISOString(),
       draftWhere: 'IN_CLOUD',
@@ -241,6 +267,7 @@ describe('check and receipt', () => {
     expect(json).not.toContain('Meenal');
     expect(json).not.toContain('epilepsy');
     expect(receipt.guard.found.student).toBe(2);
+    expect(receipt.guard.unreadParagraphs).toBe(1);
     expect(receipt.check.conflict).toBe(1);
   });
 });

@@ -76,18 +76,84 @@ function exactSlice(paragraph: string, text: string): string {
   return paragraph.slice(at, at + text.length);
 }
 
+/** What the model said about one paragraph, turned into candidates. */
+export interface ParagraphReading {
+  candidates: Candidate[];
+  /** Private details the model reported that could not be found in the paragraph. */
+  dropped: number;
+}
+
+/**
+ * Turn the model's answer for one paragraph into candidates. Returns
+ * undefined when the answer cannot be read at all: the caller must then
+ * treat the paragraph as not guarded by the model.
+ */
+export function readGuardAnswer(paragraph: string, raw: string): ParagraphReading | undefined {
+  let answer: GuardAnswer;
+  try {
+    answer = JSON.parse(raw) as GuardAnswer;
+  } catch {
+    return undefined;
+  }
+  if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return undefined;
+  const list = <T,>(v: T[] | undefined): T[] | undefined => (v === undefined ? [] : Array.isArray(v) ? v : undefined);
+  const people = list(answer.people);
+  const places = list(answer.places);
+  const details = list(answer.private);
+  if (!people || !places || !details) return undefined;
+
+  const candidates: Candidate[] = [];
+  let dropped = 0;
+  for (const p of people) {
+    if (!p || typeof p.name !== 'string' || !p.name || /\d/.test(p.name)) continue;
+    candidates.push({ kind: p.role === 'adult' ? 'adult' : 'student', text: p.name, source: 'on-device model' });
+  }
+  for (const place of places) {
+    if (typeof place !== 'string' || !place || /^(class|grade|std|standard|section)\b/i.test(place)) continue;
+    candidates.push({ kind: 'place', text: place, source: 'on-device model' });
+  }
+  for (const d of details) {
+    const quote = d && typeof d.quote === 'string' && d.quote.trim() ? anchorQuote(paragraph, d.quote) : undefined;
+    if (!quote) {
+      // The model saw something private here and it could not be pinned to the words of the note.
+      dropped++;
+      continue;
+    }
+    candidates.push({
+      kind: 'private',
+      text: quote,
+      source: 'on-device model',
+      category: typeof d.category === 'string' ? d.category : undefined,
+      aboutName: typeof d.about === 'string' ? d.about : undefined,
+    });
+  }
+  return { candidates, dropped };
+}
+
+/** What the on-device guard found, and where it fell short. */
+export interface GuardReport {
+  candidates: Candidate[];
+  /** Paragraphs (counted from 0) whose answer could not be read. The model did not guard these. */
+  unread: number[];
+  /** Private details the model reported that could not be found in the note, so were not withheld. */
+  dropped: number;
+}
+
 /**
  * Read the raw note with the on-device model. The route is ONLY_ON_DEVICE:
  * if the browser has no on-device model, modelFor throws before a request
  * is made, and nothing is sent anywhere.
+ *
+ * A paragraph the model did not answer in a readable way is reported, never
+ * passed over in silence: the teacher is told to check it.
  */
 export async function guardOnDevice(
   note: string,
   onProgress: (done: number, total: number) => void,
-): Promise<Candidate[]> {
+): Promise<GuardReport> {
   const model = modelFor('guard', { system: SYSTEM, schema: SCHEMA });
   const parts = paragraphs(note);
-  const found: Candidate[] = [];
+  const report: GuardReport = { candidates: [], unread: [], dropped: 0 };
   for (let i = 0; i < parts.length; i++) {
     onProgress(i, parts.length);
     const result = await model.generateContent(`Paragraph:\n${parts[i]}`);
@@ -96,26 +162,20 @@ export async function guardOnDevice(
       // the fact: the SDK reports where each response came from, and anything but the device stops the run.
       throw new Error('The guard did not run on the device. Stopped.');
     }
-    let answer: GuardAnswer;
+    let raw: string | undefined;
     try {
-      answer = JSON.parse(result.response.text()) as GuardAnswer;
+      raw = result.response.text();
     } catch {
+      raw = undefined;
+    }
+    const reading = raw === undefined ? undefined : readGuardAnswer(parts[i], raw);
+    if (!reading) {
+      report.unread.push(i);
       continue;
     }
-    for (const p of answer.people ?? []) {
-      if (!p.name || /\d/.test(p.name)) continue;
-      found.push({ kind: p.role === 'adult' ? 'adult' : 'student', text: p.name, source: 'on-device model' });
-    }
-    for (const place of answer.places ?? []) {
-      if (!place || /^(class|grade|std|standard|section)\b/i.test(place)) continue;
-      found.push({ kind: 'place', text: place, source: 'on-device model' });
-    }
-    for (const d of answer.private ?? []) {
-      const quote = d.quote ? anchorQuote(parts[i], d.quote) : undefined;
-      if (!quote) continue;
-      found.push({ kind: 'private', text: quote, source: 'on-device model', category: d.category, aboutName: d.about });
-    }
+    report.candidates.push(...reading.candidates);
+    report.dropped += reading.dropped;
   }
   onProgress(parts.length, parts.length);
-  return found;
+  return report;
 }

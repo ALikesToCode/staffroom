@@ -19,6 +19,8 @@ interface Run {
   label: string;
   entities: Entity[];
   guardWhere: Where;
+  unreadParagraphs: number;
+  droppedDetails: number;
   sentText: string;
   approvedAt: string;
   draftWhere: Where;
@@ -46,7 +48,14 @@ export function makeReceipt(run: Run): Receipt {
     createdAt: now,
     task: run.task,
     label: run.label,
-    guard: { where: run.guardWhere, found, bySource, allowedByTeacher: run.entities.filter((e) => !e.withheld).length },
+    guard: {
+      where: run.guardWhere,
+      found,
+      bySource,
+      allowedByTeacher: run.entities.filter((e) => !e.withheld).length,
+      unreadParagraphs: run.unreadParagraphs,
+      droppedDetails: run.droppedDetails,
+    },
     sent: { text: run.sentText, chars: run.sentText.length, approvedAt: run.approvedAt, gate: 'passed' },
     draft: { where: run.draftWhere, model: run.draftModel },
     check: {

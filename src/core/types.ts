@@ -69,6 +69,10 @@ export interface Receipt {
     found: Record<Kind, number>;
     bySource: Record<Source, number>;
     allowedByTeacher: number;
+    /** Paragraphs the on-device model did not read successfully. */
+    unreadParagraphs: number;
+    /** Private details the model reported that could not be found in the note. */
+    droppedDetails: number;
   };
   sent: {
     text: string;
