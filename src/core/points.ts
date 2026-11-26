@@ -267,28 +267,36 @@ export function missingPoints(missing: readonly string[], needs: readonly Lesson
 
 const TOGETHER = /(?<![\p{L}])(?:groups?|pairs?|partners?|teams?)(?![\p{L}])/iu;
 
-/** The line this device writes, by rule, for two children who do not work well together. */
-export const pairLine = (a: string, b: string) => `Seat ${a} and ${b} in different groups.`;
+/**
+ * The line this device writes, by rule, for two children who do not work
+ * well together: on a stage of group or pair work, put them in different
+ * groups; on a stage where pupils work alone, seat them apart.
+ */
+export const pairLine = (a: string, b: string, together = true) => (together ? `Put ${a} and ${b} in different groups.` : `Seat ${a} and ${b} apart.`);
 
 /**
  * Two children who share the need to work apart from one classmate, from
  * the same words of the note, are a pair: the cloud cannot know that the
- * classmate is the other one, so the device says it, by rule. One line
- * beside each of the two, for the Practise stage and for any stage that
- * has pupils work in groups, pairs or teams. Offered, like every line.
+ * classmate is the other one, so the device says it, by rule, in words
+ * that fit the stage. One line beside each of the two on every stage that
+ * has pupils work in groups, pairs, with partners or in teams; when no
+ * stage does, one line on the Practise stage (the first stage if there is
+ * none) to seat them apart. Offered, like every line.
  */
 export function pairPoints(constraints: readonly Constraint[], entities: Entity[], items: readonly DraftItem[], note: string): Point[] {
   const apart = constraints.filter((c) => c.confirmed && c.kind === 'learning' && c.learn === 'group' && c.about && c.at !== undefined);
+  const together = items.flatMap((item, i) => (TOGETHER.test(item.text) ? [i] : []));
+  const practise = items.findIndex((item) => /^practi[sc]e$/i.test(stageName(item.heading).trim()));
+  const stages = together.length > 0 ? together : items.length > 0 ? [practise >= 0 ? practise : 0] : [];
   const out: Point[] = [];
   for (const at of new Set(apart.map((c) => c.at))) {
     const ids = [...new Set(apart.filter((c) => c.at === at).map((c) => c.about!))];
     const students = ids.map((id) => entities.find((e) => e.id === id && e.kind === 'student'));
     if (ids.length !== 2 || !students[0] || !students[1]) continue;
-    const text = pairLine(nameInNote(note, students[0]), nameInNote(note, students[1]));
-    items.forEach((item, itemIndex) => {
-      if (!/^practi[sc]e$/i.test(stageName(item.heading).trim()) && !TOGETHER.test(item.text)) return;
+    const text = pairLine(nameInNote(note, students[0]), nameInNote(note, students[1]), together.length > 0);
+    for (const itemIndex of stages) {
       ids.forEach((childId, k) => out.push({ key: `g:${itemIndex}:${childId}`, childId, child: nameInNote(note, students[k]!), itemIndex, text, source: 'starter', state: 'offered', pair: true }));
-    });
+    }
   }
   return out;
 }

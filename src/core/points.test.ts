@@ -198,7 +198,7 @@ describe('needs the cloud left out, and two children who work better apart', () 
     expect(fitSummary(5, 0, [], rows)).toBe('5 children have private notes. The cloud wrote nothing for 2 needs.');
   });
 
-  it('seats a pair in different groups, by rule, on the Practise stage and on a stage with group work', async () => {
+  it('puts a pair in different groups on each stage of group work, and seats them apart when no stage has any', async () => {
     const { sampleNeeds } = await import('../eval/needs');
     const { pairPoints, pairLine } = await import('./points');
     const s = sampleNeeds();
@@ -206,16 +206,27 @@ describe('needs the cloud left out, and two children who work better apart', () 
       { heading: 'Starter (5 minutes)', text: 'Pupils look at a picture.' },
       { heading: 'Teach (10 minutes)', text: 'In groups of four, pupils sort the words.' },
       { heading: 'Practise (15 minutes)', text: 'Pupils write alone.' },
-      { heading: 'Check (10 minutes)', text: 'The teacher regroups the answers on the board.' },
+      { heading: 'Check (10 minutes)', text: 'Partners swap books and mark.' },
     ];
     const got = pairPoints(s.constraints, s.entities, items, s.note);
-    expect(pairLine('Kabir', 'Ishaan')).toBe('Seat Kabir and Ishaan in different groups.');
+    expect(pairLine('Kabir', 'Ishaan')).toBe('Put Kabir and Ishaan in different groups.');
+    expect(pairLine('Kabir', 'Ishaan', false)).toBe('Seat Kabir and Ishaan apart.');
+    // Practise is work alone here, so it gets no line about groups.
     expect(got.map((p) => [p.child, p.itemIndex, p.text, p.source, p.state, p.pair])).toEqual([
-      ['Kabir', 1, 'Seat Kabir and Ishaan in different groups.', 'starter', 'offered', true],
-      ['Ishaan', 1, 'Seat Kabir and Ishaan in different groups.', 'starter', 'offered', true],
-      ['Kabir', 2, 'Seat Kabir and Ishaan in different groups.', 'starter', 'offered', true],
-      ['Ishaan', 2, 'Seat Kabir and Ishaan in different groups.', 'starter', 'offered', true],
+      ['Kabir', 1, 'Put Kabir and Ishaan in different groups.', 'starter', 'offered', true],
+      ['Ishaan', 1, 'Put Kabir and Ishaan in different groups.', 'starter', 'offered', true],
+      ['Kabir', 3, 'Put Kabir and Ishaan in different groups.', 'starter', 'offered', true],
+      ['Ishaan', 3, 'Put Kabir and Ishaan in different groups.', 'starter', 'offered', true],
     ]);
+    // No stage of group work: one line, on the Practise stage, to seat them apart.
+    const alone = items.map((i) => ({ ...i, text: 'Pupils write alone at their desks.' }));
+    expect(pairPoints(s.constraints, s.entities, alone, s.note).map((p) => [p.child, p.itemIndex, p.text])).toEqual([
+      ['Kabir', 2, 'Seat Kabir and Ishaan apart.'],
+      ['Ishaan', 2, 'Seat Kabir and Ishaan apart.'],
+    ]);
+    // No Practise stage either: the first stage.
+    expect(pairPoints(s.constraints, s.entities, alone.slice(0, 2), s.note).map((p) => p.itemIndex)).toEqual([0, 0]);
+    expect(pairPoints(s.constraints, s.entities, [], s.note)).toEqual([]);
     // Not a pair: one child alone, or the need not confirmed.
     const one = s.constraints.filter((c) => !(c.learn === 'group' && c.aboutName?.startsWith('Ishaan')));
     expect(pairPoints(one, s.entities, items, s.note)).toEqual([]);
