@@ -25,6 +25,12 @@
       conflicts with a withheld fact and 12 where it does not. Each case runs once; add <code>?runs=3</code> to the address to
       run each three times. Nothing is sent anywhere: the route is ONLY_ON_DEVICE.
     </p>
+    <p>
+      Add <code>?set=full</code> for the second set: the whole sample note, a vault built from fixed entries, and five fixed
+      drafts of five three-step items each, of which one or two in each draft have a step that a withheld fact rules out. Add
+      <code>perFact=1</code> to ask about one fact at a time. For example <code>eval.html?set=full&amp;perFact=1&amp;runs=3</code>.
+    </p>
+    <p id="eval-mode"></p>
     <p id="eval-status" role="status">Looking for the on-device model.</p>
     <button id="eval-start" hidden>Load the on-device model and run</button>
     <table>
@@ -32,7 +38,7 @@
         <tr>
           <th>Run</th>
           <th>Case</th>
-          <th>Withheld fact</th>
+          <th>Checked against</th>
           <th>Advice</th>
           <th>Expected</th>
           <th>Got</th>

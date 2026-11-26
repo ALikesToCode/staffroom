@@ -147,12 +147,15 @@ export function prepare(c: EvalCase): Prepared {
 export interface EvalRow {
   id: string;
   run: number;
-  topic: EvalCase['topic'];
+  /** The topic of a single-fact case, or "full note" for an item of the full-note set. */
+  topic: EvalCase['topic'] | 'full note';
   expected: EvalCase['expected'];
   /** The verdict the check gave, or "failed" when the request failed or the check stopped. */
   got: Verdict | 'failed';
   reason: string;
   ms: number;
+  /** How many requests the check made for this item. */
+  requests?: number;
 }
 
 export interface EvalTotals {

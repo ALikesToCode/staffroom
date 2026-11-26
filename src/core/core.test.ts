@@ -594,6 +594,7 @@ import { asReceiptRecord, digestPrefix, draftLine, makeReceipt, newReceiptId, re
 import { approvalKey, DEFAULT_POLICY, fallbackPolicy, readSaved, toSave, withTimeout } from './policy';
 import { familyFor, ownersOf } from './family';
 import { CASES, prepare, totals } from '../eval/cases';
+import { FULL_FACTS, prepareFull } from '../eval/full';
 
 describe('guard helpers', () => {
   const para = "Kabir's parents are separating and he is staying with his grandmother.";
@@ -1982,6 +1983,58 @@ describe('the on-device check, step by step', () => {
     for (const kind of ['Private facts about Om:', 'Private facts about children in this class:']) {
       const facts = prompts.filter((p) => p.startsWith(kind)).flatMap((p) => p.split('\n').filter((l) => l.startsWith('- ')));
       expect(facts, kind).toHaveLength(12);
+    }
+  });
+});
+
+describe('the full-note set for measuring the on-device check', () => {
+  const set = prepareFull();
+  const nameOf = (id: string | undefined) => set.entities.find((e) => e.id === id)?.surfaces.find((s) => FULL_FACTS.some((f) => f.about === s));
+
+  it('builds the same vault every time from fixed entries', () => {
+    expect(set.note).toBe(SAMPLE_NOTE);
+    const facts = set.entities.filter((e) => e.kind === 'private');
+    expect(facts.map((e) => [e.surfaces[0], e.source, nameOf(e.about)])).toEqual(FULL_FACTS.map((f) => [f.text, 'teacher', f.about]));
+    expect(set.entities.filter((e) => e.kind === 'student').map((e) => e.surfaces[0])).toEqual([
+      'Aarav Sharma', 'Meenal Joshi', 'Kabir Qureshi', 'Tanvi Rao', 'Ishaan Verma',
+    ]);
+    expect(prepareFull()).toEqual(set);
+  });
+
+  it('has five drafts of five three-step items, with one or two conflicts in each', () => {
+    expect(set.cases).toHaveLength(25);
+    expect(new Set(set.cases.map((c) => c.id)).size).toBe(25);
+    for (let d = 1; d <= 5; d++) {
+      const draft = set.cases.filter((c) => c.id.startsWith(`draft-${d}-`));
+      expect(draft.map((c) => c.student), `draft ${d}`).toEqual(['Aarav', 'Meenal', 'Kabir', 'Ishaan', 'Tanvi']);
+      const conflicts = draft.filter((c) => c.expected === 'conflict').length;
+      expect(conflicts === 1 || conflicts === 2, `draft ${d}`).toBe(true);
+    }
+    expect(set.cases.filter((c) => c.expected === 'conflict')).toHaveLength(7);
+    for (const c of set.cases) {
+      expect(steps(c.item.text), c.id).toHaveLength(3);
+      expect(c.item.text, c.id).toMatch(/^First, .+ Second, .+ Third, .+\.$/);
+      expect(Boolean(c.because), c.id).toBe(c.expected === 'conflict');
+      expect(set.tokens, c.id).toContain(c.item.heading);
+      // A conflict is only ever about a child with a withheld fact of their own.
+      if (c.expected === 'conflict') expect(['Aarav', 'Meenal', 'Kabir'], c.id).toContain(c.student);
+    }
+  });
+
+  it('puts each item to the check against the right facts, in both modes', async () => {
+    const paras = paragraphs(set.note);
+    const fits = async () => ({ text: '{"can_do":"yes","reason":"ok"}', onDevice: true });
+    const expectedFacts: Record<string, number> = { Aarav: 1, Meenal: 3, Kabir: 1, Ishaan: 5, Tanvi: 5 };
+    for (const c of set.cases) {
+      const groups = detailsFor(c.item, set.entities);
+      expect(groups, c.id).toHaveLength(1);
+      // A child with facts of their own is checked against those; a child with none, against every withheld fact.
+      expect(groups[0].student?.surfaces.includes(c.student) ?? false, c.id).toBe(expectedFacts[c.student] < 5);
+      expect(groups[0].details, c.id).toHaveLength(expectedFacts[c.student]);
+      const plain = await checkItems([c.item], set.entities, paras, set.tokens, fits);
+      expect(plain.asked, c.id).toBe(3);
+      const perFact = await checkItems([c.item], set.entities, paras, set.tokens, fits, undefined, { perFact: true });
+      expect(perFact.asked, c.id).toBe(c.student === 'Meenal' ? 9 : 3);
     }
   });
 });
