@@ -350,7 +350,10 @@ export function App() {
                       onChange={(e) => setNote(e.target.value)}
                       placeholder="Write what you noticed this week, as you would in your own notebook. Names, family matters, health: write it all. The guard reads it here, on this device, before anything is sent."
                       rows={13}
-                      spellCheck
+                      spellCheck={false}
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      autoComplete="off"
                       aria-label="Your note"
                     />
                     <details className="class-list" open={classList.length === 0 ? undefined : false}>
@@ -363,6 +366,10 @@ export function App() {
                         onChange={(e) => setClassList(e.target.value.split('\n').map((s) => s.trimStart()))}
                         onBlur={() => setClassList((l) => l.map((s) => s.trim()).filter(Boolean))}
                         rows={5}
+                        spellCheck={false}
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        autoComplete="off"
                         aria-label="Class list"
                       />
                     </details>
