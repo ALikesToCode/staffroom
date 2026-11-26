@@ -21,7 +21,7 @@ import { approvalKey } from './core/policy';
 import { familyFor } from './core/family';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
-import { guardOnDevice, guardOutcome, paragraphs } from './ai/guard';
+import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
 import { NOTE_MAX } from './core/text';
 import {
   DRAFT_FORMAT,
@@ -125,6 +125,8 @@ export function App() {
   const [readKey, setReadKey] = useState<string | null>(null);
   /** The second tick, asked for when nothing is withheld: "I am sending my note as written". Bound to the same text and policy. */
   const [asWrittenKey, setAsWrittenKey] = useState<string | null>(null);
+  /** The tick asked for when the on-device model could not read some parts: "I have read those parts myself". */
+  const [unreadKey, setUnreadKey] = useState<string | null>(null);
   /** What was approved: the text, when, and the vault as it stood at that moment. */
   const [sent, setSent] = useState<{
     text: string;
@@ -234,11 +236,16 @@ export function App() {
   const asWrittenApproval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel, true);
   const readIt = readKey !== null && readKey === approval;
   const asWritten = asWrittenKey !== null && asWrittenKey === asWrittenApproval;
+  /** True when a model read the note but not all of it. A rules-only run says as much on the main tick. */
+  const partsUnread = guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0;
+  const unreadApproval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel, false, guardGaps.unread);
+  const unreadAcked = unreadKey !== null && unreadKey === unreadApproval;
 
   // The ticks are for one exact text under one policy. If either changes, they are cleared.
   useEffect(() => {
     setReadKey(null);
     setAsWrittenKey(null);
+    setUnreadKey(null);
   }, [approval]);
 
   // ---------------------------------------------------------------- the on-device model
@@ -314,6 +321,8 @@ export function App() {
     }
     // With no model, a capitalised word that is not an ordinary sentence opener is held back as a possible name. A guess: it can be released.
     if (where === 'RULES_ONLY') candidates.push(...possibleNameCandidates(note, classList));
+    // The model read some parts and not others: the same rule covers the parts it did not read.
+    else if (gaps.unread.length > 0) candidates.push(...possibleNameCandidates(unreadText(note, gaps.unread), classList));
     setEntities(buildVault(note, candidates));
     setGuardWhere(where);
     setGuardGaps(gaps);
@@ -416,10 +425,15 @@ export function App() {
     const written =
       tokens.length > 0 ||
       (asWrittenKey !== null && asWrittenKey === approvalKey(text, sentPolicy.lockedKinds, sentPolicy.cloudModel, true));
-    const same = read && written;
+    // Parts no model read need their own tick too, for this same text.
+    const unreadOk =
+      !(guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0) ||
+      (unreadKey !== null && unreadKey === approvalKey(text, sentPolicy.lockedKinds, sentPolicy.cloudModel, false, guardGaps.unread));
+    const same = read && written && unreadOk;
     if (stage !== 'review' || !same || stopped.length > 0) {
       setReadKey(null);
       setAsWrittenKey(null);
+      setUnreadKey(null);
       setError(
         stopped.length > 0
           ? 'The exit gate stopped the text. Nothing was sent.'
@@ -618,6 +632,7 @@ export function App() {
     setReleaseAsk(null);
     setReadKey(null);
     setAsWrittenKey(null);
+    setUnreadKey(null);
     setSent(null);
     setResult(null);
     setChecks([]);
@@ -801,7 +816,8 @@ export function App() {
         guardGaps.unread.map((i) => (
           <p className="caution" key={i}>
             The on-device model could not read part {i + 1} of your note
-            {noteParts[i] ? ` (it begins “${noteParts[i].slice(0, 40).trim()}…”)` : ''}. Check it yourself before you approve.
+            {noteParts[i] ? ` (it begins “${noteParts[i].slice(0, 40).trim()}…”)` : ''}. In that part, capitalised words were held
+            back as possible names, by rule. Private details in it were not looked for: check it yourself before you approve.
           </p>
         ))}
       {entities.length === 0 ? (
@@ -1367,6 +1383,14 @@ export function App() {
                       ? 'No model looked for private details. I have read this text and marked them myself.'
                       : 'I have read this text and I am content to send it.'}
                   </label>
+                  {partsUnread && (
+                    <label className="read-it unread-parts">
+                      <input type="checkbox" checked={unreadAcked} onChange={(e) => setUnreadKey(e.target.checked ? unreadApproval : null)} />
+                      The on-device model did not read {guardGaps.unread.length === 1 ? 'one part' : `${guardGaps.unread.length} parts`} of
+                      this note. I have read {guardGaps.unread.length === 1 ? 'that part' : 'those parts'} in the text above and marked
+                      what is private in {guardGaps.unread.length === 1 ? 'it' : 'them'} myself.
+                    </label>
+                  )}
                   {nothingWithheld && (
                     <label className="read-it as-written">
                       <input
@@ -1384,7 +1408,7 @@ export function App() {
                     </p>
                   )}
                   <div className="actions">
-                    <button className="primary send" disabled={!readIt || (nothingWithheld && !asWritten) || violations.length > 0 || !policyReady}
+                    <button className="primary send" disabled={!readIt || (nothingWithheld && !asWritten) || (partsUnread && !unreadAcked) || violations.length > 0 || !policyReady}
                       onClick={approveAndSend}
                     >
                       Approve and send

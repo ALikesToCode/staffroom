@@ -590,7 +590,7 @@ describe('vault', () => {
   });
 });
 
-import { anchor, anchorQuote, guardOutcome, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
+import { anchor, anchorQuote, guardOutcome, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer, unreadText } from '../ai/guard';
 import { allStepsFit, anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, factSets, keepNoConflict, NOT_ANSWERED, readVerdict, startsKept, steps, studentsNamed, UNCLEAR, worse } from '../ai/check';
 import { asReceiptRecord, draftLine, makeReceipt, newReceiptId, receiptRecord, RECEIPT_ID, RECORD_MODELS, recordIdTail, recordModelName } from './receipts';
 import { approvalKey, DEFAULT_POLICY, fallbackPolicy, readSaved, toSave, withTimeout } from './policy';
@@ -2123,5 +2123,41 @@ describe('the title a model writes for a receipt', () => {
     }
     // A name the teacher released for the draft still does not belong in a title.
     expect(safeTitle('Help from Sunita', released, fallback)).toBe(fallback);
+  });
+});
+
+describe('parts of the note the on-device model could not read', () => {
+  const note = 'Meenal reads well. Her aunt Sunita helps.\n\nAarav was late. His uncle Ramesh brought him from Rampur.\n\nTanvi is shy.';
+  const list = ['Meenal', 'Aarav', 'Tanvi'];
+
+  it('have the capitalised-word rule applied to them, and only to them', () => {
+    expect(unreadText(note, [1])).toBe('Aarav was late. His uncle Ramesh brought him from Rampur.');
+    expect(unreadText(note, [0, 2, 7])).toBe('Meenal reads well. Her aunt Sunita helps.\n\nTanvi is shy.');
+    expect(unreadText(note, [])).toBe('');
+    const guesses = possibleNameCandidates(unreadText(note, [1]), list);
+    expect(guesses.map((c) => [c.kind, c.text, c.category])).toEqual([
+      ['adult', 'Ramesh', 'capitalised word'],
+      ['place', 'Rampur', 'capitalised word'],
+    ]);
+    // The model read part 1 and found Sunita; the rule covers part 2, which it did not read.
+    const v = buildVault(note, [
+      ...deterministicCandidates(note, list),
+      { kind: 'adult', text: 'Sunita', source: 'on-device model' },
+      ...guesses,
+    ]);
+    expect(redact(note, v)).toBe(
+      '[Student 1] reads well. Her aunt [Adult 1] helps.\n\n[Student 2] was late. His uncle [Adult 2] brought him from [Place 1].\n\n[Student 3] is shy.',
+    );
+    expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+  });
+
+  it('need their own tick, bound to the same text and policy', () => {
+    const read = approvalKey('x', ['contact'], 'gemini-3.5-flash-lite');
+    const unread = approvalKey('x', ['contact'], 'gemini-3.5-flash-lite', false, [1, 3]);
+    expect(unread).not.toBe(read);
+    expect(approvalKey('x', ['contact'], 'gemini-3.5-flash-lite', false, [1, 3])).toBe(unread);
+    expect(approvalKey('x', ['contact'], 'gemini-3.5-flash-lite', false, [1])).not.toBe(unread);
+    expect(approvalKey('y', ['contact'], 'gemini-3.5-flash-lite', false, [1, 3])).not.toBe(unread);
+    expect(approvalKey('x', ['contact'], 'gemini-3.5-flash-lite', true)).not.toBe(unread);
   });
 });

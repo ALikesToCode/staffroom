@@ -244,6 +244,19 @@ export function guardOutcome(report: GuardReport): GuardOutcome {
   };
 }
 
+/**
+ * The text of the pieces the model could not read, one to a paragraph. The
+ * capitalised-word rule is run over this, so a name in a piece no model
+ * read is still held back as a possible name.
+ */
+export function unreadText(note: string, unread: number[]): string {
+  const parts = paragraphs(note);
+  return unread
+    .map((i) => parts[i])
+    .filter((p): p is string => typeof p === 'string')
+    .join('\n\n');
+}
+
 /** The model's answer for one piece, and whether it came from the device. */
 export interface ChunkAnswer {
   text: string;

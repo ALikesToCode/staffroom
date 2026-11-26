@@ -8,9 +8,15 @@ import type { Kind } from './types';
  * `asWritten` marks the second tick, asked for when nothing at all is
  * withheld: "I am sending my note as written". It is a different key, so
  * the ordinary tick can never stand in for it.
+ *
+ * `unreadParts` marks a third tick, asked for when the on-device model
+ * could not read some parts of the note: "I have read those parts myself".
+ * It names the parts, so it holds only for those parts of that text.
  */
-export function approvalKey(text: string, lockedKinds: Kind[], cloudModel: string, asWritten = false): string {
-  return JSON.stringify([text, [...lockedKinds].sort(), cloudModel, asWritten]);
+export function approvalKey(text: string, lockedKinds: Kind[], cloudModel: string, asWritten = false, unreadParts?: number[]): string {
+  const key: unknown[] = [text, [...lockedKinds].sort(), cloudModel, asWritten];
+  if (unreadParts) key.push({ unread: unreadParts });
+  return JSON.stringify(key);
 }
 
 /** Wait for a value for at most `ms`. After that, or if it fails, use the fallback. Never rejects. */
