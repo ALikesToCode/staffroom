@@ -130,6 +130,8 @@ export function App() {
   /** False on the first screen: no form is shown until the teacher chooses to write, or a note is already kept in this tab. */
   const [composing, setComposing] = useState(() => read(session, NOTE_KEY, '') !== '');
   const [inspecting, setInspecting] = useState(false);
+  /** Whether the list of what is withheld is unfolded. */
+  const [vaultOpen, setVaultOpen] = useState(false);
   /** Why the last draft was not written, in plain words. */
   const [draftFail, setDraftFail] = useState<{ say: string; status?: number } | null>(null);
 
@@ -1200,7 +1202,12 @@ export function App() {
 
   /** The vault, folded: the constraints are the centre of the review, and the note shows what is held by colour. */
   const vaultFold = (
-    <details className="card fold" open={(guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0) || releaseAsk !== null || unconfirmAsk !== null || undefined}>
+    <details
+      className="card fold"
+      // Open when the teacher opened it, and whenever it lists parts of the note the model could not read.
+      open={vaultOpen || (guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0)}
+      onToggle={(e) => setVaultOpen(e.currentTarget.open)}
+    >
       <summary>
         {withheld.length} {withheld.length === 1 ? 'name or detail' : 'names and details'} withheld
       </summary>
@@ -1578,7 +1585,7 @@ export function App() {
           {draftFail && stage === 'review' && (
             <div className="alert fail" role="alert">
               <p>
-                <b>{draftFail.say}</b> The request carried only the text you approved.
+                <b>{draftFail.say}</b>
                 {draftFail.status !== undefined && <small> Status {draftFail.status}.</small>}
               </p>
               <div className="actions">
