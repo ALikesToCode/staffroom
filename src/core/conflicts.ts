@@ -244,7 +244,8 @@ export function ruleConflicts(step: string, c: Constraint, context: RuleContext 
         const notThere = `${name}'s ${c.who} ${c.who === 'parents' ? 'are' : 'is'} not there to ask`;
         return m ? hit(m[0], `This step speaks to ${quote(m[0])}, and ${notThere}.`) : undefined;
       }
-      const reach = (roles: string[]) => firstMatch(step, [`${CONTACT_VERBS}${AFTER}[^.;!?]{0,60}?${BEFORE}(?:${roles.join('|')})`]);
+      // The verb and the adult stand in one clause: "speak to his mother, and do not contact his father" is two.
+      const reach = (roles: string[]) => firstMatch(step, [`${CONTACT_VERBS}${AFTER}[^.;!?,]{0,60}?${BEFORE}(?:${roles.join('|')})`]);
       const named = c.who === 'parents' ? [...PARENTS, ...ROLE_FORMS.father, ...ROLE_FORMS.mother] : c.who ? formsOf(c.who) : [];
       const m = named.length > 0 ? reach(named) : undefined;
       if (m) return hit(m[0], `This step has someone contact the ${c.who} of ${name} (${quote(m[0])}).`);

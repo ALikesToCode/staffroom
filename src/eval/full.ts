@@ -1,4 +1,5 @@
-import type { DraftItem, Entity } from '../core/types';
+import type { Constraint, DraftItem, Entity } from '../core/types';
+import { confirmConstraint, lockConstraints, proposeConstraints } from '../core/constraints';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from '../core/samples';
 import { buildVault, redactWithTokens, type Candidate } from '../core/vault';
 
@@ -32,7 +33,10 @@ interface FullItem {
   text: string;
 }
 
-/** Five drafts. In each, one or two items have a step that a withheld fact plainly rules out; the rest are harmless. */
+/**
+ * Six drafts. In each, one or two items have a step that a withheld fact plainly rules out; the rest are
+ * harmless. The first five are support plans. The sixth is a set of messages home, one for each family.
+ */
 const DRAFTS: FullItem[][] = [
   [
     {
@@ -176,6 +180,35 @@ const DRAFTS: FullItem[][] = [
       text: 'First, give her a quiet corner for reading. Second, ask her to keep a small reading diary. Third, tell her privately when she has done well.',
     },
   ],
+  [
+    {
+      student: 'Aarav',
+      expected: 'conflict',
+      because: 'The third sentence asks the family to buy a workbook; the family cannot pay for anything extra this term.',
+      text: 'Your son has a quick mind for numbers and it shows in every maths lesson. He has fallen behind with homework, and we would like to help him catch up. Please buy the practice workbook from the school office this week so that he can work through it at home.',
+    },
+    {
+      student: 'Meenal',
+      expected: 'compatible',
+      text: 'Your daughter reads aloud with real confidence. Written tests still worry her, so we are practising short pieces in lessons. Please ask her to write three sentences about her day at home.',
+    },
+    {
+      student: 'Kabir',
+      expected: 'conflict',
+      because: 'The third sentence asks both parents to come in; his parents are separating and he is staying with his grandmother.',
+      text: 'Your son has good ideas and likes to lead. Working with a partner has been hard for him this month and we are helping him to take turns. We would like both parents to come in on Friday at three to talk it through.',
+    },
+    {
+      student: 'Ishaan',
+      expected: 'compatible',
+      text: 'Your son finishes his work quickly and accurately. He sometimes gets restless while he waits for the next task. Please ask him to bring a book from home to read when he has finished.',
+    },
+    {
+      student: 'Tanvi',
+      expected: 'compatible',
+      text: 'Your daughter is reading well beyond her year. She is quiet in lessons and we are encouraging her to share what she reads. Please ask her to tell you about her book at home each week.',
+    },
+  ],
 ];
 
 /** One item of one draft, ready for the check, with what the check ought to say. */
@@ -190,17 +223,23 @@ export interface FullCase {
 export interface FullSet {
   note: string;
   entities: Entity[];
+  /** The constraints the rules propose from the note, all confirmed, as if the teacher had confirmed each. None is told to the cloud. */
+  constraints: Constraint[];
   tokens: string[];
   cases: FullCase[];
 }
 
-/** The sample note, the fixed vault and the twenty-five items, built the way the app builds them. */
+/** The sample note, the fixed vault, its constraints and the thirty items, built the way the app builds them. */
 export function prepareFull(): FullSet {
   const candidates: Candidate[] = [
     ...SAMPLE_CLASS_LIST.map((name) => ({ kind: 'student' as const, text: name, source: 'class list' as const })),
     ...FULL_FACTS.map((f) => ({ kind: 'private' as const, text: f.text, source: 'teacher' as const, aboutName: f.about })),
   ];
-  const entities = buildVault(SAMPLE_NOTE, candidates);
+  let held = { entities: buildVault(SAMPLE_NOTE, candidates), constraints: [] as Constraint[] };
+  held.constraints = proposeConstraints(SAMPLE_NOTE, held.entities);
+  for (const c of held.constraints) held = confirmConstraint(SAMPLE_NOTE, held.entities, held.constraints, c.id);
+  const constraints = held.constraints;
+  const entities = lockConstraints(held.entities, constraints);
   const tokens = redactWithTokens(SAMPLE_NOTE, entities).tokens;
   const tokenOf = (name: Name) => entities.find((e) => e.kind === 'student' && e.surfaces.includes(name))!.token;
   const cases = DRAFTS.flatMap((draft, d) =>
@@ -213,5 +252,5 @@ export function prepareFull(): FullSet {
       item: { heading: tokenOf(it.student), text: it.text },
     })),
   );
-  return { note: SAMPLE_NOTE, entities, tokens, cases };
+  return { note: SAMPLE_NOTE, entities, constraints, tokens, cases };
 }

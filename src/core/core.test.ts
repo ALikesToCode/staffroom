@@ -2022,19 +2022,20 @@ describe('the full-note set for measuring the on-device check', () => {
     expect(prepareFull()).toEqual(set);
   });
 
-  it('has five drafts of five three-step items, with one or two conflicts in each', () => {
-    expect(set.cases).toHaveLength(25);
-    expect(new Set(set.cases.map((c) => c.id)).size).toBe(25);
-    for (let d = 1; d <= 5; d++) {
+  it('has six drafts of five three-step items, with one or two conflicts in each', () => {
+    expect(set.cases).toHaveLength(30);
+    expect(new Set(set.cases.map((c) => c.id)).size).toBe(30);
+    for (let d = 1; d <= 6; d++) {
       const draft = set.cases.filter((c) => c.id.startsWith(`draft-${d}-`));
       expect(draft.map((c) => c.student), `draft ${d}`).toEqual(['Aarav', 'Meenal', 'Kabir', 'Ishaan', 'Tanvi']);
       const conflicts = draft.filter((c) => c.expected === 'conflict').length;
       expect(conflicts === 1 || conflicts === 2, `draft ${d}`).toBe(true);
     }
-    expect(set.cases.filter((c) => c.expected === 'conflict')).toHaveLength(7);
+    expect(set.cases.filter((c) => c.expected === 'conflict')).toHaveLength(9);
     for (const c of set.cases) {
       expect(steps(c.item.text), c.id).toHaveLength(3);
-      expect(c.item.text, c.id).toMatch(/^First, .+ Second, .+ Third, .+\.$/);
+      // The sixth draft is messages home: three sentences each, not numbered steps.
+      if (!c.id.startsWith('draft-6-')) expect(c.item.text, c.id).toMatch(/^First, .+ Second, .+ Third, .+\.$/);
       expect(Boolean(c.because), c.id).toBe(c.expected === 'conflict');
       expect(set.tokens, c.id).toContain(c.item.heading);
       // A conflict is only ever about a child with a withheld fact of their own.

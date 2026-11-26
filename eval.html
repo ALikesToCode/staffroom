@@ -21,14 +21,27 @@
   <body translate="no">
     <h1>Staffroom: measuring the on-device check</h1>
     <p>
-      A developer page. It runs 24 fixed, invented cases through the same on-device check the app uses: 12 where the advice
-      conflicts with a withheld fact and 12 where it does not. Each case runs once; add <code>?runs=3</code> to the address to
-      run each three times. Nothing is sent anywhere: the route is ONLY_ON_DEVICE.
+      A developer page. With nothing added to the address it runs 24 fixed, invented cases through the on-device model's part
+      of the check: 12 where the advice conflicts with a withheld fact and 12 where it does not. Each case runs once; add
+      <code>?runs=3</code> to run each three times. Nothing is sent anywhere: the route is ONLY_ON_DEVICE. In these single-fact
+      sets the model's own answer is counted: its "no" is shown as "conflict" here, though the app shows it to the teacher as a
+      doubt and never strikes an item on the model's word alone.
     </p>
     <p>
-      Add <code>?set=full</code> for the second set: the whole sample note, a vault built from fixed entries, and five fixed
-      drafts of five three-step items each, of which one or two in each draft have a step that a withheld fact rules out. Add
-      <code>perFact=1</code> to ask about one fact at a time. For example <code>eval.html?set=full&amp;perFact=1&amp;runs=3</code>.
+      <code>?set=rules</code>: the rule layer on its own, 62 fresh pairs of a step and a confirmed constraint. No model is used,
+      so it runs in any browser. A case the rules get wrong stays in the set and is counted.
+    </p>
+    <p>
+      <code>?set=full</code>: the whole sample note, a vault built from fixed entries, the constraints the rules propose (all
+      confirmed) and six fixed drafts of five three-step items each, of which one or two in each draft have a step that a
+      withheld fact rules out. Each row shows the two layers together, and each on its own.
+    </p>
+    <p>
+      <code>?set=heldout</code>: 16 single-fact cases the on-device model has not been tuned on, for one run.
+    </p>
+    <p>
+      One fact at a time is the default, as in the app; add <code>perFact=0</code> to ask about all of a child's facts in one
+      prompt. For example <code>eval.html?set=full&amp;runs=3</code>.
     </p>
     <p id="eval-mode"></p>
     <p id="eval-status" role="status">Looking for the on-device model.</p>

@@ -12,7 +12,7 @@ import { buildVault, redactWithTokens } from '../core/vault';
 export interface EvalCase {
   id: string;
   expected: 'conflict' | 'compatible';
-  topic: 'time' | 'place' | 'health' | 'money' | 'family' | 'travel';
+  topic: 'time' | 'place' | 'health' | 'money' | 'family' | 'travel' | 'custom';
   student: string;
   /** What the teacher wrote about the child that is not private. */
   about: string;
@@ -150,8 +150,15 @@ export interface EvalRow {
   /** The topic of a single-fact case, or "full note" for an item of the full-note set. */
   topic: EvalCase['topic'] | 'full note';
   expected: EvalCase['expected'];
-  /** The verdict the check gave, or "failed" when the request failed or the check stopped. */
+  /**
+   * What the check said, or "failed" when the request failed or the check stopped. For the single-fact sets
+   * this is the on-device model's own answer: its "no" is counted as "conflict" here, though the app shows
+   * it to the teacher as a doubt. For the full-note set it is the two layers together, as the app shows it.
+   */
   got: Verdict | 'failed';
+  /** Full-note set: what the rule layer said on its own, and what the on-device model said on its own. */
+  layerA?: 'conflict' | 'unsure' | 'none';
+  layerB?: Verdict | 'failed';
   reason: string;
   ms: number;
   /** How many requests the check made for this item. */
