@@ -28,6 +28,11 @@ const SCHEMA = {
 
 const NO_CLEAR_ANSWER = 'The on-device check gave no clear answer. Read this item yourself.';
 
+const NO_REASON = 'The on-device check flagged this item and gave no reason. Read it against the private details yourself.';
+
+/** The verdict for a group whose request failed or whose answer could not be read. */
+export const UNCLEAR: ItemCheck = { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
+
 /**
  * Turn the check model's answer into a verdict. Anything that is not a
  * clear "fits" or "conflict" becomes "unsure", so a broken or unexpected
@@ -42,8 +47,10 @@ export function readVerdict(raw: string): ItemCheck {
   }
   if (!parsed || typeof parsed !== 'object') return { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
   const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
-  if (parsed.verdict === 'fits' || parsed.verdict === 'conflict' || parsed.verdict === 'unsure') {
-    return { verdict: parsed.verdict, reason };
+  if (parsed.verdict === 'fits') return { verdict: 'fits', reason };
+  // A warning with no reason still has to tell the teacher what to do.
+  if (parsed.verdict === 'conflict' || parsed.verdict === 'unsure') {
+    return { verdict: parsed.verdict, reason: reason || NO_REASON };
   }
   return { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
 }
@@ -73,6 +80,9 @@ export interface CheckGroup {
   details: Entity[];
 }
 
+/** Words that make an item apply to every child, whoever else it names. */
+const WHOLE_CLASS = /(?<![\p{L}\p{N}])(?:whole class|everyone|all students|the class)(?![\p{L}\p{N}])/iu;
+
 const flat = (e: Entity) => e.surfaces[0].toLowerCase().replace(/\s+/g, ' ');
 
 /** A detail that is wholly inside another in the list (a phrase inside its own sentence) is listed once, as the longer. */
@@ -84,8 +94,9 @@ const longestOnly = (all: Entity[]) =>
  *
  * - For each student the item names, the withheld private details about that student.
  * - Withheld details that are about nobody in particular are never left out: they form a class-wide group.
- * - When that gives nothing (the item names no student, as "Whole class" does, or names only students
- *   with no detail of their own) the item is checked against every withheld private detail, as one group.
+ * - When that gives nothing (the item names no student, or names only students with no detail of their
+ *   own), or when the item speaks to the whole class ("whole class", "everyone", "all students",
+ *   "the class") whoever else it names, it is checked against every withheld private detail, as one group.
  *
  * The result is empty only when no private detail is withheld at all.
  */
@@ -96,7 +107,7 @@ export function detailsFor(item: DraftItem, entities: Entity[]): CheckGroup[] {
   const groups: CheckGroup[] = studentsNamed(item, entities)
     .map((student) => ({ student, details: longestOnly(withheld.filter((d) => d.about === student.id)) }))
     .filter((g) => g.details.length > 0);
-  if (groups.length === 0) return [{ details: longestOnly(withheld) }];
+  if (groups.length === 0 || WHOLE_CLASS.test(`${item.heading} ${item.text}`)) return [{ details: longestOnly(withheld) }];
   const unattached = longestOnly(withheld.filter((d) => !d.about || !entities.some((e) => e.id === d.about)));
   if (unattached.length > 0) groups.push({ details: unattached });
   return groups;
@@ -159,7 +170,33 @@ export async function checkOnDevice(
 ): Promise<ItemCheck[]> {
   if (!anythingToCheck(items, entities)) return items.map(() => NOTHING_WITHHELD);
   const model = modelFor('check', { system: SYSTEM, schema: SCHEMA });
-  const paras = paragraphs(note);
+  return checkItems(
+    items,
+    entities,
+    paragraphs(note),
+    async (prompt) => {
+      const result = await model.generateContent(prompt);
+      const onDevice = result.response.inferenceSource === 'on_device';
+      // The text is read only when the answer came from the device.
+      return { text: onDevice ? result.response.text() : '', onDevice };
+    },
+    onProgress,
+  );
+}
+
+/**
+ * Check each item, one prompt per group. One request that fails, or one
+ * answer that cannot be read, makes that group unsure and the run goes on.
+ * An answer from anywhere but the device is different: the private details
+ * were in that prompt, so the whole check stops.
+ */
+export async function checkItems(
+  items: DraftItem[],
+  entities: Entity[],
+  paras: string[],
+  ask: (prompt: string) => Promise<{ text: string; onDevice: boolean }>,
+  onProgress: (done: number, total: number) => void = () => {},
+): Promise<ItemCheck[]> {
   const checks: ItemCheck[] = [];
   for (let i = 0; i < items.length; i++) {
     onProgress(i, items.length);
@@ -168,22 +205,36 @@ export async function checkOnDevice(
       checks.push(NOTHING_WITHHELD);
       continue;
     }
-    let worst: ItemCheck = { verdict: 'fits', reason: '' };
+    let worst: ItemCheck | undefined;
     for (const group of groups) {
-      const result = await model.generateContent(checkPrompt(group, items[i], paras, entities));
-      if (result.response.inferenceSource !== 'on_device') {
-        throw new Error('The check did not run on the device. Stopped.');
+      let answer: { text: string; onDevice: boolean } | undefined;
+      try {
+        answer = await ask(checkPrompt(group, items[i], paras, entities));
+      } catch {
+        answer = undefined;
       }
-      const answer = readVerdict(result.response.text());
-      if (rank(answer) > rank(worst) || !worst.reason) worst = answer;
+      if (answer && !answer.onDevice) throw new Error('The check did not run on the device. Stopped.');
+      worst = worse(worst, answer ? readVerdict(answer.text) : UNCLEAR);
     }
-    checks.push(worst);
+    checks.push(worst ?? UNCLEAR);
   }
   onProgress(items.length, items.length);
   return checks;
 }
 
 const rank = (c: ItemCheck) => (c.verdict === 'conflict' ? 2 : c.verdict === 'unsure' ? 1 : 0);
+
+/**
+ * Keep the more serious of two verdicts. The verdict only ever moves up:
+ * a later, milder answer never replaces an earlier warning. Between two of
+ * the same rank the first is kept, unless it has no reason to show.
+ */
+export function worse(current: ItemCheck | undefined, next: ItemCheck): ItemCheck {
+  if (!current) return next;
+  if (rank(next) > rank(current)) return next;
+  if (rank(next) === rank(current) && !current.reason && next.reason) return next;
+  return current;
+}
 
 /**
  * Which items start as kept. An item the check found in conflict starts

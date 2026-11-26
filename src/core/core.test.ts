@@ -516,7 +516,7 @@ describe('vault', () => {
 });
 
 import { anchor, anchorQuote, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
-import { anythingToCheck, checkPrompt, contextParagraphs, detailsFor, readVerdict, startsKept, studentsNamed } from '../ai/check';
+import { anythingToCheck, checkItems, checkPrompt, contextParagraphs, detailsFor, readVerdict, startsKept, studentsNamed, UNCLEAR, worse } from '../ai/check';
 import { asReceiptRecord, makeReceipt, receiptRecord, sha256Hex } from './receipts';
 
 describe('guard helpers', () => {
@@ -707,6 +707,80 @@ describe('check and receipt', () => {
     expect(detailsFor({ heading: 'Whole class', text: 'x' }, none)).toEqual([]);
     expect(anythingToCheck([{ heading: '[Student 1]', text: 'quiz' }], none)).toBe(false);
     expect(anythingToCheck([{ heading: 'Whole class', text: 'x' }], vault)).toBe(true);
+  });
+
+  it('only ever moves a verdict up', () => {
+    const fits = { verdict: 'fits' as const, reason: 'ok' };
+    const unsure = { verdict: 'unsure' as const, reason: 'think' };
+    const conflict = { verdict: 'conflict' as const, reason: 'must leave early' };
+    expect(worse(undefined, fits)).toBe(fits);
+    expect(worse(fits, conflict)).toBe(conflict);
+    expect(worse(conflict, fits)).toBe(conflict);
+    expect(worse(conflict, unsure)).toBe(conflict);
+    expect(worse(unsure, fits)).toBe(unsure);
+    expect(worse(unsure, { verdict: 'unsure', reason: 'another' })).toBe(unsure);
+    // Same rank: the one with a reason to show is kept.
+    expect(worse({ verdict: 'fits', reason: '' }, fits)).toBe(fits);
+    expect(worse(fits, { verdict: 'fits', reason: '' })).toBe(fits);
+    let run: ReturnType<typeof worse> | undefined;
+    for (const next of [fits, conflict, fits, unsure]) run = worse(run, next);
+    expect(run).toBe(conflict);
+  });
+
+  it('gives a warning with no reason a reason the teacher can act on', () => {
+    expect(readVerdict('{"verdict":"conflict","reason":""}').reason).toMatch(/gave no reason/);
+    expect(readVerdict('{"verdict":"unsure"}').reason).toMatch(/gave no reason/);
+    expect(readVerdict('{"verdict":"fits","reason":""}')).toEqual({ verdict: 'fits', reason: '' });
+    expect(UNCLEAR).toEqual({ verdict: 'unsure', reason: 'The on-device check gave no clear answer. Read this item yourself.' });
+  });
+
+  it('checks an item that speaks to the whole class against everything, even when it names a student', () => {
+    const text = 'Meenal reads well. She has epilepsy.\n\nTanvi is shy. Her father is unemployed.';
+    const v = buildVault(text, [
+      { kind: 'student', text: 'Meenal', source: 'class list' },
+      { kind: 'student', text: 'Tanvi', source: 'class list' },
+      { kind: 'private', text: 'She has epilepsy', source: 'on-device model' },
+      { kind: 'private', text: 'Her father is unemployed', source: 'on-device model' },
+    ]);
+    const all = ['She has epilepsy', 'Her father is unemployed'];
+    for (const item of [
+      { heading: 'Everyone', text: 'Ask [Student 1] to lead a timed test.' },
+      { heading: '[Student 1]', text: 'Read aloud in front of the class.' },
+      { heading: 'Plan', text: 'All students bring ten rupees; [Student 2] collects it.' },
+      { heading: 'Whole class and [Student 2]', text: 'Quiet reading.' },
+    ]) {
+      const groups = detailsFor(item, v);
+      expect(groups).toHaveLength(1);
+      expect(groups[0].student).toBeUndefined();
+      expect(groups[0].details.map((d) => d.surfaces[0])).toEqual(all);
+    }
+    // An item for one student, with no such words, is still checked against that student only.
+    const one = detailsFor({ heading: '[Student 1]', text: 'Give extra time in tests.' }, v);
+    expect(one.map((g) => [g.student?.surfaces[0], g.details.map((d) => d.surfaces[0])])).toEqual([['Meenal', ['She has epilepsy']]]);
+  });
+
+  it('marks a group whose request fails as unsure and carries on', async () => {
+    const items = [
+      { heading: '[Student 1]', text: 'timed quiz' },
+      { heading: '[Student 1]', text: 'extra time' },
+      { heading: '[Student 1]', text: 'reading aloud' },
+    ];
+    let asked = 0;
+    const checks = await checkItems(items, vault, [note], async () => {
+      asked++;
+      if (asked === 1) throw new Error('the model stopped');
+      if (asked === 2) return { text: 'not json', onDevice: true };
+      return { text: '{"verdict":"fits","reason":"ok"}', onDevice: true };
+    });
+    expect(checks).toEqual([UNCLEAR, UNCLEAR, { verdict: 'fits', reason: 'ok' }]);
+    expect(asked).toBe(3);
+  });
+
+  it('stops the whole check when an answer did not come from the device', async () => {
+    const items = [{ heading: '[Student 1]', text: 'timed quiz' }];
+    await expect(checkItems(items, vault, [note], async () => ({ text: '{"verdict":"fits","reason":"ok"}', onDevice: false }))).rejects.toThrow(
+      /did not run on the device/,
+    );
   });
 
   it('starts an item in conflict as struck and the rest as kept', () => {

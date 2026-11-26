@@ -192,14 +192,19 @@ export function App() {
 
   // The tick is for one exact text under one policy. If either changes, it is cleared.
   useEffect(() => setReadText(null), [outgoing, policy]);
-  const deviceCanRun = device === 'available' || device === 'downloadable' || device === 'downloading';
 
   // ---------------------------------------------------------------- the on-device model
 
   /** Must be called from a click: Chrome only starts a model download after one. */
   const turnOnDevice = useCallback(async (): Promise<boolean> => {
-    if (device === 'available') return true;
-    if (!deviceCanRun) return false;
+    // The first look at the device may still be under way. Wait for a real answer, not the placeholder.
+    let status = device;
+    if (status === 'checking') {
+      status = await deviceStatus();
+      setDevice(status);
+    }
+    if (status === 'available') return true;
+    if (status !== 'downloadable' && status !== 'downloading') return false;
     try {
       setDownload(0);
       await prepareDevice((fraction) => setDownload(fraction));
@@ -212,7 +217,7 @@ export function App() {
     } finally {
       setDownload(null);
     }
-  }, [device, deviceCanRun]);
+  }, [device]);
 
   // ---------------------------------------------------------------- step 2: guard
 
@@ -362,15 +367,17 @@ export function App() {
       where = 'SKIPPED';
     } else {
       try {
-        if ((await deviceStatus()) !== 'available') throw new Error('no on-device model');
+        if ((await deviceStatus()) !== 'available') throw new Error('no on-device model was available.');
         itemChecks = await checkOnDevice(note, drafted.draft.items, entities, (done, total) =>
           setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`),
         );
         where = 'ON_DEVICE';
-      } catch {
+      } catch (e) {
+        // Say what happened. The draft stays; every item that had something to be checked against is marked unchecked.
+        setError(`The on-device check stopped: ${message(e)} The items below are not checked.`);
         itemChecks = drafted.draft.items.map((item) =>
           detailsFor(item, entities).length > 0
-            ? { verdict: 'not checked', reason: 'No on-device model was available. Read this item against the private details yourself.' }
+            ? { verdict: 'not checked', reason: 'The on-device check did not run. Read this item against the private details yourself.' }
             : NOTHING_WITHHELD,
         );
       }
@@ -821,7 +828,8 @@ export function App() {
                   )}
                   {checkWhere === 'NOT_RUN' && (
                     <p className="caution">
-                      No on-device model was available to check this draft against what was withheld. The items below are not checked.
+                      The on-device check did not run, so this draft was not checked against what was withheld. The items below are
+                      not checked: read each one against the private details yourself.
                     </p>
                   )}
                   <ol className="items">
@@ -842,7 +850,7 @@ export function App() {
                               <span>{c.reason}</span>
                               {facts.length > 0 && (
                                 <small>
-                                  Checked against, on this device only:{' '}
+                                  {c.verdict === 'not checked' ? 'Not checked against:' : 'Checked against, on this device only:'}{' '}
                                   {facts.flatMap((f) => f.details.map((d) => `“${d.surfaces[0]}”`)).join(', ')}
                                 </small>
                               )}
