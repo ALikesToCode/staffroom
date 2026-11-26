@@ -166,7 +166,7 @@ export function App() {
     const candidates = deterministicCandidates(note, classList);
     let where: Where = 'RULES_ONLY';
     let gaps = NO_GAPS;
-    setProgress('Checking the class list and the pattern rules');
+    setProgress('Checking the class list, the pattern rules and the sensitive words');
     if (await turnOnDevice()) {
       try {
         const report = await guardOnDevice(note, (done, total) =>
@@ -567,8 +567,9 @@ export function App() {
                   </div>
                   {guardWhere === 'RULES_ONLY' && (
                     <p className="caution">
-                      No on-device model ran, so the raw note was not shown to any model. Only your class list and the pattern rules were
-                      applied. Names that are not on the list and private details were not looked for: select them in your note.
+                      No on-device model ran, so the raw note was not shown to any model. Only your class list, the pattern rules and a
+                      short list of sensitive words were applied. Names that are not on the list were not looked for, and nor were
+                      private details beyond those words: select them in your note.
                     </p>
                   )}
                   {entities.length === 0 ? (
@@ -773,7 +774,9 @@ export function App() {
                   )}
                   <label className="read-it">
                     <input type="checkbox" checked={readIt} onChange={(e) => setReadText(e.target.checked ? outgoing : null)} />
-                    I have read this text and I am content to send it.
+                    {guardWhere === 'RULES_ONLY'
+                      ? 'No model looked for private details. I have read this text and marked them myself.'
+                      : 'I have read this text and I am content to send it.'}
                   </label>
                   <div className="actions">
                     <button className="primary send" disabled={!readIt || violations.length > 0} onClick={approveAndSend}>

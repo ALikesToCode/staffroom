@@ -1,5 +1,5 @@
 import type { Entity, Kind, Source } from './types';
-import { findByRule, nameParts, nameWords, wholeWordMatcher } from './rules';
+import { findByRule, findSensitive, nameParts, nameWords, wholeWordMatcher } from './rules';
 
 const TOKEN_NAME: Record<Kind, string> = {
   student: 'Student',
@@ -134,7 +134,10 @@ function attachPrivateDetails(note: string, entities: Entity[]) {
   }
 }
 
-/** Candidates from the class list and from the pattern rules. */
+/**
+ * Candidates that need no model: the class list, the pattern rules, and the
+ * sentences that contain a word from the sensitive list. Used in every mode.
+ */
 export function deterministicCandidates(note: string, classList: string[]): Candidate[] {
   const out: Candidate[] = [];
   for (const name of classList) {
@@ -149,6 +152,7 @@ export function deterministicCandidates(note: string, classList: string[]): Cand
     }
   }
   for (const hit of findByRule(note)) out.push({ kind: hit.kind, text: hit.text, source: 'rule' });
+  for (const hit of findSensitive(note)) out.push({ kind: 'private', text: hit.text, source: 'rule', category: hit.category });
   return out;
 }
 

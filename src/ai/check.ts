@@ -57,15 +57,20 @@ export function anythingToCheck(items: DraftItem[], entities: Entity[]): boolean
   return items.some((item) => detailsFor(item, entities).length > 0);
 }
 
-/** The private details that bear on one draft item: those about any student the item names. */
+/**
+ * The private details that bear on one draft item: those about any student
+ * the item names. A detail that is wholly inside another one about the same
+ * student (a phrase inside its own sentence) is listed once, as the longer.
+ */
 export function detailsFor(item: DraftItem, entities: Entity[]): { student: Entity; details: Entity[] }[] {
   const text = `${item.heading} ${item.text}`;
+  const flat = (e: Entity) => e.surfaces[0].toLowerCase().replace(/\s+/g, ' ');
   return entities
     .filter((e) => e.kind === 'student' && text.includes(e.token))
-    .map((student) => ({
-      student,
-      details: entities.filter((d) => d.kind === 'private' && d.withheld && d.about === student.id),
-    }))
+    .map((student) => {
+      const all = entities.filter((d) => d.kind === 'private' && d.withheld && d.about === student.id);
+      return { student, details: all.filter((d) => !all.some((o) => o !== d && flat(o).length > flat(d).length && flat(o).includes(flat(d)))) };
+    })
     .filter((x) => x.details.length > 0);
 }
 

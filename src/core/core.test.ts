@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findByRule, nameParts } from './rules';
+import { findByRule, findSensitive, nameParts, sentences } from './rules';
 import { addByTeacher, applyLocks, buildVault, deterministicCandidates, redact, restore, segment, PRIVATE_TOKEN } from './vault';
 import { checkOutgoing, checkReply } from './gate';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from './samples';
@@ -26,6 +26,45 @@ describe('pattern rules', () => {
 
   it('drops honorifics from names', () => {
     expect(nameParts('Mrs. Kavita Rao')).toEqual(['Kavita', 'Rao']);
+  });
+});
+
+describe('sensitive words', () => {
+  it('withholds the whole sentence around a sensitive word in the sample note', () => {
+    expect(findSensitive(SAMPLE_NOTE).map((h) => [h.category, h.text])).toEqual([
+      [
+        'family',
+        'His mother Sunita told me on the phone (98765 43210) that his father lost his job at the mill and Aarav now helps at the family tea stall before school',
+      ],
+      ['health', 'She told me she has epilepsy and is afraid of having a seizure in the exam hall'],
+      ['family', "Kabir's parents are separating and he is staying with his grandmother"],
+    ]);
+    for (const h of findSensitive(SAMPLE_NOTE)) expect(SAMPLE_NOTE.slice(h.start, h.end)).toBe(h.text);
+  });
+
+  it('needs no model: the rules-only vault hides those sentences', () => {
+    const v = buildVault(SAMPLE_NOTE, deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST));
+    const details = v.filter((e) => e.kind === 'private');
+    expect(details.map((e) => e.source)).toEqual(['rule', 'rule', 'rule']);
+    const out = redact(SAMPLE_NOTE, v);
+    for (const leaked of ['epilepsy', 'seizure', 'lost his job', 'separating', 'tea stall', 'Sunita', '98765']) {
+      expect(out).not.toContain(leaked);
+    }
+    expect(out).toContain('[Student 1] has missed four days this month. [withheld]. He is bright in maths');
+    expect(checkOutgoing(out, v)).toEqual([]);
+  });
+
+  it('matches whole words in any case, and a plain plural', () => {
+    expect(findSensitive('He takes MEDICATION daily. She had two seizures.')).toHaveLength(2);
+    expect(findSensitive('The casters on the trolley broke. Debtors and hospitality were the topics.')).toEqual([]);
+  });
+
+  it('does not end a sentence at an abbreviation or inside a number', () => {
+    expect(sentences('Her roll no. 6B/23 is new. Mrs. Rao came at 3.30 today!\nNext line').map((s) => s.text)).toEqual([
+      'Her roll no. 6B/23 is new',
+      'Mrs. Rao came at 3.30 today',
+      'Next line',
+    ]);
   });
 });
 
@@ -76,15 +115,21 @@ describe('vault', () => {
       expect(redacted).not.toContain(leaked);
     }
     expect(redacted).toContain('[Student 1] has missed four days');
-    expect(redacted).toContain("[Student 3]'s parents");
+    expect(redacted).not.toContain('separating');
+    const kabir = vault.map((e) => (e.surfaces[0].startsWith("Kabir's parents") ? { ...e, withheld: false } : e));
+    expect(redact(SAMPLE_NOTE, kabir)).toContain("[Student 3]'s parents are separating");
     expect(redacted).toContain(PRIVATE_TOKEN);
   });
 
   it('attaches a private detail to the right student', () => {
     const byId = (id?: string) => vault.find((e) => e.id === id)?.surfaces[0];
-    const details = vault.filter((e) => e.kind === 'private');
-    expect(byId(details[0].about)).toBe('Meenal');
-    expect(byId(details[1].about)).toBe('Aarav Sharma');
+    const about = (start: string) => byId(vault.find((e) => e.kind === 'private' && e.surfaces[0].startsWith(start))?.about);
+    expect(about('she has epilepsy')).toBe('Meenal');
+    expect(about('She told me')).toBe('Meenal');
+    expect(about('his father lost his job')).toBe('Aarav Sharma');
+    expect(about('His mother Sunita')).toBe('Aarav Sharma');
+    // A name inside the detail wins over the name nearest before it ("Kabir and Ishaan fight ...").
+    expect(about("Kabir's parents")).toBe('Kabir');
   });
 
   it('puts names back on the device', () => {
@@ -259,6 +304,15 @@ describe('check and receipt', () => {
     { kind: 'student', text: 'Tanvi', source: 'class list' },
     { kind: 'private', text: 'She has epilepsy', source: 'on-device model', category: 'health' },
   ]);
+
+  it('lists a phrase and the sentence around it once', () => {
+    const v = buildVault(note, [
+      { kind: 'student', text: 'Meenal', source: 'class list' },
+      { kind: 'private', text: 'She has epilepsy', source: 'rule' },
+      { kind: 'private', text: 'epilepsy', source: 'on-device model' },
+    ]);
+    expect(detailsFor({ heading: '[Student 1]', text: 'timed quiz' }, v)[0].details.map((d) => d.surfaces[0])).toEqual(['She has epilepsy']);
+  });
 
   it('gives each item only the details about the students it names', () => {
     expect(detailsFor({ heading: '[Student 1]', text: 'timed quiz' }, vault)[0].details).toHaveLength(1);

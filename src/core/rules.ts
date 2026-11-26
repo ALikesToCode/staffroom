@@ -96,3 +96,78 @@ export function wholeWordMatcher(surfaces: string[]): RegExp | null {
   const body = unique.map((s) => escapeRe(s).replace(/\s+/g, '\\s+')).join('|');
   return new RegExp(`${EDGE_BEFORE}(?:${body})${EDGE_AFTER}`, 'giu');
 }
+
+// ---------------------------------------------------------------- sensitive words
+
+/**
+ * A short, fixed list of words that mark a sentence as private. It is no
+ * match for a model: it knows these words and nothing else. It runs in
+ * every mode, so a note is never sent with one of these in plain sight
+ * only because no model was there to read it.
+ */
+const SENSITIVE: { category: string; terms: string[] }[] = [
+  { category: 'health', terms: ['epilepsy', 'seizure', 'asthma', 'diabetes', 'disability', 'medication', 'hospital', 'pregnant'] },
+  {
+    category: 'family',
+    terms: [
+      'separating', 'separated', 'divorce', 'divorced', 'died', 'death', 'orphan', 'lost his job', 'lost her job',
+      'unemployed', 'debt', 'alcohol', 'abuse', 'violence',
+    ],
+  },
+  { category: 'identity', terms: ['caste', 'religion'] },
+];
+
+/** The same word with a plain plural "s" also counts: "seizures", "debts". */
+const SENSITIVE_RE = SENSITIVE.map((group) => ({
+  category: group.category,
+  re: new RegExp(
+    `${EDGE_BEFORE}(?:${group.terms.map((t) => escapeRe(t).replace(/\s+/g, '\\s+')).join('|')})s?${EDGE_AFTER}`,
+    'iu',
+  ),
+}));
+
+/** A full stop after one of these does not end a sentence. */
+const ABBREVIATIONS = new Set([...HONORIFICS, 'no', 'nos', 'adm', 'reg', 'std', 'st', 'dob']);
+
+export interface Sentence {
+  text: string;
+  start: number;
+  end: number;
+}
+
+/** Split text into sentences, without the closing punctuation. A line break also ends a sentence. */
+export function sentences(text: string): Sentence[] {
+  const out: Sentence[] = [];
+  let from = 0;
+  const close = (to: number) => {
+    let start = from;
+    let end = to;
+    while (start < end && /\s/.test(text[start])) start++;
+    while (end > start && /[\s.!?]/.test(text[end - 1])) end--;
+    if (end > start) out.push({ text: text.slice(start, end), start, end });
+    from = to;
+  };
+  for (const m of text.matchAll(/[.!?]+(?=\s|$)|\n+/g)) {
+    if (m[0] === '.') {
+      const word = /[\p{L}]+$/u.exec(text.slice(from, m.index))?.[0].toLowerCase();
+      if (word && ABBREVIATIONS.has(word)) continue;
+    }
+    close(m.index + m[0].length);
+  }
+  close(text.length);
+  return out;
+}
+
+export interface SensitiveHit extends Sentence {
+  category: string;
+}
+
+/** Every sentence that contains a word from the sensitive list, whole. No model is involved. */
+export function findSensitive(text: string): SensitiveHit[] {
+  const hits: SensitiveHit[] = [];
+  for (const sentence of sentences(text)) {
+    const group = SENSITIVE_RE.find((g) => g.re.test(sentence.text));
+    if (group) hits.push({ ...sentence, category: group.category });
+  }
+  return hits;
+}
