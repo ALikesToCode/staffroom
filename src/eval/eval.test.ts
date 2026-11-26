@@ -31,6 +31,8 @@ describe('the rule layer measured on fresh pairs', () => {
     // bring from home count as a cost, the phone and internet rule is about home, more health words). Those
     // changes were made knowing this set, so it is no longer fresh for them. They moved nothing here:
     // the totals and both lists are the same before and after.
+    // The same holds for the later narrowing of "order" and of buying that is only studied, made from
+    // steps the cloud wrote live: nothing here moved.
     expect(totals).toEqual({ cases: 62, conflictCases: 29, caught: 19, queried: 0, missed: 10, otherCases: 33, passed: 30, falseAlarms: 3 });
     expect(rows.filter((r) => r.expected === 'conflict' && r.got !== 'conflict').map((r) => r.id)).toEqual([
       'after-1', // "once the final bell has gone": no "after"
@@ -191,6 +193,7 @@ describe('the lesson set: whole lessons against the sample class, by rule', () =
     // the money rule knows things to bring from home, the phone and internet rule is about home, and the
     // health words gained "flicker". So this set is no longer fresh for those rules, and the numbers
     // below say only that the fixes do what they were written to do on the cases they were written from.
+    // The later narrowing of "order" and of buying that is only studied moved nothing here either.
     expect(totals).toEqual({ lessons: 5, stages: 25, expected: 13, caught: 13, missed: 0, falseAlarms: 0 });
     expect(rows.filter((r) => r.outcome !== 'caught')).toEqual([]);
   });

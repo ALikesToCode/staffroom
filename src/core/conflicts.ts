@@ -182,13 +182,51 @@ const MONEY = [
   'donat(?:e|es|ed|ing|ion|ions)',
   // "Contribute an idea" is no payment: the word counts with money, a sum or a cost after it.
   'contribut(?:e|es|ed|ing|ion|ions)(?=\\s+(?:[\\p{L}]+\\s+){0,3}?(?:towards|rupees?|rs\\.?|₹|money|\\d|cost|costs|fund|funds))',
-  '(?<!in )order(?:s|ed|ing)?(?! of)',
+  // To order is to buy only with a thing to buy or a place to buy it from. "Spatial order", "in order", "word order" are not.
+  'plac(?:e|es|ed|ing)\\s+an\\s+order',
+  'order(?:s|ed|ing)?\\s+(?:a|an|some|one|two|three|\\d+)\\s+(?:[\\p{L}-]+\\s+){0,3}?(?:kits?|books?|cop(?:y|ies)|sets?|workbooks?|readers?|packs?|uniforms?)',
+  'order(?:s|ed|ing)?\\s+(?:[\\p{L}-]+\\s+){1,4}?(?:online|from\\s+(?:the|a|an)\\s+(?:shop|store|market|website|supplier|publisher|catalogue))',
   // Things a family is usually asked to pay for. A step that lends one is flagged too: the rule cannot tell.
   'workbooks?',
   'uniforms?',
   'kits?',
   'tuitions?',
 ];
+
+/**
+ * Buying as the thing studied, not a thing asked for: "name items bought from nearby shops", "find out
+ * what people buy at the market". The step asks pupils to look at buying (STUDY), the buying is spoken of
+ * and not asked for (ABOUT_BUYING before the word, or "buying and selling"), and nobody is told to buy.
+ */
+const BUY_WORD = /^(?:buy|buys|buying|bought)$/iu;
+const STUDY = words([
+  'observ(?:e|es|ed|ing)',
+  'list(?:s|ed|ing)?',
+  'nam(?:e|es|ed|ing)',
+  'surveys?',
+  'questionnaires?',
+  'interview(?:s|ed|ing)?',
+  'discuss(?:es|ed|ing)?',
+  'role-?plays?',
+  'writ(?:e|es|ing) (?:down|about)',
+  'record(?:s|ed|ing)?',
+  'find(?:s|ing)? out',
+  'ask(?:s|ed|ing)?',
+  'talk(?:s|ed|ing)? about',
+  'shar(?:e|es|ed|ing)',
+  'tall(?:y|ies|ied)',
+  'call(?:s|ing)? out',
+]);
+const ABOUT_BUYING =
+  /(?:(?:what|which|where|why|how\s+(?:much|many|often))\s+(?:[\p{L}]+\s+){0,3}|(?:items?|things?|goods|products?|foods?|vegetables|fruits?)\s+(?:(?:that|which)\s+)?(?:[\p{L}]+\s+){0,2}|about\s+)$/iu;
+const TOLD_TO_BUY = /(?:must|should|needs?\s+to|has\s+to|have\s+to|will|to)\s+$/iu;
+
+function buyingStudied(step: string, m: RegExpMatchArray): boolean {
+  if (!BUY_WORD.test(m[0]) || !has(STUDY, step)) return false;
+  const before = step.slice(0, m.index);
+  if (/^buying\s+and\s+selling/iu.test(step.slice(m.index))) return true;
+  return ABOUT_BUYING.test(before) && !TOLD_TO_BUY.test(before);
+}
 
 /** Things a family has to find and send in. The words after "bring" are kept in the match, so that what is brought can be read. */
 const BRING = [
@@ -333,7 +371,7 @@ export function ruleConflicts(step: string, c: Constraint, context: RuleContext 
       return m ? hit(m[0], `This step is set for ${m[0]}, a day ${name} is away.`) : undefined;
     }
     case 'money': {
-      const m = firstMatch(step, MONEY);
+      const m = firstMatch(step, MONEY, (x) => !buyingStudied(step, x));
       if (m) return hit(m[0], `This step asks the family of ${name} to pay for something (${quote(m[0])}).`);
       const b = firstMatch(step, BRING, (x) => !has(SCHOOL_THINGS, x[0]));
       return b ? hit(b[0], `This step asks the family of ${name} to provide something (${quote(b[0])}).`) : undefined;

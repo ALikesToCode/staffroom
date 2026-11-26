@@ -119,8 +119,36 @@ describe('the rule layer, kind by kind', () => {
     for (const step of ['Ask her to pay attention to the margins.', 'Put the cards in order.', 'Give her a printed sheet from the cupboard.', 'There is no need to buy a workbook.']) {
       expect(verdict(step, k), step).toBe('none');
     }
-    // Known false alarms: the rule knows the word, not what the step does with it.
-    for (const step of ['Lend her a workbook from the cupboard.', 'Check the word order in each sentence.']) expect(verdict(step, k), step).toBe('conflict');
+    // A known false alarm: the rule knows the word, not what the step does with it.
+    expect(verdict('Lend her a workbook from the cupboard.', k)).toBe('conflict');
+  });
+
+  it('money: to order is to buy only with a thing or a shop, and buying that is studied is not buying', () => {
+    const k = c('money');
+    for (const step of [
+      'Order a set of readers for her.',
+      'Each family orders a copy from the shop.',
+      'Place an order for the class kit.',
+      'Parents order the atlas online.',
+      'Ask the family to buy a workbook.',
+      'Pupils list what they must buy for the project.',
+      'Tell pupils what to buy before Monday.',
+      'Each pupil buys a notebook and writes about the market in it.',
+      'Discuss the visit, then buy a ticket at the gate.',
+    ]) expect(verdict(step, k), step).toBe('conflict');
+    for (const step of [
+      'The teacher explains how to structure a descriptive paragraph using adjectives and spatial order.',
+      'Check the word order in each sentence.',
+      'Pupils put the order of events on a timeline.',
+      'Line up in order of height.',
+      'Pupils order the fractions from smallest to largest.',
+      'The teacher introduces the topic of local markets by asking the class to name items bought from nearby shops.',
+      'The teacher explains how to design a simple survey questionnaire to find out what people buy at the local market.',
+      'The teacher assigns the pupils to ask a family member about their favorite market stall and write down three items they buy there.',
+      'The pupils listen and discuss what they usually buy at the market.',
+      'Pupils role-play buying and selling at a stall.',
+      'Pupils write about buying vegetables with their grandmother.',
+    ]) expect(verdict(step, k), step).toBe('none');
   });
 
   it('no phone or internet: a step that needs one', () => {
