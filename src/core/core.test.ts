@@ -227,6 +227,20 @@ describe('vault', () => {
     expect(redact(note, marked)).toBe('[Student 1] and Ishaan fight most days. [withheld]. [Place 1] is far.');
   });
 
+  it('leaves no part of a private detail that overlaps a name', () => {
+    const note = 'Aarav Sharma has epilepsy.';
+    const v = buildVault(note, [
+      { kind: 'student', text: 'Aarav Sharma', source: 'class list' },
+      { kind: 'private', text: 'Sharma has epilepsy', source: 'teacher' },
+    ]);
+    expect(v.map((e) => e.surfaces[0])).toEqual(['Aarav Sharma', 'Sharma has epilepsy']);
+    expect(v.every((e) => e.withheld)).toBe(true);
+    const out = redact(note, v);
+    for (const part of ['has epilepsy', 'has', 'epilepsy', 'Sharma', 'Aarav']) expect(out).not.toContain(part);
+    expect(out).toBe('[Student 1][withheld].');
+    expect(checkOutgoing(out, v)).toEqual([]);
+  });
+
   it('still withholds a name inside a private detail the teacher released', () => {
     const note = "Kabir's parents are separating and he is tired. Ring 98765 43210.";
     const v = buildVault(note, [
