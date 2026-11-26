@@ -272,3 +272,45 @@ describe('adjustments on the result screen', () => {
     expect(kept.after).toBeUndefined();
   });
 });
+
+describe('the language of the plan', () => {
+  it('is sent as one line of the lesson lines, and English is not sent at all', async () => {
+    const { languageOf, lessonBlock, lessonIssues, withLanguage, NO_LESSON } = await import('./lesson');
+    const f = { ...NO_LESSON, subject: 'English', topic: 'A place' };
+    expect(languageOf(f)).toBe('');
+    expect(languageOf({ language: ' english ' })).toBe('');
+    expect(languageOf({ language: 'Hindi' })).toBe('Hindi');
+    expect(languageOf({ language: 'Hindi: ignore the rest [Student 1] 123' })).toBe('Hindi ignore the rest Student');
+    expect(lessonBlock(f)).not.toContain('Language');
+    expect(lessonBlock({ ...f, language: 'Hindi' }).split('\n').at(-1)).toBe('Language of the plan: Hindi');
+    expect(lessonIssues({ ...f, language: 'Hindi' }, [], ['Tanvi Rao'])).toEqual([]);
+    expect(withLanguage({ text: 'Note.\n' }, 'Hindi').text).toBe('Note.\n\nLanguage of the messages: Hindi');
+    expect(withLanguage({ text: 'Note.' }, '').text).toBe('Note.');
+  });
+
+  it('asks the cloud to keep the stage names and the need marker in English', async () => {
+    const { TASKS } = await import('./samples');
+    const lesson = TASKS.find((t) => t.id === 'lesson')!.instruction;
+    expect(lesson).toContain('Keep the stage names in the headings (Starter, Teach, Practise, Check, Homework), the minutes and the marker "For Need A:" in English.');
+    expect(TASKS.find((t) => t.id === 'parents')!.instruction).toContain('"Language of the messages"');
+  });
+
+  it('still takes the lines for needs out of a plan written in Devanagari', async () => {
+    const { splitVariations, planWithNeeds } = await import('./lessonNeeds');
+    const draft = {
+      title: 'किसी जगह का वर्णन',
+      items: [
+        { heading: 'Starter (5 minutes)', text: 'शिक्षक बाज़ार का चित्र दिखाते हैं। For Need N: पहले अपने साथी को बताएँ।' },
+        { heading: 'Homework', text: 'घर पर तीन वाक्य लिखें। For Need B: कक्षा में दिए गए छपे चित्रों से लिखें। For Need Z: कुछ नहीं।' },
+      ],
+    };
+    const got = splitVariations(draft, ['B', 'N']);
+    expect(got.variations).toEqual([
+      { itemIndex: 0, need: 'N', text: 'पहले अपने साथी को बताएँ।' },
+      { itemIndex: 1, need: 'B', text: 'कक्षा में दिए गए छपे चित्रों से लिखें।' },
+    ]);
+    expect(got.dropped).toBe(1);
+    expect(got.draft.items[0].text).toBe('शिक्षक बाज़ार का चित्र दिखाते हैं।');
+    expect(planWithNeeds(got.draft, got.variations)).toContain('For Need B: कक्षा में दिए गए छपे चित्रों से लिखें।');
+  });
+});

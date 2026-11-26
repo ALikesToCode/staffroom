@@ -16,6 +16,8 @@ export interface LessonFields {
   minutes: number;
   /** What was done last time. Filled from a saved lesson, or typed. */
   lastTime: string;
+  /** The language the cloud is asked to write in. Absent, empty or "English": English. Also read for messages to parents. */
+  language?: string;
 }
 
 export const NO_LESSON: LessonFields = { klass: '', subject: '', topic: '', minutes: 40, lastTime: '' };
@@ -24,6 +26,28 @@ export const FIELD_MAX = 120;
 export const LAST_TIME_MAX = 600;
 
 const one = (s: string, max: number) => s.replace(/\s+/g, ' ').trim().slice(0, max);
+
+/** The languages offered by name. Any other is typed. */
+export const LANGUAGES = ['English', 'Hindi'] as const;
+export const LANGUAGE_MAX = 40;
+
+/** The language to write in, as it is sent: a name in letters. Empty for English, which is not sent at all. */
+export function languageOf(f: Pick<LessonFields, 'language'> | null | undefined): string {
+  const l = (f?.language ?? '').replace(/[^\p{L}\p{M}\s()-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, LANGUAGE_MAX);
+  return /^english$/i.test(l) ? '' : l;
+}
+
+/** Said once when the text is not in English. The rules are word lists in English; nothing here claims a model read the text either. */
+export const NOT_ENGLISH = 'The rules read English only, so they have not checked this text. Read it yourself.';
+export const NOT_CHECKED_BY_RULE = 'Not checked by rule';
+
+/** The line that asks for messages home in a language. */
+export const MESSAGES_LANGUAGE = 'Language of the messages';
+
+/** The outgoing text of messages home, with the language asked for under it. In English, the text as it is. */
+export function withLanguage<T extends { text: string }>(going: T, language: string): T {
+  return language ? { ...going, text: `${going.text.trimEnd()}\n\n${MESSAGES_LANGUAGE}: ${language}` } : going;
+}
 
 /** The length of a lesson in whole minutes, 5 to 240. Anything else is 40. */
 export const lessonMinutes = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) && n >= 5 && n <= 240 ? Math.round(n) : 40);
@@ -37,6 +61,7 @@ export function lessonBlock(f: LessonFields): string {
   if (one(f.klass, FIELD_MAX)) lines.push(`Class: ${one(f.klass, FIELD_MAX)}`);
   lines.push(`Subject: ${one(f.subject, FIELD_MAX)}`, `Topic: ${one(f.topic, FIELD_MAX)}`, `Length: ${lessonMinutes(f.minutes)} minutes`);
   if (one(f.lastTime, LAST_TIME_MAX)) lines.push(`What we did last time: ${one(f.lastTime, LAST_TIME_MAX)}`);
+  if (languageOf(f)) lines.push(`Language of the plan: ${languageOf(f)}`);
   return lines.join('\n');
 }
 

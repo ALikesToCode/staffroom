@@ -15,7 +15,8 @@ import {
   segment,
   TOKEN_RE,
 } from './core/vault';
-import { checkReply, safeTitle, type Violation } from './core/gate';
+import { checkOutgoing, checkReply, safeTitle, type Violation } from './core/gate';
+import { LANGUAGES, languageOf, NOT_CHECKED_BY_RULE, NOT_ENGLISH, withLanguage } from './core/lesson';
 import { loadReceipts, makeReceipt, plainTitle, storeReceipts } from './core/receipts';
 import { approvalKey } from './core/policy';
 import {
@@ -82,6 +83,9 @@ import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard'
 import { constraintsOnDevice, mergeProposals, type ConstraintReport } from './ai/constraints';
 import { learningOnDevice, mergeLearning } from './ai/learning';
 import { classView, withoutClass, withTicketNeeds } from './core/ticket';
+import { materialsReply, materialsText } from './core/materials';
+import { MaterialsCard, MaterialsPages, MaterialsWire } from './ui/Materials';
+import { ReadAloud } from './ui/ReadAloud';
 import { NOTE_MAX } from './core/text';
 import {
   DRAFT_FORMAT,
@@ -91,6 +95,8 @@ import {
   LABEL_SYSTEM,
   labelReceipt,
   writeDraft,
+  writeMaterials,
+  type MaterialsResult,
   type DraftResult,
 } from './ai/draft';
 import { anythingToCheck, checkDidNotRun, checkOnDevice, detailsFor, keepNoConflict, noConflictFound, NOTHING_WITHHELD, startsKept } from './ai/check';
@@ -245,6 +251,8 @@ export function App() {
     needs: Need[];
     /** For a lesson: the needs by letter, and whose each is. The letters and lines were sent; whose they are was not. */
     lessonNeeds: LessonNeed[];
+    /** The language the cloud was asked to write in. Empty: English. */
+    language: string;
   } | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
   const [replyIssues, setReplyIssues] = useState<Violation[]>([]);
@@ -295,6 +303,14 @@ export function App() {
   /** For a lesson: the lines the cloud wrote for needs, by stage and letter, and how many it wrote for a letter it was not sent. */
   const [variations, setVariations] = useState<Variation[]>([]);
   const [variationsDropped, setVariationsDropped] = useState(0);
+  /** For a signed lesson: the materials the cloud wrote from the signed plan and the needs by letter, and what the return gate found in them. */
+  const [materials, setMaterials] = useState<(MaterialsResult & { text: string; issues: Violation[] }) | null>(null);
+  const [materialsBusy, setMaterialsBusy] = useState(false);
+  const [materialsFail, setMaterialsFail] = useState<string | null>(null);
+  /** What the print sheet holds now: the signed text, or the materials with or without names. */
+  const [printWhat, setPrintWhat] = useState<'run' | 'materials' | 'materials-no-names'>('run');
+  /** The receipt of the run on screen, once signed. */
+  const signedId = useRef<string | null>(null);
   /** The lessons signed off on this device. */
   const [lessons, setLessons] = useState<SavedLesson[]>(loadLessons);
   /** Where the fit ran in this run. NOT_RUN until the on-device model has answered once. */
@@ -417,7 +433,7 @@ export function App() {
   );
   // The redacted note, with the needs the teacher chose to tell under it. The gate runs on both.
   const going = useMemo(
-    () => withLessonGoing(outgoingOf(note, entities, sent?.constraints ?? constraints, task === 'lesson'), task === 'lesson' ? lesson : null, entities, classList),
+    () => withLanguage(withLessonGoing(outgoingOf(note, entities, sent?.constraints ?? constraints, task === 'lesson'), task === 'lesson' ? lesson : null, entities, classList), task === 'parents' ? languageOf(lesson) : ''),
     [note, entities, sent, constraints, task, lesson, classList],
   );
   // In a replay the text shown is the text that was sent on the day, as recorded.
@@ -702,7 +718,9 @@ export function App() {
     if (!policyReadyRef.current || sendingRef.current || replay) return;
     const sentPolicy = policyRef.current;
     const current = lockConstraints(applyLocks(rawEntities, sentPolicy.lockedKinds), constraints);
-    const approved = withLessonGoing(outgoingOf(note, current, constraints, task === 'lesson'), task === 'lesson' ? lesson : null, current, classList);
+    // The language the cloud is asked to write in. The rules read English only, so in any other they check nothing.
+    const language = task === 'lesson' || task === 'parents' ? languageOf(lesson) : '';
+    const approved = withLanguage(withLessonGoing(outgoingOf(note, current, constraints, task === 'lesson'), task === 'lesson' ? lesson : null, current, classList), task === 'parents' ? language : '');
     const { text, tokens } = approved;
     const stopped = approved.violations;
     // The tick was for one text, one set of locks and one drafting model. Any of them changed: no send.
@@ -737,7 +755,7 @@ export function App() {
     setError(null);
     setDraftFail(null);
     const approvedAt = new Date().toISOString();
-    setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy, constraints, needs: approved.needs, lessonNeeds: approved.lessonNeeds ?? [] });
+    setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy, constraints, needs: approved.needs, lessonNeeds: approved.lessonNeeds ?? [], language });
     setStage('drafting');
     let drafted: DraftResult;
     try {
@@ -779,7 +797,10 @@ export function App() {
     let byModelSaid: (ItemCheck | undefined)[] | null = null;
     // What the check reads: the vault, and what the teacher typed as a constraint that is not in the note.
     const facts = withConstraintFacts(entities, constraints);
-    if (!anythingToCheck(items, facts)) {
+    if (language) {
+      // Not in English: no rule read it, and no model is asked. Every item says so.
+      itemChecks = items.map(() => ({ verdict: 'not checked', reason: NOT_ENGLISH }));
+    } else if (!anythingToCheck(items, facts)) {
       // No private detail was withheld and no constraint confirmed: there is nothing to check, so no model is asked.
       itemChecks = items.map(() => NOTHING_WITHHELD);
       where = 'SKIPPED';
@@ -848,7 +869,7 @@ export function App() {
     // What the cloud wrote for a need is put beside each child who has it. Only this device knows who that is.
     setVariations(split.variations);
     setVariationsDropped(split.dropped);
-    setPoints(placeVariations(split.variations, toldNeeds, entities, items, constraints, note));
+    setPoints(placeVariations(split.variations, toldNeeds, entities, items, language ? [] : constraints, note));
     setPointsSuggested(0);
     setChildSaid({});
     setFitChild(null);
@@ -911,6 +932,7 @@ export function App() {
       kept: signed.filter((k) => k === true).length,
       struck: signed.filter((k) => k === false).length,
     });
+    signedId.current = receipt.id;
     const next = [receipt, ...receipts];
     setKept(signed);
     setReceipts(next);
@@ -979,7 +1001,7 @@ export function App() {
     const items = came.map((item, i) => (i in nextEdits ? { ...item, text: nextEdits[i] } : item));
     const live = sent.constraints.map((c) => (nextOff.includes(c.id) ? { ...c, confirmed: false } : c));
     const told = new Map(sent.needs.filter((n) => !nextOff.includes(n.id)).map((n) => [n.id, n.line]));
-    const after = recheckItems(items, live, sent.entities, sent.tokens, note, told, modelChecks, items.map((_, i) => i in nextEdits), task === 'lesson');
+    const after = sent.language ? checks : recheckItems(items, live, sent.entities, sent.tokens, note, told, modelChecks, items.map((_, i) => i in nextEdits), task === 'lesson');
     if (task !== 'lesson') setKept((k) => keptAfterRecheck(k, checks, after));
     setChecks(after);
     setEdits(nextEdits);
@@ -1075,7 +1097,7 @@ export function App() {
 
   /** Every step of the lesson that does not suit a child, by rule, against the constraints as they stand now. */
   const hits = useMemo<LessonHit[]>(() => {
-    if (task !== 'lesson' || !draft || !sent) return [];
+    if (task !== 'lesson' || !draft || !sent || sent.language) return [];
     const told = new Map(sent.needs.filter((n) => !offIds.includes(n.id)).map((n) => [n.id, n.line]));
     return lessonHits(draft.items, liveConstraints, sent.entities, sent.tokens, note, told);
   }, [task, draft, sent, liveConstraints, offIds, note]);
@@ -1323,6 +1345,44 @@ export function App() {
       : classPlanText({ title: draft.title, items: keptIndexes.map((i) => draft.items[i]) })
     : '';
 
+  /** The request for materials, exactly as it would be sent: the signed class plan and the needs by letter. */
+  const materialsRequest = task === 'lesson' && sent && stage === 'signed' && classPlan ? materialsText(classPlan, sent.lessonNeeds, sent.language) : '';
+  const materialsStopped = useMemo(() => (materialsRequest && sent ? checkOutgoing(materialsRequest, sent.entities) : []), [materialsRequest, sent]);
+  const needNames = (letter: string) => (sent ? namesForNeed(letter, sent.lessonNeeds, notesByChild, sent.entities) : []);
+
+  const makeMaterials = async () => {
+    if (!sent || !materialsRequest || materialsBusy || replay || materialsStopped.length > 0) return;
+    const text = materialsRequest;
+    const run = runRef.current;
+    setMaterialsBusy(true);
+    setMaterialsFail(null);
+    try {
+      const got = await writeMaterials(text, sent.lessonNeeds.map((n) => n.letter), sent.policy.cloudModel);
+      if (runRef.current !== run) return;
+      setMaterials({ ...got, text, issues: checkReply(materialsReply(got.materials), sent.entities, sent.tokens, text) });
+      // Counted on the receipt in this browser. Nothing of it is in the record that may leave the device.
+      const id = signedId.current;
+      setReceipts((rs) => {
+        const next = rs.map((r) => (r.id === id && r.lesson ? { ...r, lesson: { ...r.lesson, materialsVersions: got.materials.versions.length } } : r));
+        storeReceipts(next);
+        return next;
+      });
+    } catch {
+      if (runRef.current === run) setMaterialsFail(configured ? 'The materials could not be written, or what came back was not whole. Nothing of it is shown. You can try again.' : 'This build has no Firebase project, so the cloud refused the request and no materials were written.');
+    } finally {
+      if (runRef.current === run) setMaterialsBusy(false);
+    }
+  };
+
+  const printMaterials = (withNames: boolean) => {
+    setPrintWhat(withNames ? 'materials' : 'materials-no-names');
+    // The sheet is drawn first, then printed; after printing it holds the signed text again.
+    setTimeout(() => {
+      window.print();
+      setPrintWhat('run');
+    }, 80);
+  };
+
   /** The confirmed needs with a line for a lesson that are not told yet, and the button that tells them all. */
   const untold = task === 'lesson' ? constraints.filter((c) => c.confirmed && !c.share && lessonNeedLine(c) !== undefined) : [];
   const tellAll = () => {
@@ -1389,6 +1449,11 @@ export function App() {
     setPoints([]);
     setVariations([]);
     setVariationsDropped(0);
+    setMaterials(null);
+    setMaterialsBusy(false);
+    setMaterialsFail(null);
+    setPrintWhat('run');
+    signedId.current = null;
     setPointsSuggested(0);
     setChildSaid({});
     setFitChild(null);
@@ -1492,6 +1557,7 @@ export function App() {
         policy: replay.policy,
         constraints: replay.constraints,
         needs: recordedNeeds ? outgoingOf(replay.note, replay.entities, replay.constraints, true).needs : sharedNeeds(replay.constraints, replay.entities),
+        language: replay.task === 'lesson' || replay.task === 'parents' ? languageOf(replay.lesson) : '',
         lessonNeeds: (recordedNeeds ?? []).map((n) => ({ ...n, constraintIds: [], children: replay.needChildren?.[n.letter] ?? [], others: [], issues: [], sensitive: [] })),
       });
       setVariations(replay.variations ?? []);
@@ -2000,9 +2066,11 @@ export function App() {
         )}
         {c && !conflict && !doubt && !(isLesson && itemHits.length > 0) && (
           <p className={`quiet-verdict q-${c.verdict.replace(' ', '-')}${byRuleOnly ? ' q-rule' : ''}`}>
-            <b>{edited ? 'Checked by rule' : byRuleOnly ? 'No conflict found by rule' : verdictLabel(c)}</b>{' '}
+            <b>{sent?.language ? NOT_CHECKED_BY_RULE : edited ? 'Checked by rule' : byRuleOnly ? 'No conflict found by rule' : verdictLabel(c)}</b>{' '}
             <span>
-              {edited
+              {sent?.language
+                ? NOT_ENGLISH
+                : edited
                 ? c.reason
                 : byRuleOnly
                   ? `Compared with ${c.rules} ${c.rules === 1 ? 'constraint' : 'constraints'} you confirmed.`
@@ -2075,6 +2143,7 @@ export function App() {
                 <button className="secondary small" disabled={replyBlocked} onClick={() => copy(i, restore(item.text, entities, sent?.tokens).trim())}>
                   {copyLabel(i, 'Copy')}
                 </button>
+                {stage === 'signed' && !replyBlocked && <ReadAloud text={restore(item.text, entities, sent?.tokens).trim()} language={sent?.language ?? ''} />}
               </>
             ) : (
               <>
@@ -2280,8 +2349,28 @@ export function App() {
                 </article>
               )}
 
+              {isLesson && stage === 'signed' && !replay && keptCount > 0 && sent && !replyBlocked && (
+                <MaterialsCard
+                  request={materialsRequest}
+                  stopped={materialsStopped}
+                  busy={materialsBusy}
+                  fail={materialsFail}
+                  result={materials?.materials ?? null}
+                  issues={materials?.issues ?? []}
+                  where={materials ? (materials.where === 'IN_CLOUD' ? `Written in the cloud by ${materials.model}` : 'The cloud failed, so the on-device model wrote these') : ''}
+                  namesFor={needNames}
+                  onSend={() => void makeMaterials()}
+                  onPrint={printMaterials}
+                />
+              )}
+
               {(stage === 'result' || stage === 'signed') && result && draft && (
                 <article className="card result">
+                  {sent?.language && (
+                    <p className="caution" role="status">
+                      {NOT_ENGLISH}
+                    </p>
+                  )}
                   <p className="eyebrow">{restore(draft.title, entities, sent?.tokens)}</p>
                   <h3 className="summary">
                     {isLesson ? fitSummary(notesByChild.length, replay ? shownPoints.filter((p) => p.source === 'model').length : pointsSuggested, hits, shownPoints) : summaryLine(checks)}
@@ -2360,6 +2449,7 @@ export function App() {
                             {copyLabel('all', isLesson ? 'Copy the class plan' : 'Copy the text')}
                           </button>
                         )}
+                        {keptCount > 0 && isLesson && !replyBlocked && <ReadAloud text={classPlan} language={sent?.language ?? ''} />}
                         {isLesson && (
                           <button className="link" onClick={() => setView('lessons')}>
                             Lessons
@@ -2516,6 +2606,36 @@ export function App() {
                       </label>
                     ))}
                   </fieldset>
+                  {(task === 'lesson' || task === 'parents') && (
+                    <div className="write-in">
+                      <label className="lesson-field">
+                        Write it in
+                        <select
+                          value={LANGUAGES.some((l) => l === (lesson.language || 'English')) ? lesson.language || 'English' : 'other'}
+                          disabled={Boolean(replay)}
+                          onChange={(e) => setLesson((l) => ({ ...l, language: e.target.value === 'other' ? ' ' : e.target.value === 'English' ? '' : e.target.value }))}
+                        >
+                          {LANGUAGES.map((l) => (
+                            <option key={l} value={l}>
+                              {l}
+                            </option>
+                          ))}
+                          <option value="other">Another language</option>
+                        </select>
+                      </label>
+                      {lesson.language !== undefined && lesson.language !== '' && !LANGUAGES.some((l) => l === lesson.language) && (
+                        <label className="lesson-field">
+                          Which language
+                          <input type="text" value={lesson.language.trimStart()} maxLength={40} readOnly={Boolean(replay)} placeholder="Marathi" onChange={(e) => setLesson((l) => ({ ...l, language: e.target.value || ' ' }))} />
+                        </label>
+                      )}
+                      {languageOf(lesson) && (
+                        <p className="hint">
+                          Sent as one line: “{task === 'lesson' ? 'Language of the plan' : 'Language of the messages'}: {languageOf(lesson)}”. {NOT_ENGLISH}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {task === 'lesson' && (
                     <div className="lesson-lines">
                       {(
@@ -2920,6 +3040,21 @@ export function App() {
                 </article>
               )}
 
+              {materials && (
+                <article className="card">
+                  <div className="card-head">
+                    <h3>{materials.where === 'IN_CLOUD' ? 'Materials: what came back' : 'Materials: written on the device'}</h3>
+                    <span className="hint">{materials.model}</span>
+                  </div>
+                  <MaterialsWire result={materials.materials} />
+                  <p className="hint">The cloud was sent the signed class plan and the needs by letter. It was not told whose a need is.</p>
+                  <details className="fold">
+                    <summary>The text that was sent for the materials · {materials.text.length.toLocaleString()} characters</summary>
+                    <pre className="wire">{materials.text}</pre>
+                  </details>
+                </article>
+              )}
+
               {sent && stage !== 'review' && (
                 <details className="card fold outbox" open={stage === 'drafting' || undefined}>
                   {/* "Sent" only once the cloud has answered. Until then, and when it never did, the app cannot say the text arrived. */}
@@ -3091,7 +3226,9 @@ export function App() {
       {/* ------------------------------------------------ what is printed: the signed text, names put back, nothing else */}
       {canPrint && draft && (
         <section className="print-sheet" aria-hidden="true">
-          {task === 'parents' ? (
+          {printWhat !== 'run' && materials ? (
+            <MaterialsPages title={draft.title} result={materials.materials} namesFor={needNames} withNames={printWhat === 'materials'} />
+          ) : task === 'parents' ? (
             printable.map(({ item, i, family }) => (
               <div className="print-page" key={i}>
                 <h2>For the family of {family.student!.surfaces[0]}</h2>

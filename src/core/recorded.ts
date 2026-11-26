@@ -4,7 +4,7 @@ import { KINDS } from './policy';
 import { ALL_KINDS } from './constraints';
 import { NEED_LINE_MAX, type Variation } from './lessonNeeds';
 import { SUGGESTION_MAX } from './recheck';
-import { ADJUSTMENT_MAX, FIELD_MAX, LAST_TIME_MAX, type AdjustmentSource, type LessonFields } from './lesson';
+import { ADJUSTMENT_MAX, FIELD_MAX, LANGUAGE_MAX, LAST_TIME_MAX, type AdjustmentSource, type LessonFields } from './lesson';
 
 // A recorded run: one real run on the sample class, captured in Chrome with the on-device model, kept as a
 // file beside the app. A browser without the on-device model can replay it, read-only. Nothing in a replay
@@ -191,7 +191,7 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
   const short = (v: unknown, max: number) => str(v) && v.length <= max;
   if (
     lesson !== undefined &&
-    !(obj(lesson) && short(lesson.klass, FIELD_MAX) && short(lesson.subject, FIELD_MAX) && short(lesson.topic, FIELD_MAX) && short(lesson.lastTime, LAST_TIME_MAX) && num(lesson.minutes) && lesson.minutes >= 5 && lesson.minutes <= 240)
+    !(obj(lesson) && short(lesson.klass, FIELD_MAX) && short(lesson.subject, FIELD_MAX) && short(lesson.topic, FIELD_MAX) && short(lesson.lastTime, LAST_TIME_MAX) && optional(lesson.language, (v): v is string => short(v, LANGUAGE_MAX)) && num(lesson.minutes) && lesson.minutes >= 5 && lesson.minutes <= 240)
   ) {
     return undefined;
   }
@@ -252,7 +252,7 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
     ...(rewrites ? { rewrites: rewrites.map((r) => ({ itemIndex: r.itemIndex, text: r.text })) } : {}),
     ...(fits ? { fits: fits.map((f) => ({ itemIndex: f.itemIndex, stepIndex: f.stepIndex, suggestion: f.suggestion })) } : {}),
     ...(obj(lesson)
-      ? { lesson: { klass: lesson.klass as string, subject: lesson.subject as string, topic: lesson.topic as string, minutes: lesson.minutes as number, lastTime: lesson.lastTime as string } }
+      ? { lesson: { klass: lesson.klass as string, subject: lesson.subject as string, topic: lesson.topic as string, minutes: lesson.minutes as number, lastTime: lesson.lastTime as string, ...(typeof lesson.language === 'string' && lesson.language ? { language: lesson.language } : {}) } }
       : {}),
     ...(adjustments
       ? {

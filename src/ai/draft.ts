@@ -1,3 +1,4 @@
+import { MATERIALS_SCHEMA, MATERIALS_SYSTEM, readMaterials, type Materials } from '../core/materials';
 import type { Draft, LabelWhere, Task, TaskId, Where } from '../core/types';
 import { ON_DEVICE_MODEL } from '../core/receipts';
 import { plainText } from '../core/text';
@@ -96,6 +97,26 @@ export async function writeDraft(redacted: string, task: Task, cloudModel: strin
     where: onDevice ? 'ON_DEVICE' : 'IN_CLOUD',
     model: onDevice ? ON_DEVICE_MODEL : cloudModel,
   };
+}
+
+export interface MaterialsResult {
+  materials: Materials;
+  where: Where;
+  model: string;
+}
+
+/**
+ * Write the materials from the text the teacher approved: the signed class
+ * plan and the needs by letter. The route is the draft's, PREFER_IN_CLOUD.
+ * A reply that is not whole is refused: nothing of it is shown.
+ */
+export async function writeMaterials(text: string, letters: readonly string[], cloudModel: string): Promise<MaterialsResult> {
+  const model = modelFor('draft', { system: MATERIALS_SYSTEM, schema: MATERIALS_SCHEMA, cloudModel });
+  const result = await model.generateContent(text);
+  const materials = readMaterials(plainText(result.response.text()), letters);
+  if (!materials) throw new Error('The materials that came back were not whole.');
+  const onDevice = result.response.inferenceSource === 'on_device';
+  return { materials, where: onDevice ? 'ON_DEVICE' : 'IN_CLOUD', model: onDevice ? ON_DEVICE_MODEL : cloudModel };
 }
 
 /** The instruction for the call that names the receipt. */

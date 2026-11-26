@@ -207,6 +207,13 @@ export function withLessonNeeds(text: string, needs: readonly LessonNeed[]): str
 export const VARIATION_INSTRUCTION =
   'After each stage, where a listed need changes what a pupil can do in that stage, add one line for that need: "For Need A: <what such a pupil does instead, for the same purpose>". Add a line only where the stage needs it. Do not guess who or how many.';
 
+/** The sentence added to the lesson's instruction for a plan in another language. The stage names and the marker stay in English so that the plan can still be read by the parser. */
+export const LANGUAGE_INSTRUCTION =
+  'If the lesson lines give a "Language of the plan", write the title, the text of every stage and every line for a need in that language. Keep the stage names in the headings (Starter, Teach, Practise, Check, Homework), the minutes and the marker "For Need A:" in English.';
+
+/** The sentence added to the instruction for messages home in another language. */
+export const MESSAGES_LANGUAGE_INSTRUCTION = 'If the notes end with a "Language of the messages" line, write every note home in that language.';
+
 /** What the cloud wrote for one need at one stage. */
 export interface Variation {
   itemIndex: number;

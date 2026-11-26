@@ -3333,3 +3333,67 @@ mark.hit {
 .how-went.ticket li > span {
   min-width: 9.5em;
 }
+
+/* "Write it in", and the materials of a signed lesson. */
+.write-in {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.write-in .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.materials h4 {
+  margin: 16px 0 6px;
+}
+
+.materials .board-work {
+  list-style: none;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--paper-card);
+  font-family: var(--mono, monospace);
+  font-size: 0.9rem;
+}
+
+.materials .sheet {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.materials .answer {
+  color: var(--ink-soft);
+  font-size: 0.9em;
+}
+
+.materials .version {
+  border-left: 3px solid var(--slate-line);
+  padding: 2px 0 2px 12px;
+  margin: 8px 0;
+}
+
+.materials .version p {
+  margin: 2px 0;
+}
+
+.materials .names {
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--k-student);
+  font: 600 0.8rem var(--sans);
+  white-space: nowrap;
+}
+
+.materials pre.wire {
+  white-space: pre-wrap;
+  max-height: 320px;
+  overflow: auto;
+}
