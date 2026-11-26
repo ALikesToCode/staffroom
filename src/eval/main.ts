@@ -7,6 +7,8 @@ import { CASES, prepare, totals, type EvalCase, type EvalRow } from './cases';
 import { prepareFull } from './full';
 import { HELDOUT } from './heldout';
 import { runRuleSet } from './rules';
+import { FIT_CASES, fitRow, fitTotals, type FitRow } from './fit';
+import { onDeviceFit } from '../ai/fit';
 
 // A developer page, not part of the app. It runs fixed cases through the same check the app runs and shows
 // what came back. Nothing is sent anywhere: the model sets use the ONLY_ON_DEVICE route, and the rule set
@@ -23,9 +25,10 @@ const runs = Math.max(1, Math.min(20, Number(params.get('runs')) || 1));
  * ?set=rules: the rule layer on its own, no model, any browser.
  * ?set=full: the whole sample note and six fixed drafts, both layers.
  * ?set=heldout: sixteen single-fact cases the model has not been tuned on.
+ * ?set=fit: fourteen steps in conflict, each rewritten by the on-device model for the child.
  * No set: the 24 single-fact cases.
  */
-const set = (['rules', 'full', 'heldout'] as const).find((s) => s === params.get('set')) ?? 'cases';
+const set = (['rules', 'full', 'heldout', 'fit'] as const).find((s) => s === params.get('set')) ?? 'cases';
 /** One fact at a time is the default, as in the app. ?perFact=0 asks about all of a child's facts in one prompt. */
 const perFact = params.get('perFact') !== '0';
 
@@ -34,10 +37,13 @@ const SET_NAME: Record<typeof set, string> = {
   heldout: '16 held-out single-fact cases, on-device model only',
   full: 'full note, 30 items in 6 drafts, rule layer and on-device model',
   rules: 'rule layer only, no model',
+  fit: '14 steps in conflict, rewritten by the on-device model',
 };
 document.getElementById('eval-mode')!.textContent =
   set === 'rules'
     ? `Set: ${SET_NAME[set]}.`
+    : set === 'fit'
+      ? `Set: ${SET_NAME[set]}. Runs of each: ${runs}.`
     : `Set: ${SET_NAME[set]}. Mode: ${perFact ? 'one fact at a time' : 'all facts of a child in one prompt'}. Runs of each: ${runs}.`;
 
 function cell(row: HTMLTableRowElement, text: string, className = '') {
@@ -144,7 +150,58 @@ function jobs(ask: ReturnType<typeof onDeviceAsk>): Job[] {
   });
 }
 
+/** The fit: each step is rewritten on the device, and the rewrite is read by rule. Nothing here judges whether the rewrite is good advice. */
+async function runFit() {
+  start.disabled = true;
+  document.body.dataset.state = 'running';
+  const rows: (FitRow & { run: number; ms: number })[] = [];
+  const ask = onDeviceFit();
+  const report = (done: boolean) =>
+    (json.textContent = JSON.stringify({ done, at: new Date().toISOString(), userAgent: navigator.userAgent, set, runsPerCase: runs, totals: fitTotals(rows), rows }, null, 2));
+  let n = 0;
+  for (let r = 1; r <= runs; r++) {
+    for (const c of FIT_CASES) {
+      status.textContent = `Run ${r} of ${runs}: step ${++n} of ${FIT_CASES.length * runs} (${c.id})`;
+      const began = performance.now();
+      const row = { ...(await fitRow(c, ask)), run: r, ms: 0 };
+      row.ms = Math.round(performance.now() - began);
+      rows.push(row);
+      const tr = table.insertRow();
+      cell(tr, String(r));
+      cell(tr, c.id);
+      cell(tr, `${row.kind}: ${row.constraint}`);
+      cell(tr, row.step);
+      cell(tr, 'a rewrite no rule fires on');
+      cell(
+        tr,
+        row.error ? 'failed' : row.offered.ok ? `offered after ${row.offered.requests} ${row.offered.requests === 1 ? 'request' : 'requests'}` : 'nothing offered',
+        row.offered.ok ? 'right' : 'wrong',
+      );
+      cell(
+        tr,
+        row.error ??
+          [
+            row.first.produced ? `First answer: ${row.first.rewrite}` : 'First answer: no rewrite.',
+            row.first.produced ? (row.first.rulePasses ? 'No rule fires on it.' : `A rule matched “${row.first.matched.join('”, “')}”.`) : '',
+            row.first.factWords.length > 0 ? `It repeats words of the fact: ${row.first.factWords.join(', ')}.` : '',
+            row.offered.ok && row.offered.suggestion !== row.first.rewrite ? `Offered: ${row.offered.suggestion}` : '',
+            row.offered.ok && row.offered.factWords.length > 0 && row.offered.suggestion !== row.first.rewrite ? `It repeats words of the fact: ${row.offered.factWords.join(', ')}.` : '',
+          ]
+            .filter(Boolean)
+            .join(' '),
+      );
+      cell(tr, String(row.ms));
+      report(false);
+    }
+  }
+  const t = fitTotals(rows);
+  status.textContent = `Done (${SET_NAME.fit}). First answers: ${t.produced} of ${t.cases} were a rewrite, ${t.rulePasses} had no rule fire on them, ${t.saysFact} repeated words of the private fact. Offered after at most one retry: ${t.offered} of ${t.cases} (${t.offeredSaysFact} repeating words of the fact). Stopped: ${t.errors}.`;
+  report(true);
+  document.body.dataset.state = 'done';
+}
+
 async function run() {
+  if (set === 'fit') return runFit();
   start.disabled = true;
   document.body.dataset.state = 'running';
   const rows: EvalRow[] = [];

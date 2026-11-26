@@ -40,6 +40,12 @@
       <code>?set=heldout</code>: 16 single-fact cases the on-device model has not been tuned on, for one run.
     </p>
     <p>
+      <code>?set=fit</code>: 14 steps that each go against one confirmed constraint, two for each kind a rule can check. The
+      on-device model is asked to rewrite each step so the child can follow it, as the app asks. For each the page shows whether
+      the first answer was a rewrite, whether a rule still fires on it, and whether it repeats words of the private fact; and
+      what the app would offer after its one retry. It does not judge whether a rewrite is good advice.
+    </p>
+    <p>
       One fact at a time is the default, as in the app; add <code>perFact=0</code> to ask about all of a child's facts in one
       prompt. For example <code>eval.html?set=full&amp;runs=3</code>.
     </p>

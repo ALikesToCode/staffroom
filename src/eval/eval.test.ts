@@ -5,6 +5,9 @@ import { CASES, prepare } from './cases';
 import { prepareFull } from './full';
 import { HELDOUT } from './heldout';
 import { RULE_CASES, runRuleSet } from './rules';
+import { FIT_CASES, fitInput, fitRow, fitTotals } from './fit';
+import { ruleConflicts } from '../core/conflicts';
+import type { FitAsk } from '../ai/fit';
 
 describe('the rule layer measured on fresh pairs', () => {
   const { rows, totals } = runRuleSet();
@@ -116,5 +119,49 @@ describe('the held-out set for the on-device model', () => {
       expect(groups[0].details.map((d) => d.surfaces[0]), c.id).toEqual([c.fact]);
       expect(p.note, c.id).toContain(c.fact);
     }
+  });
+});
+
+describe('the fit set', () => {
+  const says = (rewrite: string) => ({ text: JSON.stringify({ rewrite }), onDevice: true });
+
+  it('has two fresh pairs for every kind a rule can check, each a step the rule calls a conflict', () => {
+    expect(FIT_CASES).toHaveLength(14);
+    expect(new Set(FIT_CASES.map((c) => c.id)).size).toBe(14);
+    for (const kind of ['time-after', 'time-before', 'days-away', 'money', 'no-phone-internet', 'contact', 'health']) {
+      expect(FIT_CASES.filter((c) => c.constraint.kind === kind), kind).toHaveLength(2);
+    }
+    for (const c of FIT_CASES) expect(ruleConflicts(c.step, c.constraint)?.verdict, c.id).toBe('conflict');
+    // None is a step of another set.
+    const used = new Set([...RULE_CASES.map((c) => c.step), ...CASES.map((c) => c.advice), ...HELDOUT.map((c) => c.advice)]);
+    expect(FIT_CASES.some((c) => used.has(c.step))).toBe(false);
+    expect(prepareFull().cases.some((full) => FIT_CASES.some((c) => full.item.text.includes(c.step)))).toBe(false);
+  });
+
+  it('reports the first answer on its own, and what would be offered after the one retry', async () => {
+    const c = FIT_CASES.find((x) => x.id === 'after-1')!;
+    const answers = [says('Ask Ritika to stay behind at lunch, as she has to catch the last bus to her village.'), says('Give Ritika fifteen minutes at lunch on Monday to finish her map.')];
+    let n = 0;
+    const ask: FitAsk = async () => answers[n++];
+    const row = await fitRow(c, ask);
+    expect(row.first).toEqual({
+      produced: true,
+      rewrite: 'Ask Ritika to stay behind at lunch, as she has to catch the last bus to her village.',
+      rulePasses: false,
+      matched: ['stay behind'],
+      factWords: ['catch', 'last', 'village'],
+    });
+    expect(row.offered).toEqual({ ok: true, suggestion: 'Give Ritika fifteen minutes at lunch on Monday to finish her map.', requests: 2, factWords: [] });
+    expect(fitInput(c)).toMatchObject({ studentName: 'Ritika', task: 'plan' });
+  });
+
+  it('counts a pair with no usable answer, and one whose run stopped, without inventing a rewrite', async () => {
+    const none = await fitRow(FIT_CASES[0], async () => says(FIT_CASES[0].step));
+    expect(none.first.produced).toBe(false);
+    expect(none.offered).toEqual({ ok: false, suggestion: '', requests: 2, factWords: [] });
+    const stopped = await fitRow(FIT_CASES[1], async () => ({ text: 'x', onDevice: false }));
+    expect(stopped.error).toBe('The fit did not run on the device. Stopped.');
+    const good = await fitRow(FIT_CASES[6], async () => says('Lend Farhan a geometry box from the class set for next week.'));
+    expect(fitTotals([none, stopped, good])).toEqual({ cases: 3, produced: 1, rulePasses: 1, saysFact: 0, offered: 1, offeredSaysFact: 0, errors: 1 });
   });
 });
