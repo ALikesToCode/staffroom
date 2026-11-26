@@ -29,6 +29,14 @@ export function stepToRewrite(item: DraftItem, entities: Entity[], allowed: read
   return { step: found, whole: false };
 }
 
+/** The most characters of a suggestion the on-device model makes for one step. */
+export const SUGGESTION_MAX = 300;
+
+/** Which step of the item this is, counted from 0 among its steps as the teacher reads them. 0 for the whole item. */
+export function stepIndexOf(item: DraftItem, step: string, entities: Entity[], allowed: readonly string[]): number {
+  return Math.max(0, steps(restore(item.text, entities, allowed).trim()).indexOf(step));
+}
+
 /**
  * Write the names in a text back as the stand-ins that were sent, so the
  * rewritten item is read like the rest of the draft. A name whose stand-in

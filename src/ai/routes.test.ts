@@ -4,6 +4,7 @@ import { checkOnDevice } from './check';
 import { constraintsOnDevice } from './constraints';
 import { labelReceipt } from './draft';
 import { guardOnDevice } from './guard';
+import { fitStep } from './fit';
 import { modelFor, onDeviceModelPresent, prepareDevice } from './routes';
 
 const note = 'Meenal reads well. She has epilepsy.';
@@ -32,6 +33,7 @@ describe('ONLY_ON_DEVICE routes with no on-device model', () => {
   it('refuses to build a guard or check model', () => {
     expect(() => modelFor('guard', { system: 'x' })).toThrow(/Nothing was sent/);
     expect(() => modelFor('check', { system: 'x' })).toThrow(/Nothing was sent/);
+    expect(() => modelFor('fit', { system: 'x' })).toThrow(/Nothing was sent/);
   });
 
   it('rejects the guard without a request', async () => {
@@ -47,6 +49,12 @@ describe('ONLY_ON_DEVICE routes with no on-device model', () => {
   it('rejects the check without a request', async () => {
     const items = [{ heading: '[Student 1]', text: 'Set a timed written test.' }];
     await expect(checkOnDevice(note, items, vault, ['[Student 1]'], () => {})).rejects.toThrow(/no on-device model/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects the fit of a step without a request', async () => {
+    const constraint = { id: 'c', kind: 'time-after' as const, text: 'has to leave at the last bell', source: 'rule' as const, confirmed: true };
+    await expect(fitStep({ step: 'Keep her after school.', itemText: 'Keep her after school.', constraint, task: 'plan' })).rejects.toThrow(/no on-device model/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

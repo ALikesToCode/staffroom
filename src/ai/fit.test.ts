@@ -1,0 +1,113 @@
+import { describe, expect, it } from 'vitest';
+import type { Constraint } from '../core/types';
+import { factWordsIn, FIT_FAILED, FIT_MAX, FIT_SCHEMA, FIT_SYSTEM, fitHits, fitPrompt, fitStep, readFit, type FitAsk } from './fit';
+import { ROUTES } from './routes';
+
+const leave: Constraint = { id: 'c1', kind: 'time-after', text: 'has to leave school at the last bell to reach home before dark', source: 'rule', confirmed: true, about: 's2' };
+const money: Constraint = { id: 'c2', kind: 'money', text: 'the family cannot pay for anything extra this term', source: 'rule', confirmed: true, about: 's2' };
+const step = 'Second, enrol Meenal in the remedial writing club after the last bell.';
+const input = { step, itemText: `First, seat her at the front. ${step}`, constraint: leave, studentName: 'Meenal', task: 'plan' as const };
+
+/** A model that gives these answers in turn, and remembers what it was asked. */
+const fake = (answers: (string | { text: string; onDevice: boolean })[]) => {
+  const prompts: string[] = [];
+  const ask: FitAsk = async (prompt) => {
+    prompts.push(prompt);
+    const a = answers[prompts.length - 1] ?? '';
+    return typeof a === 'string' ? { text: a, onDevice: true } : a;
+  };
+  return { ask, prompts };
+};
+const says = (rewrite: string) => JSON.stringify({ rewrite });
+
+describe('the fit route', () => {
+  it('is ONLY_ON_DEVICE, with a short instruction and a one-field answer', () => {
+    expect(ROUTES.find((r) => r.id === 'fit')!.mode).toBe('only_on_device');
+    expect(FIT_SYSTEM.length).toBeLessThan(260);
+    expect(FIT_SCHEMA).toEqual({ type: 'object', properties: { rewrite: { type: 'string' } }, required: ['rewrite'] });
+  });
+
+  it('asks with the fact and the step, and nothing else', () => {
+    expect(fitPrompt(input)).toBe(
+      `Fact about the child: has to leave school at the last bell to reach home before dark\nStep: ${step}\nRewrite the step so the child can follow it.`,
+    );
+    expect(fitPrompt(input, ['after school', 'club'])).toMatch(/\nIt must not involve: after school, club$/);
+  });
+});
+
+describe('reading a suggestion', () => {
+  it('trims it and keeps at most 300 characters, cut at the end of a sentence', () => {
+    expect(readFit(says('  Give Meenal the same task\n in the lunch break.  '), step)).toBe('Give Meenal the same task in the lunch break.');
+    const long = `${'Give her the task at lunch. '.repeat(12)}`;
+    const kept = readFit(says(long), step)!;
+    expect(kept.length).toBeLessThanOrEqual(FIT_MAX);
+    expect(kept.endsWith('lunch.')).toBe(true);
+    expect(readFit(says('x'.repeat(400)), step)).toHaveLength(FIT_MAX);
+  });
+
+  it('rejects an empty answer, the step again, and anything that is not the answer asked for', () => {
+    expect(readFit(says('   '), step)).toBeUndefined();
+    expect(readFit(says(step), step)).toBeUndefined();
+    expect(readFit(says(`  ${step.toUpperCase()} `), step)).toBeUndefined();
+    expect(readFit('Give her the task at lunch.', step)).toBeUndefined();
+    expect(readFit('{"rewrite": 3}', step)).toBeUndefined();
+    expect(readFit('null', step)).toBeUndefined();
+  });
+});
+
+describe('fitting a step on the device', () => {
+  it('offers a suggestion no rule fires on, after one request', async () => {
+    const model = fake([says('Second, give Meenal the remedial writing task in the lunch break.')]);
+    expect(await fitStep(input, model.ask)).toEqual({ ok: true, suggestion: 'Second, give Meenal the remedial writing task in the lunch break.', asked: 1 });
+    expect(model.prompts).toEqual([fitPrompt(input)]);
+  });
+
+  it('asks once more, naming the matched words, when a rule still fires', async () => {
+    const model = fake([says('Ask Meenal to stay back for ten minutes of writing.'), says('Give Meenal ten minutes of writing in the lunch break.')]);
+    expect(await fitStep(input, model.ask)).toEqual({ ok: true, suggestion: 'Give Meenal ten minutes of writing in the lunch break.', asked: 2 });
+    expect(model.prompts[1]).toBe(`${fitPrompt(input)}\nIt must not involve: stay back`);
+  });
+
+  it('compares the suggestion with every confirmed constraint about the student, not only the one in conflict', async () => {
+    const both = { ...input, constraints: [leave, money, { ...money, id: 'c3', kind: 'time-before' as const, confirmed: false }] };
+    const model = fake([says('Ask her family to buy the writing workbook for home.'), says('Meet her before school to write.')]);
+    expect(fitHits('Ask her family to buy the writing workbook for home.', both).map((h) => h.matched)).toEqual(['buy']);
+    // The second answer goes against nothing confirmed: the time-before constraint is not confirmed.
+    expect(await fitStep(both, model.ask)).toEqual({ ok: true, suggestion: 'Meet her before school to write.', asked: 2 });
+    expect(model.prompts[1]).toMatch(/It must not involve: buy$/);
+  });
+
+  it('knows an activity the note says meets after the last bell', async () => {
+    const model = fake([says('Send Meenal to the remedial writing club.'), says('Send Meenal to the remedial writing club on Fridays.')]);
+    expect(await fitStep({ ...input, afterBell: ['remedial writing club'] }, model.ask)).toEqual({ ok: false, say: FIT_FAILED, asked: 2 });
+  });
+
+  it('gives up after the second request, and says so', async () => {
+    const model = fake([says('Keep her after school.'), says('Give her a detention.')]);
+    expect(await fitStep(input, model.ask)).toEqual({ ok: false, say: 'The on-device model could not fit this step. Rewrite it yourself or strike it.', asked: 2 });
+    expect(model.prompts).toHaveLength(2);
+    expect(await fitStep(input, fake(['not json', says(step)]).ask)).toEqual({ ok: false, say: FIT_FAILED, asked: 2 });
+    expect(await fitStep(input, fake([says(''), says('Give her the task at lunch.')]).ask)).toMatchObject({ ok: true, asked: 2 });
+  });
+
+  it('stops, and reads nothing, when an answer did not come from the device', async () => {
+    const model = fake([{ text: says('Give her the task at lunch.'), onDevice: false }]);
+    await expect(fitStep(input, model.ask)).rejects.toThrow('The fit did not run on the device. Stopped.');
+    expect(model.prompts).toHaveLength(1);
+  });
+
+  it('a failed request is the caller\'s to report: it is not turned into a suggestion', async () => {
+    const ask: FitAsk = async () => {
+      throw new Error('the model stopped');
+    };
+    await expect(fitStep(input, ask)).rejects.toThrow('the model stopped');
+  });
+});
+
+describe('the words of the private fact in a text', () => {
+  it('lists the words of the fact a suggestion repeats, small words left out', () => {
+    expect(factWordsIn('Give Meenal the task at lunch, as she must leave to reach home before dark.', leave)).toEqual(['leave', 'reach', 'home', 'dark']);
+    expect(factWordsIn('Give Meenal the task in the lunch break.', leave)).toEqual([]);
+    expect(factWordsIn('Lend her the workbook.', money)).toEqual([]);
+  });
+});

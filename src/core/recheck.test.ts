@@ -4,7 +4,11 @@ import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redactWithTokens } from './vault';
 import { confirmConstraint, proposeConstraints } from './constraints';
 import { combineChecks, ruleCheckItem } from './conflicts';
-import { keptAfterRecheck, modelSaid, recheckItems, REWRITTEN_CLEAR, REWRITTEN_UNCOMPARED, rewriteStep, standInsFor, stepToRewrite, UNCOMPARED } from './recheck';
+import { keptAfterRecheck, modelSaid, recheckItems, REWRITTEN_CLEAR, REWRITTEN_UNCOMPARED, rewriteStep, standInsFor, stepIndexOf, stepToRewrite, UNCOMPARED } from './recheck';
+import { lockConstraints } from './constraints';
+import { checkReply } from './gate';
+import { familyFor } from './family';
+import { outgoingOf } from './needs';
 
 // The sample note, guarded by rule, with every proposed constraint confirmed.
 const vault = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
@@ -111,6 +115,47 @@ describe('a step rewritten by the teacher', () => {
   it('leaves a name as typed when its stand-in was never sent', () => {
     expect(standInsFor('Meenal and Zoya read together.', entities, tokens)).toBe(`${meenal.token} and Zoya read together.`);
     expect(standInsFor('Meenal reads.', entities, [])).toBe('Meenal reads.');
+  });
+});
+
+describe('which step of an item was rewritten', () => {
+  it('counts from 0 among the steps as the teacher reads them', () => {
+    expect(stepIndexOf(items[0], 'Please encourage her to attend the after-school writing club this week.', entities, tokens)).toBe(1);
+    expect(stepIndexOf(items[0], 'Meenal reads aloud with confidence.', entities, tokens)).toBe(0);
+    expect(stepIndexOf(items[1], 'Read for ten minutes each morning.', entities, tokens)).toBe(0);
+    expect(stepIndexOf(items[0], 'Words that are not there.', entities, tokens)).toBe(0);
+  });
+});
+
+describe('a rewritten message home that states the private reason', () => {
+  // The vault as it stands at approval: the words of each confirmed constraint are withheld too.
+  const locked = lockConstraints(entities, constraints);
+  const going = outgoingOf(SAMPLE_NOTE, locked, constraints);
+  const step = 'Please encourage her to attend the after-school writing club this week.';
+  const after = (words: string) => {
+    const next = rewriteStep(items[0], step, words, locked, going.tokens);
+    return {
+      gate: checkReply(`Messages home\n${next.heading}\n${next.text}`, locked, going.tokens, going.text),
+      family: familyFor(next, SAMPLE_NOTE, locked, going.tokens, SAMPLE_CLASS_LIST),
+    };
+  };
+
+  it('is flagged by the return gate when the reason has a sensitive word the approved text did not have', () => {
+    const { gate } = after('Please give Meenal ten minutes of writing at lunch, because she has epilepsy.');
+    expect(gate.map((v) => v.what)).toEqual(['epilepsy']);
+    expect(gate[0].why).toBe('a sensitive word that was not in the text you approved');
+  });
+
+  it('is not flagged otherwise: neither the gate nor the family copy knows the words of a constraint', () => {
+    // As things stand. The words of the confirmed constraint, copied out whole into the message, pass both checks:
+    // the return gate does not look for a detail withheld at one place of the note, and the family copy looks
+    // only for other students, people, places, contact details and identity numbers.
+    const whole = after('Please give Meenal ten minutes of writing at lunch, because she has to leave school at the last bell to reach home before dark.');
+    expect(whole.gate).toEqual([]);
+    expect(whole.family.student).toBe(meenal);
+    const reworded = after('Please give Meenal ten minutes of writing at lunch, as she walks a long way and must be back before nightfall.');
+    expect(reworded.gate).toEqual([]);
+    expect(reworded.family.student).toBe(meenal);
   });
 });
 

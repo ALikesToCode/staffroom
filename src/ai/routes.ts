@@ -25,6 +25,12 @@ export const ROUTES = [
     why: 'Only this device knows what was withheld, so only this device can check the draft against it. The same refusal applies: no on-device model, no request.',
   },
   {
+    id: 'fit',
+    job: 'Fit a step in conflict to the child',
+    mode: InferenceMode.ONLY_ON_DEVICE,
+    why: 'The fact that rules a step out is private, so the step is rewritten where the fact is: on this device. The same refusal applies: no on-device model, no request. The suggestion fills the rewrite box and nothing changes until you save it.',
+  },
+  {
     id: 'label',
     job: 'Name the receipt',
     mode: InferenceMode.PREFER_ON_DEVICE,
