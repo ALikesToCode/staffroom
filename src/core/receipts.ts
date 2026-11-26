@@ -98,6 +98,8 @@ interface Run {
   struck: number;
   /** Kept items whose text the teacher rewrote on the device. */
   rewritten?: number;
+  /** Kept items whose rewrite began as a suggestion of the on-device model. A count: no words of any suggestion. */
+  fittedOnDevice?: number;
 }
 
 /** Build the receipt of a run. Counts and the approved text only: nothing from the vault. */
@@ -143,7 +145,7 @@ export function makeReceipt(run: Run): Receipt {
       ...layerCounts(run.checks),
     },
     constraints: run.constraints ?? { confirmed: 0, byKind: {} },
-    signOff: { kept: run.kept, struck: run.struck, at: now, ...(run.rewritten ? { rewritten: run.rewritten } : {}) },
+    signOff: { kept: run.kept, struck: run.struck, at: now, ...(run.rewritten ? { rewritten: run.rewritten } : {}), ...(run.fittedOnDevice ? { fittedOnDevice: run.fittedOnDevice } : {}) },
   };
 }
 

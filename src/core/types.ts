@@ -146,8 +146,11 @@ export interface Receipt {
   };
   /** Counts of the constraints the teacher confirmed. Counts only: no words of any constraint. */
   constraints?: { confirmed: number; byKind: Partial<Record<ConstraintKind, number>>; /** Need lines told to the cloud. */ shared?: number };
-  /** `rewritten`: kept items whose text the teacher changed. Kept in this browser only: it is not in the record that may leave the device. */
-  signOff: { kept: number; struck: number; at: string; rewritten?: number };
+  /**
+   * `rewritten`: kept items whose text the teacher changed. `fittedOnDevice`: those of them whose new words began as a
+   * suggestion of the on-device model. Both are kept in this browser only: neither is in the record that may leave the device.
+   */
+  signOff: { kept: number; struck: number; at: string; rewritten?: number; fittedOnDevice?: number };
 }
 
 /** What a constraint rules out. `other` is free text: only the model can check it. */

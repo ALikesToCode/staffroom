@@ -29,6 +29,46 @@ const run: RecordedRun = captureRun(
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.7444.60 Safari/537.36',
 );
 
+describe('a recorded run with rewrites and suggestions', () => {
+  const fit = { itemIndex: 0, stepIndex: 0, suggestion: 'Give Meenal the writing task in the lunch break.' };
+  const rewrite = { itemIndex: 0, text: 'Give [Student 2] the writing task in the lunch break.' };
+  const copy = () => JSON.parse(JSON.stringify(run)) as Record<string, unknown>;
+
+  it('holds what stood at the download, beside the reply as it first came', () => {
+    const saved = captureRun({ ...run, rewrites: [rewrite], fits: [fit] }, new Date(run.recordedAt), 'Chrome/142.0.7444.60');
+    expect(saved.draft).toEqual(run.draft);
+    expect(saved.checks).toEqual(run.checks);
+    const back = asRecordedRun(JSON.parse(JSON.stringify(saved)))!;
+    expect(back.rewrites).toEqual([rewrite]);
+    expect(back.fits).toEqual([fit]);
+    expect(asRecordedRun({ ...copy(), fits: [{ ...fit, extra: 'x' }] })!.fits).toEqual([fit]);
+  });
+
+  it('leaves both out when there are none, so an older file reads the same', () => {
+    const saved = captureRun({ ...run, rewrites: [], fits: [] }, new Date(run.recordedAt), 'Chrome/142.0.7444.60');
+    expect(saved).not.toHaveProperty('rewrites');
+    expect(saved).not.toHaveProperty('fits');
+    expect(asRecordedRun(copy())).not.toHaveProperty('fits');
+  });
+
+  it('is refused when a suggestion or a rewrite is not in form', () => {
+    for (const fits of [
+      'x',
+      [{ ...fit, itemIndex: 1 }],
+      [{ ...fit, itemIndex: -1 }],
+      [{ ...fit, stepIndex: 1.5 }],
+      [{ ...fit, suggestion: '  ' }],
+      [{ ...fit, suggestion: 'x'.repeat(301) }],
+      [{ itemIndex: 0, stepIndex: 0 }],
+      [fit, fit],
+      [null],
+    ]) expect(asRecordedRun({ ...copy(), fits }), JSON.stringify(fits).slice(0, 60)).toBeUndefined();
+    for (const rewrites of [{}, [{ itemIndex: 3, text: 'x' }], [{ itemIndex: 0, text: '' }], [{ itemIndex: 0 }], [rewrite, rewrite], [{ itemIndex: 0, text: 'x'.repeat(4001) }]]) {
+      expect(asRecordedRun({ ...copy(), rewrites }), JSON.stringify(rewrites).slice(0, 60)).toBeUndefined();
+    }
+  });
+});
+
 describe('a recorded run', () => {
   it('is captured in the form of the file and read back whole', () => {
     expect(run.recordedAt).toBe('2026-11-26T10:15:30.000Z');
@@ -45,7 +85,7 @@ describe('a recorded run', () => {
     expect(asRecordedRun(null)).toBeUndefined();
     expect(asRecordedRun('<!doctype html>')).toBeUndefined();
     expect(asRecordedRun({})).toBeUndefined();
-    for (const key of Object.keys(run)) {
+    for (const key of Object.keys(run).filter((k) => k !== 'rewrites' && k !== 'fits')) {
       const broken = copy();
       delete broken[key];
       expect(asRecordedRun(broken), key).toBeUndefined();

@@ -2,6 +2,7 @@ import type { Constraint, Draft, Entity, ItemCheck, Kind, TaskId, Where } from '
 import type { Policy } from './policy';
 import { KINDS } from './policy';
 import { CONSTRAINT_KINDS } from './constraints';
+import { SUGGESTION_MAX } from './recheck';
 
 // A recorded run: one real run on the sample class, captured in Chrome with the on-device model, kept as a
 // file beside the app. A browser without the on-device model can replay it, read-only. Nothing in a replay
@@ -9,6 +10,23 @@ import { CONSTRAINT_KINDS } from './constraints';
 
 /** The address of the file, beside the app. Until it exists, the app offers no replay. */
 export const RECORDED_FILE = 'recorded-run.json';
+
+/** A suggestion the on-device model made for one step of an item, as it was offered. Names are written out: it never left the device. */
+export interface RecordedFit {
+  itemIndex: number;
+  /** Which step of the item, counted from 0. 0 when the whole item was fitted. */
+  stepIndex: number;
+  suggestion: string;
+}
+
+/** An item as it stood when the run was saved: the text that replaced the cloud's on the device, with stand-ins. */
+export interface RecordedRewrite {
+  itemIndex: number;
+  text: string;
+}
+
+/** The most characters of a rewritten item that a recorded run holds. */
+const REWRITE_MAX = 4000;
 
 export interface RecordedRun {
   /** When the run was made, ISO-8601. */
@@ -30,6 +48,10 @@ export interface RecordedRun {
   checks: ItemCheck[];
   where: { guard: Where; draft: Where; check: Where };
   draftModel: string;
+  /** The items the teacher had rewritten when the run was saved, a suggestion saved as it was or changed. Absent: none. */
+  rewrites?: RecordedRewrite[];
+  /** The suggestions the on-device model made before the run was saved. Shown read-only in a replay. Absent: none. */
+  fits?: RecordedFit[];
 }
 
 const WHERES: Where[] = ['ON_DEVICE', 'IN_CLOUD', 'RULES_ONLY', 'NOT_RUN', 'SKIPPED'];
@@ -86,6 +108,12 @@ const isCheck = (v: unknown): v is ItemCheck =>
   optional(v.also, str) &&
   optional(v.rules, num);
 
+/** A list with one entry at most for each item of the draft, each pointing at an item that exists. */
+const perItem = <T extends { itemIndex: number }>(v: unknown, count: number, each: (x: Record<string, unknown>) => boolean): v is T[] =>
+  Array.isArray(v) &&
+  v.every((x) => obj(x) && num(x.itemIndex) && x.itemIndex < count && each(x)) &&
+  new Set(v.map((x: { itemIndex: number }) => x.itemIndex)).size === v.length;
+
 const isItem = (v: unknown): v is { heading: string; text: string } => obj(v) && str(v.heading) && str(v.text);
 
 /**
@@ -108,6 +136,16 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
   if (d.checks.length !== draft.items.length) return undefined;
   const where = d.where;
   if (!obj(where) || ![where.guard, where.draft, where.check].every((w) => WHERES.includes(w as Where))) return undefined;
+  const count = draft.items.length;
+  const rewrites = d.rewrites;
+  if (rewrites !== undefined && !perItem<RecordedRewrite>(rewrites, count, (x) => str(x.text) && x.text.trim().length > 0 && x.text.length <= REWRITE_MAX)) return undefined;
+  const fits = d.fits;
+  if (
+    fits !== undefined &&
+    !perItem<RecordedFit>(fits, count, (x) => num(x.stepIndex) && str(x.suggestion) && x.suggestion.trim().length > 0 && x.suggestion.length <= SUGGESTION_MAX)
+  ) {
+    return undefined;
+  }
   return {
     recordedAt: d.recordedAt,
     chrome: d.chrome,
@@ -122,6 +160,8 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
     checks: d.checks,
     where: { guard: where.guard as Where, draft: where.draft as Where, check: where.check as Where },
     draftModel: d.draftModel,
+    ...(rewrites ? { rewrites: rewrites.map((r) => ({ itemIndex: r.itemIndex, text: r.text })) } : {}),
+    ...(fits ? { fits: fits.map((f) => ({ itemIndex: f.itemIndex, stepIndex: f.stepIndex, suggestion: f.suggestion })) } : {}),
   };
 }
 
@@ -131,10 +171,25 @@ export function browserName(userAgent: string): string {
   return m ? `Chrome ${m[1]}` : userAgent.slice(0, 120);
 }
 
-/** Put a live run into the form of the file. The caller downloads it. */
+/**
+ * Put a live run into the form of the file. The caller downloads it.
+ * `draft` and `checks` are the reply and the verdicts as they first came;
+ * `rewrites` and `fits` are what stood on the result screen at that moment.
+ * An empty list of either is left out.
+ */
 export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now: Date, userAgent: string): RecordedRun {
-  return { recordedAt: now.toISOString(), chrome: browserName(userAgent), ...run };
+  const { rewrites, fits, ...rest } = run;
+  return {
+    recordedAt: now.toISOString(),
+    chrome: browserName(userAgent),
+    ...rest,
+    ...(rewrites && rewrites.length > 0 ? { rewrites } : {}),
+    ...(fits && fits.length > 0 ? { fits } : {}),
+  };
 }
+
+/** Said over a suggestion shown in a replay. */
+export const RECORDED_FIT_LABEL = 'Suggested on this device in the recorded run';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 

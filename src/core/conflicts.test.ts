@@ -371,7 +371,12 @@ describe('what a receipt keeps of the constraints and the two layers', () => {
       constraints: { ...constraintCounts(constraints), shared: 1 },
       kept: 1,
       struck: 2,
+      rewritten: 1,
+      fittedOnDevice: 1,
     });
+    // Rewrites and fits are counted in this browser only: the record that may go to the account has no key for either.
+    expect(receipt.signOff).toMatchObject({ kept: 1, struck: 2, rewritten: 1, fittedOnDevice: 1 });
+    expect(JSON.stringify(receiptRecord(receipt))).not.toMatch(/fitted|rewritten/i);
     expect(receipt.check).toMatchObject({ conflict: 1, unsure: 1, fits: 1, conflictsByRule: 1, doubtsByModel: 1 });
     expect(receipt.constraints).toEqual({ confirmed: 2, byKind: { 'time-after': 1, health: 1 }, shared: 1 });
     expect(JSON.stringify(receipt)).not.toMatch(/last bell|epilepsy|strobe|Meenal|Rule reason|after school/);
