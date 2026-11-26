@@ -85,6 +85,10 @@ pnpm typecheck
 
 [`eval.html`](eval.html) is a developer page that measures the check on the real on-device model. With `pnpm dev` running, open http://127.0.0.1:5173/eval.html in Chrome on a desktop. It puts 24 fixed, invented cases ([`src/eval/cases.ts`](src/eval/cases.ts)) through the same code the app uses, on the same `ONLY_ON_DEVICE` route: 12 where the advice conflicts with a withheld fact (time, place, health, money, family, travel) and 12 where the same fact is there and the advice is fine. Each case runs once; add `?runs=3` to run each three times. The page shows a table and the same results as JSON in `<pre id="eval-json">`: for each case what was expected, what the check said, its reason and the time taken, and totals for conflicts caught, compatible cases wrongly flagged as a conflict, unsure answers and failures. A second set, `eval.html?set=full`, measures the check on the whole sample note: a vault built from fixed entries (the class-list names and five private facts) and five fixed drafts of five three-step items each ([`src/eval/full.ts`](src/eval/full.ts)), in which one or two items of each draft have a step that a withheld fact rules out. Add `perFact=1` to ask about one fact at a time instead of all of a child's facts in one prompt. The output is in the same form. The results of the run quoted under the limits below are in [`docs/check-eval-2026-11-26.json`](docs/check-eval-2026-11-26.json).
 
+## Built for #BuildHybridAI 2026
+
+Staffroom is a new project, written during the contest's submission period (from 11 November 2026). It contains no code or other work that existed before then. It uses standard open-source libraries, and AI coding assistants were used in writing it.
+
 ## Limits, stated plainly
 
 - The on-device model is Gemini Nano in Chrome on desktop, and English only. In any other browser the app says so and runs the rules-only guard: the class list, the patterns, the short list of sensitive words and the capitalised-word rule. Those are no substitute for a model or for reading the text.

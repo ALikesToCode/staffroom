@@ -8,6 +8,14 @@ A small model on the teacher's device reads a note about a child and proposes wh
 
 **Code:** https://github.com/ALikesToCode/staffroom
 
+## Value proposition
+
+A teacher gets a large model's help with the notes that matter most, without handing those notes over. What leaves the device is only the text the teacher has read and approved; the names and private details stay behind, and are used on the device to check the advice that comes back.
+
+## What was built during the submission period
+
+All of it. Staffroom is a new project, started after the submission period opened on 11 November 2026. It contains no code or other work that existed before then. It uses standard open-source libraries (React, Vite, the Firebase JavaScript SDK), and AI coding assistants were used in writing it.
+
 ## Inspiration
 
 Teachers keep the most useful notes about a class in their heads or in a notebook: who is missing school and why, who has a health condition, whose home is in trouble. Those notes are exactly what a large model needs to write a good support plan, and exactly what should not be pasted into one. I work on teacher training in public education in India, and I build agent systems that stay under control. Staffroom puts the two together: the capable model does the heavy writing, and a small model on the device is the guard that decides what it is allowed to see.
