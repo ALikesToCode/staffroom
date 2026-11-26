@@ -75,6 +75,17 @@
       whether its quote is in the paragraph and its line passes the gate for a need line.
     </p>
     <p>
+      <code>?set=guard</code>: twelve fresh invented class notes (<code>src/eval/guard.ts</code>) put
+      through the guard as the app runs it, twice: by the rules alone, as in a browser with no on-device model, and by the
+      rules with the on-device model. Each note runs three times in each mode; <code>?runs=</code> changes that. The names,
+      places, numbers and private details in each note are labelled word for word, many of them in words no list would
+      catch, with harmless words that look private and the kinds of constraint each note gives; the labels were written
+      before the set was run. For each mode the page counts the details held back in full, in part or not at all (and among
+      them those no rule was expected to catch), the harmless spans held back, the labelled kinds of constraint proposed and
+      any others, and the time for each note. Nothing is sent: the model runs on the <code>ONLY_ON_DEVICE</code> route. No
+      result of this set is recorded here yet.
+    </p>
+    <p>
       One fact at a time is the default, as in the app; add <code>perFact=0</code> to ask about all of a child's facts in one
       prompt. For example <code>eval.html?set=full&amp;runs=3</code>.
     </p>

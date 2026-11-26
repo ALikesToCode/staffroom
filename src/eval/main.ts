@@ -12,6 +12,9 @@ import { FIT_CHILD_SYSTEM, FIT_LESSON_SYSTEM, fitLessonSchema, onDeviceFit } fro
 import { runLessonSet } from './lesson';
 import { LEARNING_CASES, learningVault, runLearningRules, runNeedsSet, runTicketSet } from './needs';
 import { LEARNING_SCHEMA, LEARNING_SYSTEM, readLearningAnswer } from '../ai/learning';
+import { guardOnDevice } from '../ai/guard';
+import { constraintsOnDevice } from '../ai/constraints';
+import { GUARD_CASES, guardNote, guardTotals, scoreGuard, type GuardDevice, type GuardMode, type GuardRow } from './guard';
 
 // A developer page, not part of the app. It runs fixed cases through the same check the app runs and shows
 // what came back. Nothing is sent anywhere: the model sets use the ONLY_ON_DEVICE route, and the rule set
@@ -32,9 +35,10 @@ const runs = Math.max(1, Math.min(20, Number(params.get('runs')) || 1));
  * ?set=lesson: five whole lesson plans against the sample class, rule layer only, no model.
  * ?set=needs: five lesson replies with lines for needs, placed beside the children of the sample class. Plain code, no model.
  * ?set=learning: twelve paragraphs for the proposer of learning needs: the rule, and the on-device model where there is one.
+ * ?set=guard: twelve fresh notes through the guard, rules only and with the on-device model, three runs unless ?runs= says.
  * No set: the 24 single-fact cases.
  */
-const set = (['rules', 'full', 'heldout', 'fit', 'lesson', 'needs', 'learning'] as const).find((s) => s === params.get('set')) ?? 'cases';
+const set = (['rules', 'full', 'heldout', 'fit', 'lesson', 'needs', 'learning', 'guard'] as const).find((s) => s === params.get('set')) ?? 'cases';
 /** One fact at a time is the default, as in the app. ?perFact=0 asks about all of a child's facts in one prompt. */
 const perFact = params.get('perFact') !== '0';
 
@@ -47,12 +51,17 @@ const SET_NAME: Record<typeof set, string> = {
   lesson: '5 lesson plans against the sample class, rule layer only, no model',
   needs: '5 lesson replies with lines for needs, placed beside the children of the sample class, plain code, no model',
   learning: '12 paragraphs for the proposer of learning needs, by rule and by the on-device model',
+  guard: '12 fresh notes through the guard, rules only and with the on-device model',
 };
+/** The guard set runs each note three times unless the address says otherwise. */
+const guardRuns = params.has('runs') ? runs : 3;
 document.getElementById('eval-mode')!.textContent =
   set === 'rules' || set === 'lesson' || set === 'needs' || set === 'learning'
     ? `Set: ${SET_NAME[set]}.`
     : set === 'fit'
       ? `Set: ${SET_NAME[set]}. Runs of each: ${runs}.`
+    : set === 'guard'
+      ? `Set: ${SET_NAME[set]}. Runs of each note in each mode: ${guardRuns}.`
     : `Set: ${SET_NAME[set]}. Mode: ${perFact ? 'one fact at a time' : 'all facts of a child in one prompt'}. Runs of each: ${runs}.`;
 
 function cell(row: HTMLTableRowElement, text: string, className = '') {
@@ -403,6 +412,101 @@ async function runLearning() {
   document.body.dataset.state = 'done';
 }
 
+/**
+ * Twelve fresh notes through the guard, as the app runs it: rules only,
+ * and the rules with the on-device model, each note `guardRuns` times.
+ * Each run is scored against the labels of its note. With no on-device
+ * model here, only the rules are run and the page says so.
+ */
+async function runGuardSet(onDevice: GuardDevice | null) {
+  const modes: GuardMode[] = onDevice ? ['rules', 'model'] : ['rules'];
+  const rows: GuardRow[] = [];
+  const out = (done: boolean) => {
+    json.textContent = JSON.stringify(
+      {
+        done,
+        at: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        set,
+        runsPerCase: guardRuns,
+        modes,
+        totals: { rules: guardTotals(rows, 'rules'), model: onDevice ? guardTotals(rows, 'model') : null },
+        rows,
+      },
+      null,
+      2,
+    );
+  };
+  for (let r = 1; r <= guardRuns; r++) {
+    for (const [i, c] of GUARD_CASES.entries()) {
+      for (const mode of modes) {
+        status.textContent = `Run ${r} of ${guardRuns}, note ${i + 1} of ${GUARD_CASES.length} (${c.id}), ${mode === 'model' ? 'rules and the on-device model' : 'rules only'}`;
+        const began = performance.now();
+        const got = await guardNote(c, mode === 'model' ? onDevice : null);
+        const ms = Math.round(performance.now() - began);
+        const score = scoreGuard(c, got);
+        rows.push({ run: r, id: c.id, mode, where: got.where, unread: got.unread, ...(got.failed ? { failed: got.failed } : {}), ms, ...score });
+        const tr = table.insertRow();
+        cell(tr, String(r));
+        cell(tr, c.id);
+        cell(tr, mode === 'model' ? `rules and the on-device model (${got.where})` : 'rules only');
+        cell(tr, c.note);
+        cell(tr, `${c.details.length} details, ${c.harmless.length} harmless, constraints: ${c.constraints.join(', ') || 'none'}`);
+        cell(
+          tr,
+          `caught ${score.caught.length}, partly ${score.partly.length}, missed ${score.missed.length}; harmless held ${score.harmlessHeld.length}; constraints ${score.constraintsMatched.length} of ${c.constraints.length}`,
+          score.missed.length === 0 && score.partly.length === 0 && score.harmlessHeld.length === 0 ? 'right' : 'wrong',
+        );
+        cell(
+          tr,
+          [
+            score.missed.length > 0 ? `missed: ${score.missed.map((t) => `“${t}”`).join(', ')}` : '',
+            score.partly.length > 0 ? `partly: ${score.partly.map((t) => `“${t}”`).join(', ')}` : '',
+            score.harmlessHeld.length > 0 ? `harmless held: ${score.harmlessHeld.map((t) => `“${t}”`).join(', ')}` : '',
+            score.constraintsMissed.length > 0 ? `constraints missed: ${score.constraintsMissed.join(', ')}` : '',
+            score.constraintsExtra.length > 0 ? `other kinds proposed: ${score.constraintsExtra.join(', ')}` : '',
+            got.failed ? `the model failed: ${got.failed}` : '',
+          ]
+            .filter(Boolean)
+            .join('; '),
+        );
+        cell(tr, String(ms));
+        out(false);
+      }
+    }
+  }
+  const say = (mode: GuardMode) => {
+    const t = guardTotals(rows, mode);
+    return `${mode === 'model' ? 'Rules and the on-device model' : 'Rules only'}: ${t.caught} of ${t.details} details caught (${t.partly} in part, ${t.missed} missed; of those no rule was expected to catch, ${t.notEasy.caught} caught and ${t.notEasy.missed} missed). Harmless spans held back: ${t.harmlessHeld} of ${t.harmless}. Constraints: ${t.constraintsMatched} of ${t.constraintsLabelled} labelled kinds proposed, ${t.constraintsExtra} other kinds. Median ${t.medianMs} ms a note.`;
+  };
+  status.textContent = `Done (${SET_NAME.guard}, ${guardRuns} runs). ${modes.map(say).join(' ')}${onDevice ? '' : ' The on-device model was not run: this browser has none.'}`;
+  out(true);
+  document.body.dataset.state = 'done';
+}
+
+/** The guard set starts at once with the rules; the model is loaded first when it can be. */
+async function startGuard() {
+  const device = await deviceStatus();
+  const onDevice: GuardDevice = { guard: (note) => guardOnDevice(note, () => {}), constraints: (note, entities) => constraintsOnDevice(note, entities, () => {}) };
+  if (device === 'available') return runGuardSet(onDevice);
+  if (device === 'downloadable' || device === 'downloading') {
+    status.textContent = 'The on-device model is not loaded yet. Press the button to load it and run both modes.';
+    start.hidden = false;
+    start.onclick = async () => {
+      start.disabled = true;
+      try {
+        await prepareDevice((f) => (status.textContent = `Loading the on-device model: ${Math.round(f * 100)}%`));
+        await runGuardSet(onDevice);
+      } catch (e) {
+        status.textContent = `The on-device model could not be loaded: ${e instanceof Error ? e.message : String(e)}`;
+        document.body.dataset.state = 'no-model';
+      }
+    };
+    return;
+  }
+  return runGuardSet(null);
+}
+
 /** The rule layer on its own. No model, so it runs at once in any browser. */
 function runRules() {
   const { rows, totals: t } = runRuleSet();
@@ -427,6 +531,7 @@ async function begin() {
   if (set === 'lesson') return runLessons();
   if (set === 'needs') return runNeeds();
   if (set === 'learning') return runLearning();
+  if (set === 'guard') return startGuard();
   const device = await deviceStatus();
   if (device === 'available') return run();
   if (device === 'downloadable' || device === 'downloading') {

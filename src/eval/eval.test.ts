@@ -311,3 +311,77 @@ describe('the guard set: what the on-device model adds to the rules', () => {
     expect(GUARD_CASES.flatMap((c) => c.harmless).length).toBeGreaterThanOrEqual(6);
   });
 });
+
+describe('the guard set: the run and the score, with fake guard output', () => {
+  const fake = {
+    id: 'fake',
+    classList: ['Asha Rao'],
+    note: 'Asha lives near Rampur and her father lost his shop. Asha won the Science Fair. The class sings.',
+    details: [
+      { text: 'Asha', kind: 'name' as const, easy: true },
+      { text: 'Rampur', kind: 'place' as const, easy: false },
+      { text: 'her father lost his shop', kind: 'private' as const, easy: false },
+    ],
+    harmless: ['Science Fair', 'The class sings'],
+    constraints: ['money' as const, 'time-after' as const],
+  };
+
+  it('counts a detail caught only where every letter of it is held back, wherever it stands', async () => {
+    const { scoreGuard } = await import('./guard');
+    const { buildVault } = await import('../core/vault');
+    const entities = buildVault(fake.note, [
+      { kind: 'student', text: 'Asha Rao', source: 'class list' },
+      { kind: 'private', text: 'father lost his shop', source: 'on-device model' },
+      { kind: 'place', text: 'Science Fair', source: 'on-device model' },
+    ]);
+    const constraints = [
+      { id: 'm', kind: 'money', text: 'x', source: 'rule', confirmed: false },
+      { id: 'l', kind: 'learning', text: 'y', source: 'rule', confirmed: false },
+      { id: 'h', kind: 'health', text: 'z', source: 'on-device model', confirmed: false },
+    ] satisfies import('../core/types').Constraint[];
+    expect(scoreGuard(fake, { entities, constraints })).toEqual({
+      caught: ['Asha'],
+      partly: ['her father lost his shop'],
+      missed: ['Rampur'],
+      harmlessHeld: ['Science Fair'],
+      constraintsMatched: ['money'],
+      constraintsMissed: ['time-after'],
+      // A learning need is not a constraint kind here.
+      constraintsExtra: ['health'],
+    });
+    // With nothing held back, every detail is missed and no harmless span is held.
+    expect(scoreGuard(fake, { entities: [], constraints: [] })).toMatchObject({ caught: [], partly: [], missed: ['Asha', 'Rampur', 'her father lost his shop'], harmlessHeld: [] });
+  });
+
+  it('runs the guard as the app does: with no device the capitalised-word rule; with it the model, and no such rule', async () => {
+    const { guardNote, scoreGuard } = await import('./guard');
+    const rules = await guardNote(fake, null);
+    expect(rules.where).toBe('RULES_ONLY');
+    // The capitalised-word rule holds back Rampur, and the harmless Science Fair with it.
+    expect(scoreGuard(fake, rules)).toMatchObject({ caught: ['Asha', 'Rampur'], harmlessHeld: ['Science Fair'] });
+    const device = {
+      guard: async () => ({ candidates: [{ kind: 'private' as const, text: 'her father lost his shop', source: 'on-device model' as const }], total: 1, unread: [], dropped: 0, partial: 0 }),
+      constraints: async () => ({ constraints: [{ id: 'd', kind: 'money' as const, text: 'her father lost his shop', source: 'on-device model' as const, confirmed: false }], asked: 1, unread: 0, dropped: 0 }),
+    };
+    const model = await guardNote(fake, device);
+    expect(model.where).toBe('ON_DEVICE');
+    expect(scoreGuard(fake, model)).toMatchObject({ caught: ['Asha', 'her father lost his shop'], missed: ['Rampur'], harmlessHeld: [], constraintsMatched: ['money'] });
+    // A model that read nothing leaves a rules-only run; one that throws is counted, and the rules stand.
+    expect((await guardNote(fake, { ...device, guard: async () => ({ candidates: [], total: 1, unread: [0], dropped: 0, partial: 0 }) })).where).toBe('RULES_ONLY');
+    const broke = await guardNote(fake, { ...device, guard: async () => Promise.reject(new Error('no answer')) });
+    expect([broke.where, broke.failed]).toEqual(['RULES_ONLY', 'no answer']);
+  });
+
+  it('adds up each mode on its own, with the details a rule should catch apart from the rest', async () => {
+    const { guardTotals, GUARD_CASES } = await import('./guard');
+    const c = GUARD_CASES[0];
+    const row = (mode: 'rules' | 'model', caught: string[], ms: number) => ({
+      run: 1, id: c.id, mode, where: 'RULES_ONLY' as const, unread: 0, ms,
+      caught, partly: [], missed: c.details.map((d) => d.text).filter((t) => !caught.includes(t)),
+      harmlessHeld: [], constraintsMatched: [], constraintsMissed: [...c.constraints], constraintsExtra: [],
+    });
+    const rows = [row('rules', ['Sneha', 'Arjun'], 10), row('model', ['Sneha', 'Arjun', 'Her father lost his shop in the floods'], 300)];
+    expect(guardTotals(rows, 'rules')).toMatchObject({ runs: 1, details: 5, caught: 2, missed: 3, easy: { caught: 2 }, notEasy: { caught: 0, missed: 2 }, medianMs: 10 });
+    expect(guardTotals(rows, 'model')).toMatchObject({ caught: 3, notEasy: { caught: 1 }, medianMs: 300 });
+  });
+});

@@ -1,4 +1,8 @@
-import type { ConstraintKind } from '../core/types';
+import type { Constraint, ConstraintKind, Entity, Where } from '../core/types';
+import { buildVault, deterministicCandidates, possibleNameCandidates, RESERVED, segment } from '../core/vault';
+import { proposeConstraints } from '../core/constraints';
+import { guardOutcome, unreadText, type GuardReport } from '../ai/guard';
+import { mergeProposals, type ConstraintReport } from '../ai/constraints';
 
 // A set for the guard: what the on-device model adds to the rules when it reads a raw note. Twelve fresh
 // class notes, invented, in an Indian school, written for this set and copied from no other. Every private
@@ -202,3 +206,161 @@ export const GUARD_CASES: GuardCase[] = [
     constraints: ['time-before'],
   },
 ];
+
+// ---------------------------------------------------------------- the run and the score
+
+/** Rules only, as in a browser with no on-device model; or the rules and the on-device model together. */
+export type GuardMode = 'rules' | 'model';
+
+/** The two on-device calls the guard makes, as the app makes them. Absent: rules only. */
+export interface GuardDevice {
+  guard: (note: string) => Promise<GuardReport>;
+  constraints: (note: string, entities: Entity[]) => Promise<ConstraintReport>;
+}
+
+/** What the guard left for one note: the vault and the proposed constraints, before the teacher has touched either. */
+export interface GuardOutput {
+  entities: Entity[];
+  constraints: Constraint[];
+  where: Where;
+  /** Parts of the note the model was asked to read and could not. */
+  unread: number;
+  /** Set when a model call threw. What the rules found stands. */
+  failed?: string;
+}
+
+/**
+ * Run the guard on one note as the app does on "Run the guard", step for
+ * step: the class list, the patterns and the sensitive words; with the
+ * device, the on-device guard, then the capitalised-word rule for what it
+ * did not read (or for the whole note when it read nothing); the vault;
+ * the constraints by rule, and with the device the model's merged in.
+ */
+export async function guardNote(c: Pick<GuardCase, 'note' | 'classList'>, device: GuardDevice | null): Promise<GuardOutput> {
+  const candidates = deterministicCandidates(c.note, c.classList);
+  let where: Where = 'RULES_ONLY';
+  let unread: number[] = [];
+  let failed: string | undefined;
+  if (device) {
+    try {
+      const report = await device.guard(c.note);
+      candidates.push(...report.candidates);
+      const outcome = guardOutcome(report);
+      where = outcome.where;
+      unread = outcome.unread;
+      if (report.stopped) failed = report.stopped;
+    } catch (e) {
+      // As in the app: the run broke before it could report, so every part counts as unread.
+      failed = e instanceof Error ? e.message : String(e);
+    }
+  }
+  if (where === 'RULES_ONLY') candidates.push(...possibleNameCandidates(c.note, c.classList));
+  else if (unread.length > 0) candidates.push(...possibleNameCandidates(unreadText(c.note, unread), c.classList));
+  const entities = buildVault(c.note, candidates);
+  let constraints = proposeConstraints(c.note, entities);
+  if (device && where === 'ON_DEVICE') {
+    try {
+      constraints = mergeProposals(constraints, (await device.constraints(c.note, entities)).constraints);
+    } catch (e) {
+      failed ??= e instanceof Error ? e.message : String(e);
+    }
+  }
+  return { entities, constraints, where, unread: unread.length, ...(failed ? { failed } : {}) };
+}
+
+/** For each character of the note, whether the vault holds it back. */
+function heldMask(note: string, entities: Entity[]): boolean[] {
+  const mask: boolean[] = [];
+  for (const s of segment(note, entities)) {
+    const held = Boolean(s.entity && (s.entity.withheld || s.entity.category === RESERVED));
+    for (let i = 0; i < s.text.length; i++) mask.push(held);
+  }
+  return mask;
+}
+
+/** How much of every place a span stands in the note is held back, letters and digits counted. */
+function share(note: string, mask: readonly boolean[], text: string): 'all' | 'part' | 'none' {
+  let held = 0;
+  let total = 0;
+  for (let at = note.indexOf(text); at >= 0; at = note.indexOf(text, at + 1)) {
+    // A short name counts where it stands as a word, not inside another word.
+    const edge = (i: number) => i < 0 || i >= note.length || !/[\p{L}\p{N}]/u.test(note[i]);
+    if (!edge(at - 1) || !edge(at + text.length)) continue;
+    for (let i = at; i < at + text.length; i++) {
+      if (!/[\p{L}\p{N}]/u.test(note[i])) continue;
+      total++;
+      if (mask[i]) held++;
+    }
+  }
+  return total === 0 || held === 0 ? 'none' : held === total ? 'all' : 'part';
+}
+
+/** How one run of the guard did on one note, against its labels. */
+export interface GuardScore {
+  /** Details held back wherever they stand. */
+  caught: string[];
+  /** Details held back only in part. */
+  partly: string[];
+  missed: string[];
+  /** Harmless spans of which any part was held back. */
+  harmlessHeld: string[];
+  /** Labelled kinds of constraint that were proposed, and those that were not. */
+  constraintsMatched: ConstraintKind[];
+  constraintsMissed: ConstraintKind[];
+  /** Kinds proposed that no label has. */
+  constraintsExtra: ConstraintKind[];
+}
+
+/** Set what the guard left against the labels of the note. Plain code. */
+export function scoreGuard(c: GuardCase, out: Pick<GuardOutput, 'entities' | 'constraints'>): GuardScore {
+  const mask = heldMask(c.note, out.entities);
+  const by = (want: 'all' | 'part' | 'none') => c.details.filter((d) => share(c.note, mask, d.text) === want).map((d) => d.text);
+  const proposed = [...new Set(out.constraints.filter((x) => x.kind !== 'learning').map((x) => x.kind))];
+  return {
+    caught: by('all'),
+    partly: by('part'),
+    missed: by('none'),
+    harmlessHeld: c.harmless.filter((h) => share(c.note, mask, h) !== 'none'),
+    constraintsMatched: c.constraints.filter((k) => proposed.includes(k)),
+    constraintsMissed: c.constraints.filter((k) => !proposed.includes(k)),
+    constraintsExtra: proposed.filter((k) => !c.constraints.includes(k)),
+  };
+}
+
+/** One row of the set: one note, one mode, one run. */
+export interface GuardRow extends GuardScore {
+  run: number;
+  id: string;
+  mode: GuardMode;
+  where: Where;
+  unread: number;
+  failed?: string;
+  ms: number;
+}
+
+/** The totals of one mode over every row of it. */
+export function guardTotals(rows: readonly GuardRow[], mode: GuardMode) {
+  const mine = rows.filter((r) => r.mode === mode);
+  const easy = new Map(GUARD_CASES.map((c) => [c.id, new Set(c.details.filter((d) => d.easy).map((d) => d.text))]));
+  const count = (pick: (r: GuardRow) => string[], wantEasy?: boolean) =>
+    mine.reduce((n, r) => n + pick(r).filter((t) => wantEasy === undefined || easy.get(r.id)?.has(t) === wantEasy).length, 0);
+  const ms = mine.map((r) => r.ms).sort((a, b) => a - b);
+  return {
+    runs: mine.length,
+    details: count((r) => [...r.caught, ...r.partly, ...r.missed]),
+    caught: count((r) => r.caught),
+    partly: count((r) => r.partly),
+    missed: count((r) => r.missed),
+    // The details the author expected only a reader to see, and those a rule should catch.
+    notEasy: { caught: count((r) => r.caught, false), partly: count((r) => r.partly, false), missed: count((r) => r.missed, false) },
+    easy: { caught: count((r) => r.caught, true), partly: count((r) => r.partly, true), missed: count((r) => r.missed, true) },
+    harmless: mine.reduce((n, r) => n + (GUARD_CASES.find((c) => c.id === r.id)?.harmless.length ?? 0), 0),
+    harmlessHeld: mine.reduce((n, r) => n + r.harmlessHeld.length, 0),
+    constraintsLabelled: mine.reduce((n, r) => n + r.constraintsMatched.length + r.constraintsMissed.length, 0),
+    constraintsMatched: mine.reduce((n, r) => n + r.constraintsMatched.length, 0),
+    constraintsExtra: mine.reduce((n, r) => n + r.constraintsExtra.length, 0),
+    unreadParts: mine.reduce((n, r) => n + r.unread, 0),
+    failures: mine.filter((r) => r.failed).length,
+    medianMs: ms.length > 0 ? ms[Math.floor(ms.length / 2)] : 0,
+  };
+}
