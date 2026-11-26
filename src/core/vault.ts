@@ -105,6 +105,11 @@ export function wordSpan(note: string, from: number, to: number): [number, numbe
   return [start, end];
 }
 
+/** True when a hand-marked item's offsets still point at its own words in this note. */
+export function spanHolds(note: string, e: Entity): boolean {
+  return !!e.span && e.span.start >= 0 && e.span.end <= note.length && e.span.start < e.span.end && note.slice(e.span.start, e.span.end) === e.surfaces[0];
+}
+
 /** True when every character of the span is held back: none of it is in the outgoing text. */
 export function covered(note: string, entities: Entity[], from: number, to: number): boolean {
   let at = 0;
@@ -350,6 +355,11 @@ export interface Segment {
 export function segment(note: string, entities: Entity[]): Segment[] {
   const ranges: { start: number; end: number; entity: Entity }[] = [];
   for (const entity of entities) {
+    // An occurrence marked by hand has its own offsets: exactly those characters, and no search.
+    if (entity.span) {
+      if (spanHolds(note, entity)) ranges.push({ start: entity.span.start, end: entity.span.end, entity });
+      continue;
+    }
     const matcher = wholeWordMatcher(entity.surfaces);
     if (!matcher) continue;
     for (const m of note.matchAll(matcher)) {
@@ -394,7 +404,7 @@ export function insidePrivate(note: string, entities: Entity[]): Map<string, str
   const spans = entities
     .filter((e) => e.kind === 'private' && e.surfaces.length > 0)
     .map((e) => {
-      const start = e.at ?? (wholeWordMatcher(e.surfaces)?.exec(note)?.index ?? -1);
+      const start = e.span?.start ?? e.at ?? (wholeWordMatcher(e.surfaces)?.exec(note)?.index ?? -1);
       return { e, start, end: start + e.surfaces[0].length };
     })
     .filter((s) => s.start >= 0);
@@ -468,9 +478,11 @@ export function restore(text: string, entities: Entity[], allowed?: readonly str
  * `span` is where in the note the selection was made. It decides which
  * words are meant: selecting "Ravi" inside "Ravinder" marks "Ravinder",
  * even though a "Ravi" stands on its own elsewhere. The span is widened to
- * whole words, and the result is checked: if the selected words would
- * still be in the outgoing text, an item tied to that exact place is added,
- * so what the teacher selected is always held back.
+ * whole words. A private detail is recorded as that one occurrence, with
+ * its start and end, and exactly those characters are redacted. A name or
+ * a number is withheld wherever it stands; if the selected words would
+ * still be in the outgoing text after that, an item with the offsets of
+ * the selection is added, so what the teacher selected is always held back.
  *
  * Without a span the first place the text stands is taken. Text that is
  * already in the vault is set back to withheld.
@@ -487,7 +499,18 @@ export function addByTeacher(note: string, entities: Entity[], text: string, kin
   if (!marked) return entities;
   const key = norm(marked);
   const has = (e: Entity, k: string) => e.surfaces.some((s) => norm(s) === k);
-  const next = entities.map((e) => (has(e, key) && !e.withheld ? { ...e, withheld: true } : { ...e }));
+  // Where a private detail stands in the note, when it is tied to one place.
+  const placeOf = (e: Entity): [number, number] | undefined =>
+    e.span ? [e.span.start, e.span.end] : e.at !== undefined ? [e.at, e.at + e.surfaces[0].length] : undefined;
+  // Marking sets a released item back to withheld. A name or number is one item wherever it stands. A private
+  // detail tied to one place is touched only when the selection is on that place: its twin elsewhere is not.
+  const meant = (e: Entity) => {
+    if (!has(e, key)) return false;
+    const place = placeOf(e);
+    if (!where || !place) return true;
+    return place[0] < where[1] && where[0] < place[1];
+  };
+  const next = entities.map((e) => (meant(e) && !e.withheld ? { ...e, withheld: true } : { ...e }));
   const number = (d: Sketch): Entity => {
     const n = Math.max(0, ...next.filter((e) => e.kind === d.kind).map((e) => Number(e.id.split('-')[1]) || 0)) + 1;
     const entity: Entity = {
@@ -502,6 +525,17 @@ export function addByTeacher(note: string, entities: Entity[], text: string, kin
     next.push(entity);
     return entity;
   };
+  if (kind === 'private' && where) {
+    // A private detail marked in the note is that one occurrence, by its offsets. The same words elsewhere
+    // are left as they are, and words that repeat ("very very very") are cut exactly where they were selected.
+    if (!covered(note, next, where[0], where[1])) {
+      const e = number({ kind, source: 'teacher', surfaces: [marked] });
+      e.span = { start: where[0], end: where[1] };
+      e.at = where[0];
+      attachPrivateDetails(note, next);
+    }
+    return next;
+  }
   if (!entities.some((e) => has(e, key))) {
     if (kind === 'private') {
       addPrivate(note, next, { kind, text: marked, source: 'teacher' }, number);
@@ -515,8 +549,8 @@ export function addByTeacher(note: string, entities: Entity[], text: string, kin
   }
   // The proof: the words the teacher selected are not in the outgoing text. If they still are, hold that place itself.
   if (where && !covered(note, next, where[0], where[1])) {
-    number({ kind, source: 'teacher', surfaces: [marked] }).at = where[0];
-    if (kind === 'private') attachPrivateDetails(note, next);
+    const e = number({ kind, source: 'teacher', surfaces: [marked] });
+    e.span = { start: where[0], end: where[1] };
   }
   return next;
 }

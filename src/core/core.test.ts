@@ -1650,3 +1650,66 @@ describe('the cases for measuring the on-device check', () => {
     expect(totals([]).medianMs).toBe(0);
   });
 });
+
+describe('an occurrence the teacher marked by hand', () => {
+  const mark = (note: string, vault: ReturnType<typeof buildVault>, from: number, text: string, kind: 'private' | 'adult' = 'private') =>
+    addByTeacher(note, vault, text, kind, { start: from, end: from + text.length });
+
+  it('withholds the last two of three repeated words, and nothing else', () => {
+    const note = 'It was very very very hard.';
+    const v = mark(note, [], note.indexOf('very very', 8), 'very very');
+    expect(v.map((e) => [e.surfaces[0], e.span])).toEqual([['very very', { start: 12, end: 21 }]]);
+    expect(redact(note, v)).toBe('It was very [withheld] hard.');
+    expect(segment(note, v).map((s) => [s.text, Boolean(s.entity)])).toEqual([
+      ['It was very ', false],
+      ['very very', true],
+      [' hard.', false],
+    ]);
+    expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+  });
+
+  it('withholds the first two of three repeated words when those were selected', () => {
+    const note = 'very very very';
+    const v = mark(note, [], 0, 'very very');
+    expect(redact(note, v)).toBe('[withheld] very');
+    expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+    const both = mark(note, v, 10, 'very');
+    expect(redact(note, both)).toBe('[withheld] [withheld]');
+    expect(checkOutgoing(redact(note, both), both, note)).toEqual([]);
+  });
+
+  it('withholds only the one of two identical phrases that was selected', () => {
+    const note = 'He is unwell. Later he is unwell again.';
+    const second = note.lastIndexOf('he is unwell');
+    const v = mark(note, [], second, 'he is unwell');
+    expect(redact(note, v)).toBe('He is unwell. Later [withheld] again.');
+    expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+    // Marking the first as well gives two entries, and releasing one leaves the other.
+    const both = mark(note, v, 0, 'He is unwell');
+    expect(redact(note, both)).toBe('[withheld]. Later [withheld] again.');
+    const released = both.map((e) => (e.span?.start === 0 ? { ...e, withheld: false } : e));
+    expect(redact(note, released)).toBe('He is unwell. Later [withheld] again.');
+    expect(checkOutgoing(redact(note, released), released, note)).toEqual([]);
+    // Selecting the second again does not withhold the released first.
+    expect(redact(note, mark(note, released, second, 'he is unwell'))).toBe('He is unwell. Later [withheld] again.');
+    // Selecting the released first withholds it again.
+    expect(redact(note, mark(note, released, 0, 'He is unwell'))).toBe('[withheld]. Later [withheld] again.');
+  });
+
+  it('is stopped at the exit gate when its offsets do not hold its words', () => {
+    const note = 'He is unwell. Later he is unwell again.';
+    const v = mark(note, [], 0, 'He is unwell');
+    const moved = v.map((e) => ({ ...e, span: { start: 3, end: 15 } }));
+    expect(redact(note, moved)).toBe(note);
+    expect(checkOutgoing(redact(note, moved), moved, note)).toEqual([{ what: 'He is unwell', why: 'marked but not found in the text' }]);
+    const beyond = v.map((e) => ({ ...e, span: { start: 30, end: 90 } }));
+    expect(checkOutgoing(redact(note, beyond), beyond, note).map((x) => x.why)).toEqual(['marked but not found in the text']);
+  });
+
+  it('still withholds a marked name wherever it stands', () => {
+    const note = 'Sunita rang. I told Sunita to wait.';
+    const v = mark(note, [], 20, 'Sunita', 'adult');
+    expect(redact(note, v)).toBe('[Adult 1] rang. I told [Adult 1] to wait.');
+    expect(checkOutgoing(redact(note, v), v, note)).toEqual([]);
+  });
+});

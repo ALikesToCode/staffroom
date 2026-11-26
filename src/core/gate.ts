@@ -1,6 +1,6 @@
 import type { Entity } from './types';
 import { findByRule, sameForm, sensitiveWords, wholeWordMatcher } from './rules';
-import { bareNotSent, covered, LOOKALIKE_RE, RESERVED } from './vault';
+import { bareNotSent, covered, LOOKALIKE_RE, RESERVED, spanHolds } from './vault';
 
 export interface Violation {
   what: string;
@@ -25,12 +25,23 @@ function containsWord(haystack: string, needle: string): boolean {
  * When the raw note is given, it also refuses a withheld item that is
  * nowhere to be found in the note as whole words: such an item is listed
  * in the vault but would redact nothing, so the vault would promise more
- * than the text delivers.
+ * than the text delivers. And it refuses to pass unless every character
+ * of every hand-marked occurrence (an item with offsets) is held back.
  */
 export function checkOutgoing(text: string, entities: Entity[], note?: string): Violation[] {
   const violations: Violation[] = [];
   for (const e of entities) {
     if (!e.withheld && e.category !== RESERVED) continue;
+    // An occurrence the teacher marked by hand has offsets. Every character between them must be held back.
+    // Its words may stand elsewhere in the note unmarked, so the outgoing text is not searched for them.
+    if (e.span) {
+      if (note === undefined) continue;
+      if (!spanHolds(note, e)) violations.push({ what: e.surfaces[0] ?? '', why: 'marked but not found in the text' });
+      else if (!covered(note, entities, e.span.start, e.span.end)) {
+        violations.push({ what: e.surfaces[0], why: `a withheld ${label(e)} is still in the text` });
+      }
+      continue;
+    }
     if (note !== undefined && !wholeWordMatcher(e.surfaces)?.test(note)) {
       violations.push({ what: e.surfaces[0] ?? '', why: 'marked but not found in the text' });
       continue;

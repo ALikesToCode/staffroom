@@ -20,6 +20,11 @@ export interface Entity {
   withheld: boolean;
   /** For private details: where in the note this one stands. The same words elsewhere are another entry. */
   at?: number;
+  /**
+   * For an occurrence the teacher marked by hand: its exact place in the note, start and end. Exactly these
+   * characters are redacted, whatever stands around them, and the exit gate refuses to pass unless they are.
+   */
+  span?: { start: number; end: number };
   /** For private details: the id of the student it is about, when known. */
   about?: string;
   /** For private details: health, family, money, identity or other. */
