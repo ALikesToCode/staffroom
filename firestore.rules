@@ -18,8 +18,10 @@ service cloud.firestore {
       return v is int && v >= 0 && v <= 1000000;
     }
 
+    // An ISO-8601 time in UTC, as the app writes it: 2026-11-26T10:15:30.123Z
     function isTime(v) {
-      return v is string && v.size() >= 20 && v.size() <= 40;
+      return v is string && v.size() <= 40
+        && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?Z$');
     }
 
     function validWithheld(m) {
@@ -46,7 +48,7 @@ service cloud.firestore {
     }
 
     // Exactly these keys, each with its type and a bound on its size. The only free strings are
-    // the two times, a hex digest and a model name of at most 100 characters.
+    // the two times (ISO-8601), a hex digest and a model name of at most 60 plain characters.
     function validRecord(d, receiptId) {
       return d.keys().hasOnly(['id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars',
           'approvedSha256', 'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
@@ -63,7 +65,7 @@ service cloud.firestore {
         && d.approvedSha256 is string && d.approvedSha256.matches('^[0-9a-f]{64}$')
         && d.guardWhere in ['ON_DEVICE', 'RULES_ONLY']
         && d.draftWhere in ['ON_DEVICE', 'IN_CLOUD']
-        && d.draftModel is string && d.draftModel.size() >= 1 && d.draftModel.size() <= 100
+        && d.draftModel is string && d.draftModel.matches('^[A-Za-z0-9 .()_-]{1,60}$')
         && d.checkWhere in ['ON_DEVICE', 'NOT_RUN', 'SKIPPED']
         && d.labelWhere in ['ON_DEVICE', 'IN_CLOUD', 'FALLBACK']
         && validVerdicts(d.verdicts)

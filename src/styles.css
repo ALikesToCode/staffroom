@@ -794,6 +794,17 @@ mark.released {
   color: var(--seal);
 }
 
+.confirm {
+  background: var(--amber-soft);
+  color: #5d3d00;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .notice {
   background: rgb(29 27 22 / 0.05);
   border-left: 3px solid var(--paper-line);

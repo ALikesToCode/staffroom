@@ -90,10 +90,12 @@ export interface Receipt {
   sent: {
     text: string;
     chars: number;
+    /** SHA-256 of the text, in hex. Receipts made before this was recorded do not have it. */
+    sha256?: string;
     approvedAt: string;
     gate: 'passed';
   };
-  draft: { where: Where; model: string };
+  draft: { where: Where; model: string; cloud?: 'no answer' | 'not reached' };
   check: {
     where: Where;
     replyGate: 'passed' | 'flagged';

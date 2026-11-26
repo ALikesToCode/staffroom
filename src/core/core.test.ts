@@ -1,5 +1,5 @@
 import indexHtml from '../../index.html?raw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { findByRule, findSensitive, nameParts, sentences } from './rules';
 import {
   addByTeacher,
@@ -517,7 +517,8 @@ describe('vault', () => {
 
 import { anchor, anchorQuote, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
 import { anythingToCheck, checkItems, checkPrompt, contextParagraphs, detailsFor, readVerdict, startsKept, studentsNamed, UNCLEAR, worse } from '../ai/check';
-import { asReceiptRecord, makeReceipt, receiptRecord, sha256Hex } from './receipts';
+import { asReceiptRecord, digestPrefix, makeReceipt, receiptRecord, recordModelName, sha256Hex } from './receipts';
+import { approvalKey, withTimeout } from './policy';
 
 describe('guard helpers', () => {
   const para = "Kabir's parents are separating and he is staying with his grandmother.";
@@ -814,6 +815,7 @@ describe('check and receipt', () => {
     unreadParagraphs: 1,
     droppedDetails: 0,
     sentText,
+    sentSha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
     approvedAt: new Date().toISOString(),
     draftWhere: 'IN_CLOUD',
     draftModel: 'gemini-3.5-flash-lite',
@@ -854,7 +856,8 @@ describe('check and receipt', () => {
     expect(json).not.toContain(receipt.label);
     expect(json).not.toContain('Meenal');
     expect(record.approvedChars).toBe(sentText.length);
-    expect(record.approvedSha256).toBe(await sha256Hex(sentText));
+    expect(record.approvedSha256).toBe(receipt.sent.sha256);
+    expect((await receiptRecord({ ...receipt, sent: { ...receipt.sent, sha256: undefined } })).approvedSha256).toBe(await sha256Hex(sentText));
     expect(record.approvedSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(record.withheld).toEqual({ student: 2, adult: 0, place: 0, contact: 0, id: 0, private: 1 });
     expect(record.verdicts.conflict).toBe(1);
@@ -863,6 +866,27 @@ describe('check and receipt', () => {
     // Every value is a number, a boolean, or one of a few short fixed strings.
     const strings = Object.values(record).filter((v): v is string => typeof v === 'string');
     expect(strings.every((v) => v.length <= 100)).toBe(true);
+  });
+
+  it('writes the record in exactly the forms the Firestore rules accept', async () => {
+    const odd = { ...receipt, draft: { where: 'IN_CLOUD' as const, model: 'gemini-3.5/flash:lite <b>"x"</b> ' + 'y'.repeat(80) } };
+    const record = await receiptRecord(odd);
+    const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+    expect(record.createdAt).toMatch(iso);
+    expect(record.approvedAt).toMatch(iso);
+    expect(record.approvedSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(record.draftModel).toMatch(/^[A-Za-z0-9 .()_-]{1,60}$/);
+    expect(recordModelName('Gemini Nano (Chrome built-in)')).toBe('Gemini Nano (Chrome built-in)');
+    expect(recordModelName('gemini-3.5-flash-lite')).toBe('gemini-3.5-flash-lite');
+    expect(recordModelName('<>')).toBe('unknown');
+    expect(['ON_DEVICE', 'RULES_ONLY']).toContain(record.guardWhere);
+    expect(['ON_DEVICE', 'IN_CLOUD']).toContain(record.draftWhere);
+    expect(['ON_DEVICE', 'NOT_RUN', 'SKIPPED']).toContain(record.checkWhere);
+    expect(['ON_DEVICE', 'IN_CLOUD', 'FALLBACK']).toContain(record.labelWhere);
+    // The same eight characters are shown on the receipt here and on the record in the account.
+    expect(digestPrefix(record.approvedSha256)).toBe(digestPrefix(receipt.sent.sha256));
+    expect(digestPrefix(record.approvedSha256)).toBe('ba7816bf');
+    expect(digestPrefix(undefined)).toBe('');
   });
 
   it('reads a stored record back, and refuses anything in another form', async () => {
@@ -874,7 +898,10 @@ describe('check and receipt', () => {
     expect(asReceiptRecord(receipt)).toBeUndefined();
     expect(asReceiptRecord({ ...record, task: 'other' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, kept: -1 })).toBeUndefined();
-    expect(asReceiptRecord({ ...record, draftModel: 'x'.repeat(101) })).toBeUndefined();
+    expect(asReceiptRecord({ ...record, draftModel: 'x'.repeat(61) })).toBeUndefined();
+    expect(asReceiptRecord({ ...record, draftModel: 'gemini<script>' })).toBeUndefined();
+    expect(asReceiptRecord({ ...record, createdAt: 'yesterday' })).toBeUndefined();
+    expect(asReceiptRecord({ ...record, approvedSha256: 'abc' })).toBeUndefined();
     expect(asReceiptRecord(null)).toBeUndefined();
   });
 });
@@ -912,5 +939,29 @@ describe('page', () => {
     expect(html).toContain('<meta name="google" content="notranslate" />');
     expect(html).toContain('<html lang="en" translate="no">');
     expect(html).toContain('<div id="root" translate="no">');
+  });
+});
+
+describe('approval and policy', () => {
+  it('binds an approval to the text, the locked kinds and the drafting model', () => {
+    const key = approvalKey('Hello [Student 1].', ['contact', 'id'], 'gemini-3.5-flash-lite');
+    expect(approvalKey('Hello [Student 1].', ['id', 'contact'], 'gemini-3.5-flash-lite')).toBe(key);
+    expect(approvalKey('Hello [Student 1]. ', ['contact', 'id'], 'gemini-3.5-flash-lite')).not.toBe(key);
+    expect(approvalKey('Hello [Student 1].', ['contact'], 'gemini-3.5-flash-lite')).not.toBe(key);
+    expect(approvalKey('Hello [Student 1].', ['contact', 'id', 'student'], 'gemini-3.5-flash-lite')).not.toBe(key);
+    expect(approvalKey('Hello [Student 1].', ['contact', 'id'], 'another-model')).not.toBe(key);
+  });
+
+  it('falls back to the defaults when the policy is slow or fails', async () => {
+    vi.useFakeTimers();
+    try {
+      const slow = withTimeout(new Promise<string>(() => {}), 4000, 'defaults');
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(await slow).toBe('defaults');
+      expect(await withTimeout(Promise.reject(new Error('offline')), 4000, 'defaults')).toBe('defaults');
+      expect(await withTimeout(Promise.resolve('remote'), 4000, 'defaults')).toBe('remote');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

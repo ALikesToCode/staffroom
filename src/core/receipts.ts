@@ -10,8 +10,24 @@ export function loadReceipts(): Receipt[] {
   }
 }
 
-export function storeReceipts(receipts: Receipt[]): void {
-  localStorage.setItem(KEY, JSON.stringify(receipts.slice(0, 50)));
+/** Keep the receipts in this browser. Returns false when the browser would not store them (full, or switched off). */
+export function storeReceipts(receipts: Receipt[]): boolean {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(receipts.slice(0, 50)));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A model name in the form the cloud record accepts: letters, digits, spaces and . ( ) _ - only, 60 at most. */
+export function recordModelName(name: string): string {
+  return name.replace(/[^A-Za-z0-9 .()_-]/g, '').slice(0, 60) || 'unknown';
+}
+
+/** The first eight characters of a digest: enough to match a receipt here to its record in the account. */
+export function digestPrefix(sha256: string | undefined): string {
+  return sha256 ? sha256.slice(0, 8) : '';
 }
 
 interface Run {
@@ -23,9 +39,13 @@ interface Run {
   unreadParagraphs: number;
   droppedDetails: number;
   sentText: string;
+  /** SHA-256 of the approved text, in hex. */
+  sentSha256: string;
   approvedAt: string;
   draftWhere: Where;
   draftModel: string;
+  /** When the device wrote the draft: whether the request went out and got no answer, or could not go out. */
+  draftCloud?: 'no answer' | 'not reached';
   checkWhere: Where;
   replyFlagged: boolean;
   checks: ItemCheck[];
@@ -58,8 +78,8 @@ export function makeReceipt(run: Run): Receipt {
       unreadParagraphs: run.unreadParagraphs,
       droppedDetails: run.droppedDetails,
     },
-    sent: { text: run.sentText, chars: run.sentText.length, approvedAt: run.approvedAt, gate: 'passed' },
-    draft: { where: run.draftWhere, model: run.draftModel },
+    sent: { text: run.sentText, chars: run.sentText.length, sha256: run.sentSha256, approvedAt: run.approvedAt, gate: 'passed' },
+    draft: { where: run.draftWhere, model: run.draftModel, ...(run.draftCloud ? { cloud: run.draftCloud } : {}) },
     check: {
       where: run.checkWhere,
       replyGate: run.replyFlagged ? 'flagged' : 'passed',
@@ -119,11 +139,11 @@ export async function receiptRecord(r: Receipt): Promise<ReceiptRecord> {
     released: r.guard.allowedByTeacher,
     approvedAt: r.sent.approvedAt,
     approvedChars: r.sent.text.length,
-    approvedSha256: await sha256Hex(r.sent.text),
+    approvedSha256: r.sent.sha256 && /^[0-9a-f]{64}$/.test(r.sent.sha256) ? r.sent.sha256 : await sha256Hex(r.sent.text),
     guardWhere: r.guard.where,
     draftWhere: r.draft.where,
-    // A model name from the app's settings, never model output. Bounded all the same.
-    draftModel: r.draft.model.slice(0, 100),
+    // A model name from the app's settings, never model output. Reduced to the form the rules accept all the same.
+    draftModel: recordModelName(r.draft.model),
     checkWhere: r.check.where,
     labelWhere: r.labelWhere ?? 'FALLBACK',
     verdicts: {
@@ -169,6 +189,10 @@ export function asReceiptRecord(data: unknown): ReceiptRecord | undefined {
   const strings = [d.id, d.createdAt, d.task, d.approvedAt, d.approvedSha256, d.guardWhere, d.draftWhere, d.draftModel, d.checkWhere, d.labelWhere];
   if (!withheld || !verdicts || !flags || typeof flags !== 'object' || !strings.every(str)) return undefined;
   if (![d.released, d.approvedChars, d.kept, d.struck, flags.unreadParagraphs, flags.droppedDetails].every(count)) return undefined;
+  // The same forms the Firestore rules insist on.
+  const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+  if (!iso.test(d.createdAt as string) || !iso.test(d.approvedAt as string)) return undefined;
+  if (!/^[0-9a-f]{64}$/.test(d.approvedSha256 as string) || !/^[A-Za-z0-9 .()_-]{1,60}$/.test(d.draftModel as string)) return undefined;
   if (typeof flags.replyFlagged !== 'boolean' || !['plan', 'parents', 'handover'].includes(d.task as string)) return undefined;
   return {
     id: d.id as string,

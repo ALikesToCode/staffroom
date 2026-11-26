@@ -5,6 +5,7 @@ import { getAuth, onAuthStateChanged, signInAnonymously, type User } from 'fireb
 import { collection, doc, getDocs, getFirestore, orderBy, query, setDoc } from 'firebase/firestore';
 import { fetchAndActivate, getRemoteConfig, getValue } from 'firebase/remote-config';
 import type { Kind, Receipt } from '../core/types';
+import { withTimeout } from '../core/policy';
 import { asReceiptRecord, receiptRecord, type ReceiptRecord } from '../core/receipts';
 
 const env = import.meta.env;
@@ -68,8 +69,20 @@ export const DEFAULT_POLICY: Policy = {
 
 const KINDS: Kind[] = ['student', 'adult', 'place', 'contact', 'id', 'private'];
 
-export async function loadPolicy(): Promise<Policy> {
-  if (!configured) return DEFAULT_POLICY;
+/** How long the app waits for the school's policy before it goes on with the built-in defaults. */
+export const POLICY_TIMEOUT_MS = 4000;
+
+/**
+ * The policy in force: the school's, or the built-in defaults when there is
+ * no project, the fetch fails, or it has not answered within the timeout.
+ * Approval is not offered until this has settled.
+ */
+export function loadPolicy(timeoutMs = POLICY_TIMEOUT_MS): Promise<Policy> {
+  if (!configured) return Promise.resolve(DEFAULT_POLICY);
+  return withTimeout(fetchPolicy(), timeoutMs, DEFAULT_POLICY);
+}
+
+async function fetchPolicy(): Promise<Policy> {
   try {
     const rc = getRemoteConfig(app);
     rc.settings.minimumFetchIntervalMillis = import.meta.env.DEV ? 0 : 60 * 60 * 1000;

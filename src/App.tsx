@@ -16,7 +16,8 @@ import {
   segment,
 } from './core/vault';
 import { checkOutgoing, checkReply, type Violation } from './core/gate';
-import { loadReceipts, makeReceipt, storeReceipts, type ReceiptRecord } from './core/receipts';
+import { digestPrefix, loadReceipts, makeReceipt, sha256Hex, storeReceipts, type ReceiptRecord } from './core/receipts';
+import { approvalKey } from './core/policy';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, paragraphs } from './ai/guard';
@@ -115,12 +116,19 @@ export function App() {
   /** Said in place of the marking buttons when a selection cannot be used. */
   const [selectionNote, setSelectionNote] = useState('');
   /** The exact outgoing text the teacher ticked as read. The tick holds only while this is still the outgoing text. */
-  const [readText, setReadText] = useState<string | null>(null);
+  const [readKey, setReadKey] = useState<string | null>(null);
   /** What was approved: the text, when, and the vault as it stood at that moment. */
-  const [sent, setSent] = useState<{ text: string; at: string; entities: Entity[]; tokens: string[] } | null>(null);
+  const [sent, setSent] = useState<{
+    text: string;
+    at: string;
+    entities: Entity[];
+    tokens: string[];
+    /** Whether this computer had a network at the moment of sending. */
+    online: boolean;
+    /** The policy the approval was given under. */
+    policy: Policy;
+  } | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
-  /** Whether this computer had a network when the draft came back. Used only to word a fallback honestly. */
-  const [draftOnline, setDraftOnline] = useState(true);
   const [replyIssues, setReplyIssues] = useState<Violation[]>([]);
   const [replyRead, setReplyRead] = useState(false);
   const [checks, setChecks] = useState<ItemCheck[]>([]);
@@ -128,7 +136,15 @@ export function App() {
   const [kept, setKept] = useState<boolean[]>([]);
   const [label, setLabel] = useState<{ title: string; where: LabelWhere } | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>(loadReceipts);
-  const [copyState, setCopyState] = useState<'idle' | 'saved' | 'failed'>('idle');
+  const [copyState, setCopyState] = useState<'idle' | 'pending' | 'saved' | 'failed'>('idle');
+  /** True when this browser would not store the receipt just signed. */
+  const [storeFailed, setStoreFailed] = useState(false);
+  /** The inline question asked before forgetting, when receipts are kept. */
+  const [forgetAsk, setForgetAsk] = useState(false);
+  const [listOpen, setListOpen] = useState(() => read(session, CLASS_LIST_KEY, [] as string[]).length === 0);
+  /** False until the school's policy has loaded, or the app has given up waiting and taken the defaults. */
+  const [policyReady, setPolicyReady] = useState(false);
+  const policyReadyRef = useRef(false);
   const [records, setRecords] = useState<Records>({ state: 'idle' });
   const [error, setError] = useState<string | null>(null);
   /** The last copy to the clipboard: the whole text or one item, and whether it worked. */
@@ -143,6 +159,8 @@ export function App() {
     deviceStatus().then(setDevice);
     loadPolicy().then((p) => {
       policyRef.current = p;
+      policyReadyRef.current = true;
+      setPolicyReady(true);
       setPolicy(p);
     });
     const stop = watchUser((u) => setUid(u?.uid ?? null));
@@ -188,10 +206,11 @@ export function App() {
   );
   const outgoing = useMemo(() => redact(note, entities), [note, entities]);
   const violations = useMemo(() => checkOutgoing(outgoing, entities, note), [outgoing, entities, note]);
-  const readIt = readText !== null && readText === outgoing;
+  const approval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel);
+  const readIt = readKey !== null && readKey === approval;
 
   // The tick is for one exact text under one policy. If either changes, it is cleared.
-  useEffect(() => setReadText(null), [outgoing, policy]);
+  useEffect(() => setReadKey(null), [approval]);
 
   // ---------------------------------------------------------------- the on-device model
 
@@ -225,7 +244,7 @@ export function App() {
     setError(null);
     setStage('guarding');
     setSelection('');
-    setReadText(null);
+    setReadKey(null);
     setSent(null);
     setResult(null);
     const candidates = deterministicCandidates(note, classList);
@@ -320,23 +339,28 @@ export function App() {
   const approveAndSend = async () => {
     // Everything is worked out again at the moment of sending: the current locks, the text they give,
     // and the gate on exactly that text. It is sent only if it is the text the teacher ticked as read.
-    const current = applyLocks(rawEntities, policyRef.current.lockedKinds);
+    if (!policyReadyRef.current) return;
+    const sentPolicy = policyRef.current;
+    const current = applyLocks(rawEntities, sentPolicy.lockedKinds);
     const { text, tokens } = redactWithTokens(note, current);
     const stopped = checkOutgoing(text, current, note);
-    if (stage !== 'review' || readText === null || text !== readText || stopped.length > 0) {
-      setReadText(null);
+    // The tick was for one text, one set of locks and one drafting model. Any of them changed: no send.
+    const same = readKey !== null && readKey === approvalKey(text, sentPolicy.lockedKinds, sentPolicy.cloudModel);
+    if (stage !== 'review' || !same || stopped.length > 0) {
+      setReadKey(null);
       setError(
         stopped.length > 0
           ? 'The exit gate stopped the text. Nothing was sent.'
-          : 'The outgoing text is not the text you ticked as read. Nothing was sent. Read it again, then approve.',
+          : 'The outgoing text or the policy is not what you ticked as read. Nothing was sent. Read it again, then approve.',
       );
       return;
     }
     const entities = current;
-    const cloudModel = policyRef.current.cloudModel;
+    const cloudModel = sentPolicy.cloudModel;
+    const sentOnline = navigator.onLine;
     setError(null);
     const approvedAt = new Date().toISOString();
-    setSent({ text, at: approvedAt, entities, tokens });
+    setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy });
     setStage('drafting');
     let drafted: DraftResult;
     try {
@@ -347,12 +371,11 @@ export function App() {
       setError(
         configured
           ? `The draft could not be written: ${message(e)}`
-          : 'This build has no Firebase project, so the cloud step is switched off. The on-device steps work. See the README to connect a project.',
+          : 'This build has no Firebase project. The cloud refused the request, and no on-device model was ready to write the draft instead. The guard and the gates still work. See the README to connect a project.',
       );
       return;
     }
     setResult(drafted);
-    setDraftOnline(navigator.onLine);
     setKept(drafted.draft.items.map(() => true));
     const replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
     setReplyIssues(checkReply(replyText, entities, tokens));
@@ -395,6 +418,12 @@ export function App() {
 
   const signOff = async () => {
     if (!result || !sent || replyBlocked) return;
+    let sentSha256 = '';
+    try {
+      sentSha256 = await sha256Hex(sent.text);
+    } catch {
+      // No digest in this browser. The receipt is still written; the record works one out if it can.
+    }
     const receipt = makeReceipt({
       task,
       label: label?.title || currentTask.label,
@@ -404,9 +433,11 @@ export function App() {
       unreadParagraphs: guardGaps.unread.length,
       droppedDetails: guardGaps.dropped + guardGaps.partial,
       sentText: sent.text,
+      sentSha256,
       approvedAt: sent.at,
       draftWhere: result.where,
       draftModel: result.model,
+      draftCloud: result.where === 'ON_DEVICE' ? (sent.online ? 'no answer' : 'not reached') : undefined,
       checkWhere,
       replyFlagged: replyIssues.length > 0,
       checks,
@@ -415,10 +446,13 @@ export function App() {
     });
     const next = [receipt, ...receipts];
     setReceipts(next);
-    storeReceipts(next);
+    // The browser can refuse to store (full, or switched off). Say so; the sign-off and the record go on.
+    setStoreFailed(!storeReceipts(next));
     setStage('signed');
     setCopyState('idle');
     if (keepCopies && uid) {
+      // Independent of the local store. With no network the write waits, and finishes when the network is back.
+      setCopyState('pending');
       try {
         await saveReceiptCopy(uid, receipt);
         setCopyState('saved');
@@ -459,7 +493,7 @@ export function App() {
     setGuardGaps(NO_GAPS);
     setSelection('');
     setSelectionNote('');
-    setReadText(null);
+    setReadKey(null);
     setSent(null);
     setResult(null);
     setChecks([]);
@@ -471,15 +505,23 @@ export function App() {
     setProgress('');
     setCopyState('idle');
     setCopied(null);
-    setDraftOnline(true);
+    setStoreFailed(false);
+    setForgetAsk(false);
     setError(null);
   };
 
   const startOver = clearRun;
 
-  /** Forget the raw note, the class list, the vault and the results: from memory and from storage. */
-  const forgetNote = () => {
+  /**
+   * Forget the raw note, the class list, the vault and the results: from memory and from storage.
+   * Receipts hold approved text, so the teacher is asked about them and they go only on a yes.
+   */
+  const forgetNote = (alsoReceipts: boolean) => {
     clearRun();
+    if (alsoReceipts) {
+      setReceipts([]);
+      storeReceipts([]);
+    }
     setNote('');
     setClassList([]);
     try {
@@ -505,6 +547,29 @@ export function App() {
   const replyBlocked = replyIssues.length > 0 && !replyRead;
   const editing = stage === 'write';
   const busy = stage === 'guarding' || stage === 'drafting' || stage === 'checking';
+
+  /** What goes to the cloud model besides the approved text. Shown before approval and kept on screen after it. */
+  const sentWith = (
+    <>
+      <p className="hint">The cloud model also receives the task instruction shown here:</p>
+      <p className="instruction">{currentTask.instruction}</p>
+      <details className="fixed-instructions">
+        <summary>Fixed instructions sent with every draft</summary>
+        <p className="hint">The system instruction:</p>
+        <pre className="wire small">{DRAFT_SYSTEM}</pre>
+        <p className="hint">Written after the task instruction:</p>
+        <pre className="wire small">{DRAFT_FORMAT}</pre>
+        <p className="hint">Written above your text:</p>
+        <pre className="wire small">{DRAFT_NOTES_HEADING}</pre>
+        <p className="hint">
+          The shape of the answer is fixed too: a title and a list of items, each with a heading and a text. One more
+          call names the receipt. It runs on this device when it can; when it cannot, the cloud model is sent the first{' '}
+          {LABEL_CHARS.toLocaleString()} characters of the text below with this instruction:
+        </p>
+        <pre className="wire small">{LABEL_SYSTEM}</pre>
+      </details>
+    </>
+  );
 
   const vaultBody = (
     <>
@@ -652,14 +717,34 @@ export function App() {
                     {!busy && (note !== '' || classList.length > 0) && (
                       <button
                         className="link forget"
-                        onClick={forgetNote}
-                        title="Clears the note, the class list, the vault and the results from this page and from this browser. Receipts are kept."
+                        onClick={() => (receipts.length > 0 ? setForgetAsk(true) : forgetNote(false))}
+                        title="Clears the note, the class list, the vault and the results from this page and from this browser."
                       >
                         Forget this note
                       </button>
                     )}
                   </span>
                 </div>
+                {forgetAsk && (
+                  <div className="confirm" role="group" aria-label="Forget this note">
+                    <p>
+                      Your note, class list, vault and results will be cleared. This browser also keeps {receipts.length}{' '}
+                      {receipts.length === 1 ? 'receipt' : 'receipts'}, and a receipt holds the text you approved. Delete{' '}
+                      {receipts.length === 1 ? 'it' : 'them'} too?
+                    </p>
+                    <div className="actions">
+                      <button className="secondary" onClick={() => forgetNote(true)}>
+                        Forget the note and delete receipts
+                      </button>
+                      <button className="secondary" onClick={() => forgetNote(false)}>
+                        Forget the note, keep receipts
+                      </button>
+                      <button className="link" onClick={() => setForgetAsk(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {editing ? (
                   <>
@@ -674,7 +759,7 @@ export function App() {
                       autoComplete="off"
                       aria-label="Your note"
                     />
-                    <details className="class-list" open={classList.length === 0 ? undefined : false}>
+                    <details className="class-list" open={listOpen} onToggle={(e) => setListOpen(e.currentTarget.open)}>
                       <summary>
                         Class list <small>{classList.length > 0 ? `${classList.length} names, kept in this tab until you close it` : 'optional, kept in this tab until you close it'}</small>
                       </summary>
@@ -923,6 +1008,16 @@ export function App() {
                           Could not copy. Your browser did not allow it: select the text and copy it by hand.
                         </p>
                       )}
+                      {storeFailed && (
+                        <p className="caution" role="alert">
+                          This browser could not store the receipt. Copy what you need before you leave this page.
+                        </p>
+                      )}
+                      {copyState === 'pending' && (
+                        <p className="hint">
+                          {online ? 'Saving the record to your account.' : 'The record will be saved when the network is back.'}
+                        </p>
+                      )}
                       {copyState === 'saved' && <p className="hint">The receipt's record (no text) was saved to your account.</p>}
                       {copyState === 'failed' && (
                         <p className="caution">The record could not be saved to your account. The receipt is still kept in this browser.</p>
@@ -959,27 +1054,14 @@ export function App() {
                       {violations.length === 0 ? 'Exit gate: clear' : `Exit gate: ${violations.length} stopped`}
                     </span>
                   </div>
-                  <p className="hint">The cloud model also receives the task instruction shown here:</p>
-                  <p className="instruction">{currentTask.instruction}</p>
-                  <details className="fixed-instructions">
-                    <summary>Fixed instructions sent with every draft</summary>
-                    <p className="hint">The system instruction:</p>
-                    <pre className="wire small">{DRAFT_SYSTEM}</pre>
-                    <p className="hint">Written after the task instruction:</p>
-                    <pre className="wire small">{DRAFT_FORMAT}</pre>
-                    <p className="hint">Written above your text:</p>
-                    <pre className="wire small">{DRAFT_NOTES_HEADING}</pre>
-                    <p className="hint">
-                      The shape of the answer is fixed too: a title and a list of items, each with a heading and a text. One more
-                      call names the receipt. It runs on this device when it can; when it cannot, the cloud model is sent the first{' '}
-                      {LABEL_CHARS.toLocaleString()} characters of the text below with this instruction:
-                    </p>
-                    <pre className="wire small">{LABEL_SYSTEM}</pre>
-                  </details>
+                  {sentWith}
                   <p className="hint">This is the exact text that will be sent, for: {currentTask.label.toLowerCase()}.</p>
                   <pre className="wire">
                     <CloudText text={outgoing} />
                   </pre>
+                  <p className="hint policy-line">
+                    {policyReady ? `Policy: ${policy.from}. Drafting model: ${policy.cloudModel}.` : 'Policy: loading. Approval waits for it.'}
+                  </p>
                   {violations.length > 0 && (
                     <ul className="stops">
                       {violations.map((v, i) => (
@@ -1016,16 +1098,18 @@ export function App() {
                     </p>
                   )}
                   <label className="read-it">
-                    <input type="checkbox" checked={readIt} onChange={(e) => setReadText(e.target.checked ? outgoing : null)} />
+                    <input type="checkbox" checked={readIt} onChange={(e) => setReadKey(e.target.checked ? approval : null)} />
                     {guardWhere === 'RULES_ONLY'
                       ? 'No model looked for private details. I have read this text and marked them myself.'
                       : 'I have read this text and I am content to send it.'}
                   </label>
                   <div className="actions">
-                    <button className="primary send" disabled={!readIt || violations.length > 0} onClick={approveAndSend}>
+                    <button className="primary send" disabled={!readIt || violations.length > 0 || !policyReady} onClick={approveAndSend}>
                       Approve and send
                     </button>
-                    <span className="hint">{outgoing.length.toLocaleString()} characters</span>
+                    <span className="hint">
+                      {policyReady ? `${outgoing.length.toLocaleString()} characters` : 'Loading school policy…'}
+                    </span>
                   </div>
                 </article>
               )}
@@ -1033,14 +1117,19 @@ export function App() {
               {sent && stage !== 'review' && (
                 <article className="card outbox">
                   <div className="card-head">
-                    <h3>{result?.where === 'ON_DEVICE' ? 'Approved by you' : 'Sent'}</h3>
+                    {/* "Sent" whenever the request went out, answered or not. With no network it never left. */}
+                    <h3>{sent.online || result?.where === 'IN_CLOUD' ? 'Sent' : 'Approved by you'}</h3>
                     <span className="gate pass">
                       Approved {time(sent.at)} · {sent.text.length.toLocaleString()} characters
                     </span>
                   </div>
+                  {sentWith}
                   <pre className="wire">
                     <CloudText text={sent.text} />
                   </pre>
+                  <p className="hint policy-line">
+                    Policy: {sent.policy.from}. Drafting model: {sent.policy.cloudModel}.
+                  </p>
                 </article>
               )}
 
@@ -1058,8 +1147,8 @@ export function App() {
                   </div>
                   {result.where === 'ON_DEVICE' && (
                     <p className="caution">
-                      {draftOnline
-                        ? 'The cloud model did not answer, so the on-device model wrote this draft from the same approved text.'
+                      {sent?.online
+                        ? 'The request was sent but the cloud model did not answer, so the on-device model wrote this draft from the same approved text.'
                         : 'The cloud could not be reached, so the on-device model wrote this draft from the same approved text.'}
                     </p>
                   )}
@@ -1275,7 +1364,7 @@ function Receipts({
                     <span>
                       Guard {RECORD_WHERE[r.guardWhere]} · draft {RECORD_WHERE[r.draftWhere]} ({r.draftModel}) · check{' '}
                       {RECORD_WHERE[r.checkWhere]}
-                      {r.flags.replyFlagged ? ' · reply flagged' : ''}
+                      {r.flags.replyFlagged ? ' · reply flagged' : ''} · digest {digestPrefix(r.approvedSha256)}
                     </span>
                   </li>
                 );
@@ -1319,10 +1408,16 @@ function Receipts({
                       <dt>Approved</dt>
                       <dd>
                         {new Date(r.sent.approvedAt).toLocaleString()} · {r.sent.chars.toLocaleString()} characters · exit gate {r.sent.gate}
+                        {r.sent.sha256 ? ` · digest ${digestPrefix(r.sent.sha256)}` : ''}
                       </dd>
                       <dt>Draft</dt>
                       <dd>
-                        {r.draft.model}, {r.draft.where === 'IN_CLOUD' ? 'in the cloud' : 'on the device (cloud not reached)'}
+                        {r.draft.model},{' '}
+                        {r.draft.where === 'IN_CLOUD'
+                          ? 'in the cloud'
+                          : r.draft.cloud === 'no answer'
+                            ? 'on the device (cloud did not answer)'
+                            : 'on the device (cloud not reached)'}
                       </dd>
                       <dt>Check</dt>
                       <dd>
