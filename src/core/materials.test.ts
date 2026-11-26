@@ -81,4 +81,10 @@ describe('materials for a lesson', () => {
     expect(readMaterials(JSON.stringify({ ...good, ticket: good.ticket.slice(0, 2) }), [])).toBeUndefined();
     expect(readMaterials(JSON.stringify({ ...good, ticket: [{ question: 'a' }, { question: 'b', answer: 'c' }, { question: 'd', answer: 'e' }] }), [])).toBeUndefined();
   });
+  it('takes off a number the cloud put in front of a question, since the page numbers them', () => {
+    const raw = JSON.stringify({ board: ['B'], sheet: ['1. One', '2) Two', 'Q3. Three', '4: Four', '5. Five', '10 apples in a bag'], versions: [], ticket: [1, 2, 3].map((n) => ({ question: `${n}. Q${n}`, answer: 'A' })) });
+    const m = readMaterials(raw, [])!;
+    expect(m.sheet).toEqual(['One', 'Two', 'Three', 'Four', 'Five', '10 apples in a bag']);
+    expect(m.ticket.map((t) => t.question)).toEqual(['Q1', 'Q2', 'Q3']);
+  });
 });

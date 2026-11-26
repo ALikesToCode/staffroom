@@ -75,6 +75,9 @@ export interface Materials {
 const line = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, MATERIAL_LINE_MAX) : '');
 const lines = (v: unknown) => (Array.isArray(v) ? v.map(line).filter(Boolean) : []);
 
+/** A question without a number the cloud put in front of it: the page numbers the questions itself. */
+export const unnumbered = (q: string) => q.replace(/^\s*(?:Q\s*)?\d{1,2}\s*[.):]\s+/iu, '');
+
 /**
  * Read the reply strictly, section by section. It is not used at all when
  * it is not JSON, when there is no board work, when the sheet has fewer
@@ -91,9 +94,9 @@ export function readMaterials(raw: string, letters: readonly string[]): Material
   }
   if (!parsed || typeof parsed !== 'object') return undefined;
   const board = lines(parsed.board).slice(0, BOARD_MAX);
-  const sheet = lines(parsed.sheet).slice(0, SHEET_MAX);
+  const sheet = lines(parsed.sheet).map(unnumbered).filter(Boolean).slice(0, SHEET_MAX);
   const ticket = (Array.isArray(parsed.ticket) ? parsed.ticket : [])
-    .map((t) => ({ question: line((t as { question?: unknown } | null)?.question), answer: line((t as { answer?: unknown } | null)?.answer) }))
+    .map((t) => ({ question: unnumbered(line((t as { question?: unknown } | null)?.question)), answer: line((t as { answer?: unknown } | null)?.answer) }))
     .filter((t) => t.question && t.answer)
     .slice(0, TICKET_QUESTIONS);
   if (board.length === 0 || sheet.length < SHEET_MIN || ticket.length < TICKET_QUESTIONS) return undefined;
