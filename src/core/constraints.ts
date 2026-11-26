@@ -263,6 +263,16 @@ export function removeConstraint(constraints: Constraint[], id: string): Constra
   return constraints.filter((c) => c.id !== id);
 }
 
+/** What identifies a proposal the teacher removed: its kind and its words. The vault and the ids change when the guard runs again; these do not. */
+export const removedKey = (c: Pick<Constraint, 'kind' | 'text'>) => `${c.kind}|${c.text.replace(/\s+/g, ' ').trim().toLowerCase()}`;
+
+/** The proposals, less those the teacher removed before: a removed proposal is not proposed again for the same class. */
+export function withoutRemoved(proposed: Constraint[], removed: readonly string[]): Constraint[] {
+  if (removed.length === 0) return proposed;
+  const gone = new Set(removed);
+  return proposed.filter((c) => !gone.has(removedKey(c)));
+}
+
 /** Change the kind. What the old kind read from the words (days, adult, trigger words) is read again for the new one. */
 export function setConstraintKind(constraints: Constraint[], id: string, kind: ConstraintKind): Constraint[] {
   return constraints.map((c) => {

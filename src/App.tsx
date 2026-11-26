@@ -28,6 +28,8 @@ import {
   lockConstraints,
   proposeConstraints,
   removeConstraint,
+  removedKey,
+  withoutRemoved,
   restoreConstraints,
   setNeed,
   setNeedAck,
@@ -148,6 +150,8 @@ interface KeptClass {
   constraints: Constraint[];
   constraintsNote: string;
   lesson: LessonFields;
+  /** Proposals the teacher removed, by kind and words, so the next guard run does not propose them again. */
+  removed?: string[];
 }
 /** What the tab keeps comes first; with none, the class kept on this device, when the teacher chose to keep one. */
 const keptClass = (): KeptClass | null => (read<boolean | null>(local, KEEP_CLASS_KEY, null) === true ? read<KeptClass | null>(local, CLASS_KEY, null) : null);
@@ -211,6 +215,11 @@ export function App() {
   const [constraints, setConstraints] = useState<Constraint[]>(() => {
     const inTab = read(session, CONSTRAINTS_KEY, { note: '', constraints: [] as Constraint[] });
     return inTab.constraints.length > 0 || read(session, NOTE_KEY, '') !== '' ? inTab.constraints : (keptClass()?.constraints ?? []);
+  });
+  /** Proposals the teacher removed from this class, by kind and words. Kept with the constraints; never sent. */
+  const [removed, setRemoved] = useState<string[]>(() => {
+    const inTab = read(session, CONSTRAINTS_KEY, { note: '', constraints: [] as Constraint[], removed: [] as string[] });
+    return inTab.removed ?? (read(session, NOTE_KEY, '') === '' ? (keptClass()?.removed ?? []) : []);
   });
   /** The note the constraints were made for. They are kept across a new guard run only while the note is the same. */
   const constraintsNote = useRef(
@@ -404,11 +413,11 @@ export function App() {
   useEffect(() => {
     if (replay) return;
     write(local, KEEP_CLASS_KEY, keepClass, keepClass === null);
-    write(local, CLASS_KEY, { note, classList, constraints, constraintsNote: constraintsNote.current, lesson } satisfies KeptClass, keepClass !== true || note === '');
-  }, [keepClass, note, classList, constraints, lesson, replay]);
+    write(local, CLASS_KEY, { note, classList, constraints, constraintsNote: constraintsNote.current, lesson, removed } satisfies KeptClass, keepClass !== true || note === '');
+  }, [keepClass, note, classList, constraints, lesson, removed, replay]);
   useEffect(() => {
-    if (!replay) write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints }, constraints.length === 0);
-  }, [constraints, replay]);
+    if (!replay) write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints, removed }, constraints.length === 0 && removed.length === 0);
+  }, [constraints, replay, removed]);
 
   /** Read the records kept in the teacher's account. They hold no text, so there is none to show. */
   const refreshRecords = useCallback(async (user: string) => {
@@ -576,6 +585,8 @@ export function App() {
         if (gone()) return;
       }
     }
+    // A proposal the teacher removed for this class is not proposed again.
+    proposed = withoutRemoved(proposed, removed);
     const held = restoreConstraints(note, vault, constraintsNote.current === note ? constraints : [], proposed);
     constraintsNote.current = note;
     setEntities(held.entities);
@@ -690,7 +701,11 @@ export function App() {
     onConfirm: (id: string) => hold(toldByDefault(confirmConstraint(note, rawEntities, constraints, id), [id])),
     onNeedAck: (id: string, on: boolean) => hold({ entities: rawEntities, constraints: setNeedAck(constraints, id, on) }),
     onUnconfirm: (id: string) => hold({ entities: rawEntities, constraints: unconfirmConstraint(constraints, id) }),
-    onRemove: (id: string) => hold({ entities: rawEntities, constraints: removeConstraint(constraints, id) }),
+    onRemove: (id: string) => {
+      const c = constraints.find((x) => x.id === id);
+      if (c && c.source !== 'teacher') setRemoved((r) => (r.includes(removedKey(c)) ? r : [...r, removedKey(c)]));
+      hold({ entities: rawEntities, constraints: removeConstraint(constraints, id) });
+    },
     onKind: (id: string, kind: ConstraintKind) => hold({ entities: rawEntities, constraints: setConstraintKind(constraints, id, kind) }),
     onTriggers: (id: string, typed: string) => hold({ entities: rawEntities, constraints: setTriggers(constraints, id, typed) }),
     onShare: (id: string, share: boolean) => hold({ entities: rawEntities, constraints: setShare(constraints, id, share) }),
@@ -1532,6 +1547,7 @@ export function App() {
     setNote('');
     setClassList([]);
     setConstraints([]);
+    setRemoved([]);
     setLesson(NO_LESSON);
     setKeepClass(null);
     setComposing(false);

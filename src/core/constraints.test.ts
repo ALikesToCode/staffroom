@@ -19,6 +19,8 @@ import {
   setTriggers,
   unconfirmConstraint,
   withConstraintFacts,
+  removedKey,
+  withoutRemoved,
 } from './constraints';
 import { outgoingOf, sharedNeeds } from './needs';
 
@@ -368,5 +370,18 @@ describe('constraints proposed by the on-device model', () => {
     expect(report.constraints).toEqual([]);
     expect(report.stopped).toMatch(/did not run on the device/);
     expect(report.unread).toBe(2);
+  });
+});
+
+describe('a proposal the teacher removed', () => {
+  it('is not proposed again for the class, whatever its id, and other proposals stand', () => {
+    const vault = buildVault(SAMPLE_NOTE, []);
+    const first = proposeConstraints(SAMPLE_NOTE, vault);
+    const gone = first[0];
+    const again = withoutRemoved(proposeConstraints(SAMPLE_NOTE, buildVault(SAMPLE_NOTE, [])), [removedKey(gone)]);
+    expect(again.some((c) => removedKey(c) === removedKey(gone))).toBe(false);
+    expect(again.length).toBe(first.length - first.filter((c) => removedKey(c) === removedKey(gone)).length);
+    expect(withoutRemoved(first, [])).toBe(first);
+    expect(removedKey({ kind: 'money', text: '  Cannot  pay ' })).toBe(removedKey({ kind: 'money', text: 'cannot pay' }));
   });
 });
