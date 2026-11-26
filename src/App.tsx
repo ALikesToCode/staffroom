@@ -84,7 +84,7 @@ import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
 import { constraintsOnDevice, mergeProposals, type ConstraintReport } from './ai/constraints';
 import { learningOnDevice, mergeLearning } from './ai/learning';
-import { classView, withoutClass, withTicketNeeds } from './core/ticket';
+import { classView, currentTicketKind, withoutClass, withTicketNeeds } from './core/ticket';
 import { materialsReply, materialsText, unnumbered, type Materials } from './core/materials';
 import { stageName } from './core/lesson';
 import { MaterialsCard, MaterialsPages, MaterialsWire } from './ui/Materials';
@@ -214,7 +214,8 @@ export function App() {
   /** The constraints of this note: proposed, confirmed, or added by hand. They never leave the device. */
   const [constraints, setConstraints] = useState<Constraint[]>(() => {
     const inTab = read(session, CONSTRAINTS_KEY, { note: '', constraints: [] as Constraint[] });
-    return inTab.constraints.length > 0 || read(session, NOTE_KEY, '') !== '' ? inTab.constraints : (keptClass()?.constraints ?? []);
+    // A need kept under the name an exit-ticket kind had before reads under its present one.
+    return (inTab.constraints.length > 0 || read(session, NOTE_KEY, '') !== '' ? inTab.constraints : (keptClass()?.constraints ?? [])).map(currentTicketKind);
   });
   /** Proposals the teacher removed from this class, by kind and words. Kept with the constraints; never sent. */
   const [removed, setRemoved] = useState<string[]>(() => {

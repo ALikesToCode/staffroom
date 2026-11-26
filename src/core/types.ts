@@ -169,7 +169,7 @@ export type ConstraintKind =
   | 'learning';
 
 /** The learning needs a rule can propose from the words of a note. */
-export type LearningKind = 'tests' | 'early' | 'missed' | 'group' | 'shy' | 'reads-above' | 'reads-below' | 'homework' | 'ticket-not' | 'ticket-quick' | 'ticket-absent';
+export type LearningKind = 'tests' | 'early' | 'missed' | 'group' | 'shy' | 'reads-above' | 'reads-below' | 'homework' | 'ticket-not' | 'ticket-got' | 'ticket-partly' | 'ticket-absent';
 
 /**
  * A private fact that rules something out for one student, or for the

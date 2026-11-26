@@ -13,8 +13,19 @@ export const TICKET_MARK: Record<TicketMark, string> = { got: 'Got it', partly: 
 export type Ticket = Record<string, TicketMark>;
 
 type TicketKind = Extract<LearningKind, `ticket-${string}`>;
-/** The need each mark gives. "Partly" gives none: the next lesson builds on the last one anyway. */
-const KIND_OF: Partial<Record<TicketMark, TicketKind>> = { not: 'ticket-not', got: 'ticket-quick', absent: 'ticket-absent' };
+/** The need each mark gives. It says what the mark says and no more: how fast a child got there was never marked. */
+const KIND_OF: Record<TicketMark, TicketKind> = { not: 'ticket-not', got: 'ticket-got', partly: 'ticket-partly', absent: 'ticket-absent' };
+
+/**
+ * A learning need kept before "got it" was renamed: "ticket-quick" said the
+ * child got the topic quickly, which no mark records. It reads as
+ * "ticket-got", with the line of that kind. Any other constraint is as it was.
+ */
+export function currentTicketKind(c: Constraint): Constraint {
+  if ((c.learn as string) !== 'ticket-quick') return c;
+  const m = /^got (.*) quickly; needs a harder task$/.exec(c.need ?? '');
+  return { ...c, learn: 'ticket-got', ...(m ? { need: ticketLine('ticket-got', m[1]) } : {}) };
+}
 
 /** The most characters of a topic in a need line. */
 export const TICKET_TOPIC_MAX = 60;
@@ -31,7 +42,8 @@ export function ticketTopic(topic: string): string {
 export function ticketLine(kind: TicketKind, topic: string): string {
   const t = ticketTopic(topic);
   if (kind === 'ticket-not') return `has not yet got ${t}; needs it taught again another way`;
-  if (kind === 'ticket-quick') return `got ${t} quickly; needs a harder task`;
+  if (kind === 'ticket-got') return `got ${t} on the exit ticket; ready for a harder task`;
+  if (kind === 'ticket-partly') return `partly got ${t}; needs more practice on it`;
   return `was absent for ${t}`;
 }
 
@@ -42,9 +54,9 @@ const slug = (name: string) => name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-
 
 /**
  * The needs a lesson's exit ticket gives the next lesson: one for each
- * child marked "not yet", "got it" or "absent". Each is confirmed and
- * told, as the teacher marked it; on the next lesson's review it can be
- * switched off like any other need. The child's name stays on the device.
+ * child with a mark. Each is confirmed and told, as the teacher marked
+ * it; on the next lesson's review it can be switched off like any other
+ * need. The child's name stays on the device.
  */
 export function ticketNeeds(lesson: SavedLesson): Constraint[] {
   const out: Constraint[] = [];

@@ -21,7 +21,8 @@ export const LEARNING_LINE: Record<LearningKind, string> = {
   homework: 'has not handed in recent homework',
   // From an exit ticket. The line in use names the topic: see ticket.ts.
   'ticket-not': 'has not yet got the last topic; needs it taught again another way',
-  'ticket-quick': 'got the last topic quickly; needs a harder task',
+  'ticket-got': 'got the last topic on the exit ticket; ready for a harder task',
+  'ticket-partly': 'partly got the last topic; needs more practice on it',
   'ticket-absent': 'was absent for the last topic',
 };
 
@@ -112,15 +113,17 @@ const LETTER_OF: Partial<Record<Constraint['kind'] | LearningKind, string>> = {
   missed: 'H',
   group: 'I',
   'ticket-not': 'J',
-  'ticket-quick': 'K',
+  'ticket-got': 'K',
   'ticket-absent': 'L',
   homework: 'M',
   shy: 'N',
   'reads-above': 'O',
   'reads-below': 'P',
+  // M was taken by homework when "partly" was given a need, so it has the next letter.
+  'ticket-partly': 'Q',
 };
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-const FIRST_FREE = 'Q';
+const FIRST_FREE = 'R';
 
 /** One need as the cloud is told it, and (on the device only) whose it is. */
 export interface LessonNeed {

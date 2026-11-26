@@ -100,7 +100,7 @@ describe('the needs a lesson is told', () => {
     expect(needs.some((n) => n.constraintIds.includes(health.id) || n.constraintIds.includes(contact.id))).toBe(false);
     const typed = setShare(setNeed(all, health.id, 'Must avoid flashing or flickering light.'), health.id, true);
     const more = lessonNeeds(typed, entities);
-    expect(more.find((n) => n.constraintIds.includes(health.id))).toMatchObject({ letter: 'Q', line: 'Must avoid flashing or flickering light', issues: [] });
+    expect(more.find((n) => n.constraintIds.includes(health.id))).toMatchObject({ letter: 'R', line: 'Must avoid flashing or flickering light', issues: [] });
   });
 
   it('is written under its own heading in the outgoing text, with no stand-in, no name and no count of children', () => {
@@ -141,7 +141,7 @@ describe('the needs a lesson is told', () => {
   it('gives a line the teacher changed the next free letter, and stops a name, a stand-in and a sensitive word in it', () => {
     const early = all.find((c) => c.learn === 'early')!;
     const changed = lessonNeeds(setNeed(all, early.id, 'needs a harder task once done'), entities);
-    expect(changed.find((n) => n.constraintIds.includes(early.id))).toMatchObject({ letter: 'Q', line: 'needs a harder task once done' });
+    expect(changed.find((n) => n.constraintIds.includes(early.id))).toMatchObject({ letter: 'R', line: 'needs a harder task once done' });
     expect(changed.some((n) => n.letter === 'G')).toBe(false);
     const why = (line: string, acked = false) => checkLessonNeed(line, entities, acked).issues.map((v) => v.what);
     expect(why('needs more to do, like Ishaan')).toContain('Ishaan');

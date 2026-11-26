@@ -5,6 +5,7 @@ import { KINDS } from './policy';
 import { ALL_KINDS } from './constraints';
 import { NEED_LINE_MAX, type Variation } from './lessonNeeds';
 import { SUGGESTION_MAX } from './recheck';
+import { currentTicketKind } from './ticket';
 import { ADJUSTMENT_MAX, FIELD_MAX, LANGUAGE_MAX, LAST_TIME_MAX, type AdjustmentSource, type LessonFields } from './lesson';
 
 // A recorded run: one real run on the sample class, captured in Chrome with the on-device model, kept as a
@@ -267,7 +268,7 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
     note: d.note,
     classList: d.classList,
     entities: d.entities,
-    constraints: d.constraints,
+    constraints: d.constraints.map(currentTicketKind),
     outgoing: d.outgoing,
     policy: { cloudModel: policy.cloudModel, lockedKinds: policy.lockedKinds, origin: policy.origin as Policy['origin'], from: policy.from },
     draft: { title: draft.title, items: draft.items.map((i) => ({ heading: i.heading, text: i.text })) },

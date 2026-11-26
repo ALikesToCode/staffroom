@@ -242,17 +242,18 @@ export const TICKET_CASES: TicketCase[] = [
     ticket: { 'Aarav Sharma': 'absent', 'Diya Sharma': 'got', 'Meenal Joshi': 'partly', 'Kabir Qureshi': 'not', 'Tanvi Rao': 'got', 'Ishaan Verma': 'not' },
     expected: [
       ['J', 'has not yet got writing a short description of a place; needs it taught again another way', ['Ishaan', 'Kabir']],
-      ['K', 'got writing a short description of a place quickly; needs a harder task', ['Diya', 'Tanvi']],
+      ['K', 'got writing a short description of a place on the exit ticket; ready for a harder task', ['Diya', 'Tanvi']],
       ['L', 'was absent for writing a short description of a place', ['Aarav']],
+      ['Q', 'partly got writing a short description of a place; needs more practice on it', ['Meenal']],
     ],
   },
   {
     id: 'all-got-it',
     topic: 'Continue: Equivalent fractions.',
     ticket: Object.fromEntries(SAMPLE_CLASS_LIST.map((n) => [n, 'got' as const])),
-    expected: [['K', 'got equivalent fractions quickly; needs a harder task', ['Aarav', 'Diya', 'Ishaan', 'Kabir', 'Meenal', 'Tanvi']]],
+    expected: [['K', 'got equivalent fractions on the exit ticket; ready for a harder task', ['Aarav', 'Diya', 'Ishaan', 'Kabir', 'Meenal', 'Tanvi']]],
   },
-  { id: 'partly-only', topic: 'Shadows', ticket: { 'Meenal Joshi': 'partly', 'Tanvi Rao': 'partly' }, expected: [] },
+  { id: 'partly-only', topic: 'Shadows', ticket: { 'Meenal Joshi': 'partly', 'Tanvi Rao': 'partly' }, expected: [['Q', 'partly got shadows; needs more practice on it', ['Meenal', 'Tanvi']]] },
   { id: 'one-absent', topic: 'Maps and keys', ticket: { 'Kabir Qureshi': 'absent' }, expected: [['L', 'was absent for maps and keys', ['Kabir']]] },
   { id: 'no-marks', topic: 'Collage', ticket: {}, expected: [] },
 ];

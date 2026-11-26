@@ -269,7 +269,7 @@ describe('the needs set: the parser and the placing, no model', () => {
     expect(totals).toEqual({ replies: 5, lines: 26, right: 26, missing: 0, wrongChild: 0, droppedExpected: 4, droppedFound: 4, hitsExpected: 5, hitsFound: 5, hitsMissed: 0, hitsFalse: 0 });
   });
 
-  it('builds needs J, K and L from an exit ticket, with no name and no count in what is told', async () => {
+  it('builds needs J, K, L and Q from an exit ticket, with no name and no count in what is told', async () => {
     const { runTicketSet } = await import('./needs');
     const got = runTicketSet();
     expect(got.rows.filter((r) => !r.right || !r.noNames)).toEqual([]);
