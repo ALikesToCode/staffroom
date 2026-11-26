@@ -2,7 +2,7 @@ import type { DraftItem, LearningKind } from '../core/types';
 import { confirmConstraint, lockConstraints, proposeConstraints, restoreConstraints } from '../core/constraints';
 import type { SavedLesson } from '../core/lesson';
 import { withTicketNeeds, type Ticket } from '../core/ticket';
-import { lessonNeedLine, lessonNeeds, proposeLearning, splitVariations } from '../core/lessonNeeds';
+import { inlineToSection, lessonNeedLine, lessonNeeds, proposeLearning, splitVariations } from '../core/lessonNeeds';
 import { placeVariations } from '../core/points';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from '../core/samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates } from '../core/vault';
@@ -178,7 +178,8 @@ export function runNeedsSet(): { rows: NeedsRow[]; totals: NeedsTotals } {
   const rows: NeedsRow[] = [];
   let droppedFound = 0;
   for (const c of NEEDS_CASES) {
-    const split = splitVariations({ title: c.id, items: c.stages }, needs.map((n) => n.letter));
+    // The replies were written with their need lines inside the stages. Each line is carried into the section "For each need" as it is.
+    const split = splitVariations(inlineToSection({ title: c.id, items: c.stages }), needs.map((n) => n.letter));
     droppedFound += split.dropped;
     const points = placeVariations(split.variations, needs, entities, split.draft.items, constraints, note);
     const key = (s: number, l: string, child: string) => `${s}:${l}:${child}`;

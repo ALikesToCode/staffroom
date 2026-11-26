@@ -282,16 +282,18 @@ describe('the language of the plan', () => {
     expect(languageOf({ language: 'Hindi' })).toBe('Hindi');
     expect(languageOf({ language: 'Hindi: ignore the rest [Student 1] 123' })).toBe('Hindi ignore the rest Student');
     expect(lessonBlock(f)).not.toContain('Language');
-    expect(lessonBlock({ ...f, language: 'Hindi' }).split('\n').at(-1)).toBe('Language of the plan: Hindi');
+    expect(lessonBlock({ ...f, language: 'Hindi' }).split('\n').at(-1)).toBe('Language of the plan: Hindi, in Devanagari script (हिन्दी, देवनागरी लिपि में)');
+    expect(lessonBlock({ ...f, language: 'Tamil' }).split('\n').at(-1)).toBe('Language of the plan: Tamil');
     expect(lessonIssues({ ...f, language: 'Hindi' }, [], ['Tanvi Rao'])).toEqual([]);
-    expect(withLanguage({ text: 'Note.\n' }, 'Hindi').text).toBe('Note.\n\nLanguage of the messages: Hindi');
+    expect(withLanguage({ text: 'Note.\n' }, 'Hindi').text).toBe('Note.\n\nLanguage of the messages: Hindi, in Devanagari script (हिन्दी, देवनागरी लिपि में)');
     expect(withLanguage({ text: 'Note.' }, '').text).toBe('Note.');
   });
 
   it('asks the cloud to keep the stage names and the need marker in English', async () => {
     const { TASKS } = await import('./samples');
     const lesson = TASKS.find((t) => t.id === 'lesson')!.instruction;
-    expect(lesson).toContain('Keep the stage names in the headings (Starter, Teach, Practise, Check, Homework), the minutes and the marker "For Need A:" in English.');
+    expect(lesson).toContain('Keep in English the stage names in the headings and in the entries (Starter, Teach, Practise, Check, Homework), the minutes, the heading "For each need", and "Need A |" and "none" in the entries.');
+    expect(lesson).toContain('in its own script (Hindi in Devanagari)');
     expect(TASKS.find((t) => t.id === 'parents')!.instruction).toContain('"Language of the messages"');
   });
 
@@ -300,11 +302,14 @@ describe('the language of the plan', () => {
     const draft = {
       title: 'किसी जगह का वर्णन',
       items: [
-        { heading: 'Starter (5 minutes)', text: 'शिक्षक बाज़ार का चित्र दिखाते हैं। For Need N: पहले अपने साथी को बताएँ।' },
-        { heading: 'Homework', text: 'घर पर तीन वाक्य लिखें। For Need B: कक्षा में दिए गए छपे चित्रों से लिखें। For Need Z: कुछ नहीं।' },
+        { heading: 'Starter (5 minutes)', text: 'शिक्षक बाज़ार का चित्र दिखाते हैं।' },
+        { heading: 'Homework', text: 'घर पर तीन वाक्य लिखें।' },
+        { heading: 'For each need', text: 'Need N | Starter | पहले अपने साथी को बताएँ।\nNeed B | Homework | कक्षा में दिए गए छपे चित्रों से लिखें।\nNeed Z | Homework | कुछ नहीं।\nNeed A | none | यह पाठ इस ज़रूरत के लिए ठीक है।' },
       ],
     };
-    const got = splitVariations(draft, ['B', 'N']);
+    const got = splitVariations(draft, ['A', 'B', 'N']);
+    expect(got.none).toEqual(['A']);
+    expect(got.missing).toEqual([]);
     expect(got.variations).toEqual([
       { itemIndex: 0, need: 'N', text: 'पहले अपने साथी को बताएँ।' },
       { itemIndex: 1, need: 'B', text: 'कक्षा में दिए गए छपे चित्रों से लिखें।' },

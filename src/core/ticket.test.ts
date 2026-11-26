@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedLesson } from './lesson';
 import { confirmConstraint, lockConstraints, proposeConstraints, restoreConstraints } from './constraints';
-import { checkLessonNeed, lessonNeedLine, lessonNeeds, proposeLearning, splitVariations } from './lessonNeeds';
+import { checkLessonNeed, inlineToSection, lessonNeedLine, lessonNeeds, proposeLearning, splitVariations } from './lessonNeeds';
 import { outgoingOf } from './needs';
 import { namesForNeed, placeVariations, childNotes } from './points';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from './samples';
@@ -70,7 +70,7 @@ describe('needs from an exit ticket', () => {
     const entities = lockConstraints(held.entities, held.constraints);
     const needs = lessonNeeds(held.constraints, entities);
     const draft = { title: 't', items: [{ heading: 'Teach (10 minutes)', text: 'Model a paragraph. For Need J: works through a second model with the teacher. For Need K: writes from a harder picture. For Need L: reads the model from last lesson first.' }] };
-    const split = splitVariations(draft, needs.map((n) => n.letter));
+    const split = splitVariations(inlineToSection(draft), needs.map((n) => n.letter));
     const points = placeVariations(split.variations, needs, entities, split.draft.items, held.constraints, SAMPLE_NOTE);
     expect(points.map((p) => `${p.need}:${p.child.split(' ')[0]}`).sort()).toEqual(['J:Ishaan', 'J:Kabir', 'K:Tanvi', 'L:Aarav']);
   });

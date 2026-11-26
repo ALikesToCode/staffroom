@@ -21,6 +21,7 @@ export function MaterialsCard({
   namesFor,
   onSend,
   onPrint,
+  noPrint,
 }: {
   /** The exact text of the request. */
   request: string;
@@ -35,7 +36,10 @@ export function MaterialsCard({
   /** Whose a need is. Known on this device only. */
   namesFor: (letter: string) => string[];
   onSend: () => void;
-  onPrint: (withNames: boolean) => void;
+  /** Absent: the materials cannot be printed here (the lesson is not signed yet, or this is a replay). */
+  onPrint?: (withNames: boolean) => void;
+  /** Said under the materials when they cannot be printed. */
+  noPrint?: string;
 }) {
   const [asking, setAsking] = useState(false);
   const [read, setRead] = useState(false);
@@ -90,6 +94,16 @@ export function MaterialsCard({
             <p>{v.text}</p>
           </div>
         ))}
+        {result.same.length > 0 && (
+          <p className="hint">
+            The class sheet as it is, the cloud says, for {result.same.map((l) => `Need ${l}${namesFor(l).length > 0 ? ` (${namesFor(l).join(', ')})` : ''}`).join('; ')}.
+          </p>
+        )}
+        {result.missing.length > 0 && (
+          <p className="caution">
+            The cloud wrote no sheet for {result.missing.map((l) => `Need ${l}${namesFor(l).length > 0 ? ` (${namesFor(l).join(', ')})` : ''}`).join('; ')}. Decide yourself what such a pupil does.
+          </p>
+        )}
         {result.dropped > 0 && (
           <p className="hint">
             {result.dropped} {result.dropped === 1 ? 'version was' : 'versions were'} for a need you did not tell the cloud, or said nothing, so {result.dropped === 1 ? 'it is' : 'they are'} left out.
@@ -103,18 +117,24 @@ export function MaterialsCard({
             </li>
           ))}
         </ol>
-        <div className="actions">
-          <button className="secondary" disabled={issues.length > 0 && !replyRead} onClick={() => onPrint(!noNames)}>
-            Print the materials
-          </button>
-          <label className="read-it">
-            <input type="checkbox" checked={noNames} onChange={(e) => setNoNames(e.target.checked)} />
-            Print without names
-          </label>
-        </div>
-        <p className="hint">
-          Prints the class sheet, one page for each need{noNames ? ', by its letter' : ' headed with the names, for you to hand out'}, the exit ticket and your answer key.
-        </p>
+        {onPrint ? (
+          <>
+            <div className="actions">
+              <button className="secondary" disabled={issues.length > 0 && !replyRead} onClick={() => onPrint(!noNames)}>
+                Print the materials
+              </button>
+              <label className="read-it">
+                <input type="checkbox" checked={noNames} onChange={(e) => setNoNames(e.target.checked)} />
+                Print without names
+              </label>
+            </div>
+            <p className="hint">
+              Prints the class sheet, one page for each need{noNames ? ', by its letter' : ' headed with the names, for you to hand out'}, the exit ticket and your answer key.
+            </p>
+          </>
+        ) : (
+          noPrint && <p className="hint">{noPrint}</p>
+        )}
       </article>
     );
   }
@@ -132,7 +152,7 @@ export function MaterialsCard({
         </div>
       ) : (
         <>
-          <p className="hint">The exact text that will be sent: the class plan you signed and the needs by letter. No name is in it.</p>
+          <p className="hint">The exact text that will be sent: the class plan as it stands and the needs by letter. No name is in it.</p>
           <pre className="wire">{request}</pre>
           {stopped.length > 0 && (
             <div className="caution" role="alert">

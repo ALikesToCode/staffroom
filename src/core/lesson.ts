@@ -37,6 +37,14 @@ export function languageOf(f: Pick<LessonFields, 'language'> | null | undefined)
   return /^english$/i.test(l) ? '' : l;
 }
 
+/**
+ * The language as the request names it. For Hindi the line also names the script and shows it, because the cloud
+ * model otherwise often writes Hindi in Latin letters: told "in Devanagari" alone it did, shown the script it did not.
+ */
+export function languageLine(language: string): string {
+  return /^hindi$/i.test(language.trim()) ? 'Hindi, in Devanagari script (हिन्दी, देवनागरी लिपि में)' : language;
+}
+
 /** Said once when the text is not in English. The rules are word lists in English; nothing here claims a model read the text either. */
 export const NOT_ENGLISH = 'The rules read English only, so they have not checked this text. Read it yourself.';
 export const NOT_CHECKED_BY_RULE = 'Not checked by rule';
@@ -46,7 +54,7 @@ export const MESSAGES_LANGUAGE = 'Language of the messages';
 
 /** The outgoing text of messages home, with the language asked for under it. In English, the text as it is. */
 export function withLanguage<T extends { text: string }>(going: T, language: string): T {
-  return language ? { ...going, text: `${going.text.trimEnd()}\n\n${MESSAGES_LANGUAGE}: ${language}` } : going;
+  return language ? { ...going, text: `${going.text.trimEnd()}\n\n${MESSAGES_LANGUAGE}: ${languageLine(language)}` } : going;
 }
 
 /** The length of a lesson in whole minutes, 5 to 240. Anything else is 40. */
@@ -61,7 +69,7 @@ export function lessonBlock(f: LessonFields): string {
   if (one(f.klass, FIELD_MAX)) lines.push(`Class: ${one(f.klass, FIELD_MAX)}`);
   lines.push(`Subject: ${one(f.subject, FIELD_MAX)}`, `Topic: ${one(f.topic, FIELD_MAX)}`, `Length: ${lessonMinutes(f.minutes)} minutes`);
   if (one(f.lastTime, LAST_TIME_MAX)) lines.push(`What we did last time: ${one(f.lastTime, LAST_TIME_MAX)}`);
-  if (languageOf(f)) lines.push(`Language of the plan: ${languageOf(f)}`);
+  if (languageOf(f)) lines.push(`Language of the plan: ${languageLine(languageOf(f))}`);
   return lines.join('\n');
 }
 
@@ -239,6 +247,8 @@ export interface SavedLesson {
   needs?: { letter: string; line: string; children: string[]; others?: string[] }[];
   /** The lines the cloud wrote for needs. `itemIndex` counts the kept stages. */
   variations?: { itemIndex: number; need: string; text: string }[];
+  /** The materials the cloud wrote for this lesson, by letter. No name is in them. */
+  materials?: { board: string[]; sheet: string[]; versions: { need: string; text: string }[]; ticket: { question: string; answer: string }[]; same?: string[] };
   /** How it went, said after teaching. */
   after?: { stages: (StageDone | null)[]; line: string; at: string; ticket?: Record<string, 'got' | 'partly' | 'not' | 'absent'> };
 }
@@ -387,7 +397,7 @@ export function savedLesson(
   stages: DraftItem[],
   adjustments: SavedAdjustment[],
   constraints: readonly Constraint[],
-  extra: Pick<SavedLesson, 'needs' | 'variations'> = {},
+  extra: Pick<SavedLesson, 'needs' | 'variations' | 'materials'> = {},
 ): SavedLesson {
   return {
     id,
@@ -399,6 +409,7 @@ export function savedLesson(
     constraintIds: constraints.filter((c) => c.confirmed).map((c) => c.id),
     ...(extra.needs && extra.needs.length > 0 ? { needs: extra.needs } : {}),
     ...(extra.variations && extra.variations.length > 0 ? { variations: extra.variations } : {}),
+    ...(extra.materials ? { materials: extra.materials } : {}),
   };
 }
 

@@ -162,6 +162,7 @@ export function Inspect({
   labelChars,
   policyLine,
   ran,
+  secondRequest,
 }: {
   onClose: () => void;
   taskInstruction: string;
@@ -173,6 +174,8 @@ export function Inspect({
   policyLine: string;
   /** Where each step ran in the run on screen. Absent for a step that has not run yet. */
   ran: Partial<Record<RouteId, string>>;
+  /** For a lesson: the exact text of the second request, when one was made for needs with no entry. */
+  secondRequest?: string;
 }) {
   return (
     <Drawer title="Inspect" onClose={onClose}>
@@ -192,6 +195,16 @@ export function Inspect({
       </ul>
       <p className="hint">{policyLine}</p>
 
+      {secondRequest && (
+        <>
+          <h3>A second request was made</h3>
+          <p>
+            Over a third of the needs you told had no entry in the first reply, so the cloud was asked once more for those letters only. It was sent the same
+            text you approved and one more line. The exact text:
+          </p>
+          <pre className="wire">{secondRequest}</pre>
+        </>
+      )}
       <h3>Sent with your approved text</h3>
       <p className="hint">The task instruction:</p>
       <pre className="wire small">{taskInstruction}</pre>

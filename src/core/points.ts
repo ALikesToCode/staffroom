@@ -115,8 +115,12 @@ export interface Point {
   why?: string;
   /** The letter of the need the cloud wrote it for. Absent for a point the device or the teacher wrote. */
   need?: string;
-  /** Starter wording offered in place of a line a rule fires on. */
+  /** Starter wording offered in place of a line a rule fires on, or where the cloud wrote nothing. */
   starter?: string;
+  /** True where the cloud was told the need and wrote nothing for it: there is no text yet. The teacher takes the starter wording or writes it. */
+  nothing?: boolean;
+  /** True for a line this device wrote by rule about two children together. */
+  pair?: boolean;
 }
 
 /** The most characters of a point. */
@@ -163,7 +167,8 @@ export function recheckPoints(points: readonly Point[], items: readonly DraftIte
 
 /** The points "Accept all" may accept, and whether every waiting point has been shown. */
 export function acceptablePoints(points: readonly Point[]): { keys: string[]; allSeen: boolean } {
-  const offered = points.filter((p) => p.state === 'offered');
+  // Where the cloud wrote nothing there is nothing to accept yet.
+  const offered = points.filter((p) => p.state === 'offered' && !p.nothing);
   const keys = offered.filter((p) => p.seen).map((p) => p.key);
   return { keys, allSeen: keys.length === offered.length };
 }
@@ -178,7 +183,8 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
  */
 export function fitSummary(children: number, suggested: number, hits: readonly LessonHit[], points: readonly Point[] = []): string {
   const steps = new Set(hits.map((h) => `${h.itemIndex}:${h.stepIndex}`)).size;
-  const placed = points.filter((p) => p.need !== undefined);
+  const placed = points.filter((p) => p.need !== undefined && !p.nothing);
+  const unanswered = new Set(points.filter((p) => p.nothing).map((p) => p.need)).size;
   const needs = new Set(placed.map((p) => p.need)).size;
   const beside = new Set(placed.map((p) => p.childId)).size;
   const against = steps + placed.filter((p) => p.state === 'offered' && p.why !== undefined).length;
@@ -186,6 +192,7 @@ export function fitSummary(children: number, suggested: number, hits: readonly L
   if (children > 0) out.push(`${count(children, 'child has', 'children have')} private notes.`);
   if (needs > 0) out.push(`The cloud wrote for ${count(needs, 'need', 'needs')} without knowing whose.`);
   if (placed.length > 0) out.push(`${count(placed.length, 'line', 'lines')} placed beside ${count(beside, 'child', 'children')} on this device.`);
+  if (unanswered > 0) out.push(`The cloud wrote nothing for ${count(unanswered, 'need', 'needs')}.`);
   if (suggested > 0) out.push(`${count(suggested, 'point', 'points')} suggested on this device.`);
   if (against > 0) out.push(`${against === 1 ? '1 goes' : `${against} go`} against a constraint you confirmed.`);
   return out.length > 0 ? out.join(' ') : 'Your note says nothing about any one child, so there is nothing to fit.';
@@ -238,6 +245,54 @@ export function placeVariations(
   return out;
 }
 
+/**
+ * Where the cloud was told a need and wrote nothing for it: one waiting
+ * row beside each child who has the need, with no text. The teacher takes
+ * the starter wording, where the kind of constraint has some, or writes it.
+ */
+export function missingPoints(missing: readonly string[], needs: readonly LessonNeed[], entities: Entity[], constraints: readonly Constraint[], note: string): Point[] {
+  const out: Point[] = [];
+  for (const letter of missing) {
+    const need = needs.find((n) => n.letter === letter);
+    for (const childId of need?.children ?? []) {
+      const student = entities.find((e) => e.id === childId && e.kind === 'student');
+      if (!student) continue;
+      const behind = constraints.find((c) => need!.constraintIds.includes(c.id) && c.about === childId);
+      const starter = behind ? starterFor(behind) : undefined;
+      out.push({ key: `m:${letter}:${childId}`, childId, child: nameInNote(note, student), itemIndex: 0, text: '', source: 'cloud', state: 'offered', need: letter, nothing: true, ...(starter ? { starter } : {}) });
+    }
+  }
+  return out;
+}
+
+const TOGETHER = /(?<![\p{L}])(?:groups?|pairs?|partners?|teams?)(?![\p{L}])/iu;
+
+/** The line this device writes, by rule, for two children who do not work well together. */
+export const pairLine = (a: string, b: string) => `Seat ${a} and ${b} in different groups.`;
+
+/**
+ * Two children who share the need to work apart from one classmate, from
+ * the same words of the note, are a pair: the cloud cannot know that the
+ * classmate is the other one, so the device says it, by rule. One line
+ * beside each of the two, for the Practise stage and for any stage that
+ * has pupils work in groups, pairs or teams. Offered, like every line.
+ */
+export function pairPoints(constraints: readonly Constraint[], entities: Entity[], items: readonly DraftItem[], note: string): Point[] {
+  const apart = constraints.filter((c) => c.confirmed && c.kind === 'learning' && c.learn === 'group' && c.about && c.at !== undefined);
+  const out: Point[] = [];
+  for (const at of new Set(apart.map((c) => c.at))) {
+    const ids = [...new Set(apart.filter((c) => c.at === at).map((c) => c.about!))];
+    const students = ids.map((id) => entities.find((e) => e.id === id && e.kind === 'student'));
+    if (ids.length !== 2 || !students[0] || !students[1]) continue;
+    const text = pairLine(nameInNote(note, students[0]), nameInNote(note, students[1]));
+    items.forEach((item, itemIndex) => {
+      if (!/^practi[sc]e$/i.test(stageName(item.heading).trim()) && !TOGETHER.test(item.text)) return;
+      ids.forEach((childId, k) => out.push({ key: `g:${itemIndex}:${childId}`, childId, child: nameInNote(note, students[k]!), itemIndex, text, source: 'starter', state: 'offered', pair: true }));
+    });
+  }
+  return out;
+}
+
 /** The names beside each line for a need, for the device's side of the lesson: who has that need. Never sent. */
 export function namesForNeed(need: string, needs: readonly LessonNeed[], notes: readonly ChildNote[], entities: Entity[]): string[] {
   const n = needs.find((x) => x.letter === need);
@@ -254,7 +309,7 @@ export function acceptedPoints(points: readonly Point[]): SavedAdjustment[] {
 
 /** The counts a receipt keeps of the points: how many the on-device model suggested and how many were accepted. No words. */
 export function pointCounts(points: readonly Point[], suggested: number): { pointsSuggested: number; pointsAccepted: number; variationsPlaced: number; variationsAccepted: number } {
-  const placed = points.filter((p) => p.need !== undefined);
+  const placed = points.filter((p) => p.need !== undefined && !p.nothing);
   return {
     pointsSuggested: suggested,
     pointsAccepted: points.filter((p) => p.state === 'accepted' && p.need === undefined).length,

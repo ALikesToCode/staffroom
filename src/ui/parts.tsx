@@ -117,7 +117,7 @@ export function RouteChip({ route, where }: { route: RouteId; where?: Where }) {
 /** The steps of a run, as the teacher meets them. */
 export const STEPS = ['Write', 'What leaves', 'Draft', 'What your device caught', 'Sign off'];
 /** The same five, as a lesson meets them. */
-export const LESSON_STEPS = ['Write', 'What leaves', 'Lesson', 'Fit to each child', 'Sign off'];
+export const LESSON_STEPS = ['Write', 'What leaves', 'Lesson', 'Beside each child', 'Sign off'];
 
 export function Stepper({ step, lesson = false }: { step: number; lesson?: boolean }) {
   const steps = lesson ? LESSON_STEPS : STEPS;

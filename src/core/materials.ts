@@ -1,4 +1,5 @@
 import { LESSON_NEEDS_HEADING, needLabel } from './lessonNeeds';
+import { languageLine } from './lesson';
 
 // Materials for a signed lesson: board work, a practice sheet, a version of the sheet for a need, and an
 // exit ticket. One more request to the cloud. What is sent is the class plan the teacher signed and the
@@ -12,7 +13,7 @@ export const MATERIALS_HEADING = 'Class plan to make materials for:';
 export const MATERIALS_SYSTEM = `You write classroom materials for the lesson plan below, for a teacher with a blackboard, paper and no budget. Give:
 board: what the teacher writes on the board, at most 8 short lines.
 sheet: a practice sheet for the whole class, 5 to 8 questions, each one line.
-versions: for each listed need that changes how a pupil can do the sheet or the homework, one version for that need. "need" is the letter only. "text" says how such a pupil does the same work for the same purpose, in at most 4 sentences. Give a version only where the need changes something. Do not guess who or how many.
+versions: exactly one for every listed need. "need" is the letter only. "text" says how such a pupil does the same sheet or homework for the same purpose, in at most 4 sentences. Where the sheet already suits the need, the text is exactly "same sheet." Every listed letter must appear. Do not guess who or how many.
 ticket: an exit ticket of exactly 3 short questions, each with its answer for the teacher.
 Use only the plan and the needs. Never write a name. If the plan gives a language, write in that language; keep the letters of the needs as they are.`;
 
@@ -40,14 +41,20 @@ export const TICKET_QUESTIONS = 3;
 /** The most characters of one line of the materials. */
 export const MATERIAL_LINE_MAX = 600;
 
+/** The line under the needs that lists the letters the cloud must give a version for. Part of the text the teacher approves. */
+export const versionsAsk = (letters: readonly string[]) => `Give a version of the sheet for every one of these letters: ${letters.join(', ')}. Where the sheet already suits a need, write "same sheet."`;
+
+/** What the cloud writes for a need the class sheet already suits. */
+export const SAME_SHEET = 'same sheet.';
+
 /**
  * The exact text of the materials request: the class plan as signed (with
  * its lines for needs, by letter) and the needs by letter. Nothing else.
  */
 export function materialsText(plan: string, needs: readonly { letter: string; line: string }[], language = ''): string {
   const parts = [`${MATERIALS_HEADING}\n\n${plan.trim()}`];
-  if (needs.length > 0) parts.push(`${LESSON_NEEDS_HEADING}\n${needs.map(needLabel).join('\n')}`);
-  if (language.trim()) parts.push(`Language of the materials: ${language.trim()}`);
+  if (needs.length > 0) parts.push(`${LESSON_NEEDS_HEADING}\n${needs.map(needLabel).join('\n')}\n${versionsAsk(needs.map((n) => n.letter))}`);
+  if (language.trim()) parts.push(`Language of the materials: ${languageLine(language.trim())}`);
   return parts.join('\n\n');
 }
 
@@ -59,6 +66,10 @@ export interface Materials {
   ticket: { question: string; answer: string }[];
   /** Versions left out: for a letter that was not sent, a second one for the same letter, or with no words. */
   dropped: number;
+  /** The needs the cloud says the class sheet already suits. */
+  same: string[];
+  /** The needs that were told and got neither a version nor "same sheet". */
+  missing: string[];
 }
 
 const line = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, MATERIAL_LINE_MAX) : '');
@@ -87,14 +98,16 @@ export function readMaterials(raw: string, letters: readonly string[]): Material
     .slice(0, TICKET_QUESTIONS);
   if (board.length === 0 || sheet.length < SHEET_MIN || ticket.length < TICKET_QUESTIONS) return undefined;
   const versions: Materials['versions'] = [];
+  const same: string[] = [];
   let dropped = 0;
   for (const v of Array.isArray(parsed.versions) ? parsed.versions : []) {
     const need = line((v as { need?: unknown } | null)?.need).replace(/^need\s+/i, '').replace(/[:.]$/, '').toUpperCase();
     const text = line((v as { text?: unknown } | null)?.text);
-    if (!text || !letters.includes(need) || versions.some((x) => x.need === need)) dropped++;
+    if (!text || !letters.includes(need) || versions.some((x) => x.need === need) || same.includes(need)) dropped++;
+    else if (/^same sheet\.?$/i.test(text)) same.push(need);
     else versions.push({ need, text });
   }
-  return { board, sheet, versions, ticket, dropped };
+  return { board, sheet, versions, ticket, dropped, same, missing: letters.filter((l) => !same.includes(l) && !versions.some((v) => v.need === l)) };
 }
 
 /** The reply as one text, for the return gate: every line of every section. */

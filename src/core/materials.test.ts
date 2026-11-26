@@ -23,9 +23,9 @@ describe('materials for a lesson', () => {
   it('sends the signed plan and the needs by letter, and nothing else', () => {
     const text = materialsText('A place\n\nStarter (5 minutes)\nLook.\nFor Need F: says it aloud.', [{ letter: 'F', line: 'finds written tests hard; can answer aloud' }]);
     expect(text).toBe(
-      "Class plan to make materials for:\n\nA place\n\nStarter (5 minutes)\nLook.\nFor Need F: says it aloud.\n\nNeeds in this class (no names and no reasons are given; a need may be one pupil's or several):\nNeed F: finds written tests hard; can answer aloud",
+      "Class plan to make materials for:\n\nA place\n\nStarter (5 minutes)\nLook.\nFor Need F: says it aloud.\n\nNeeds in this class (no names and no reasons are given; a need may be one pupil's or several):\nNeed F: finds written tests hard; can answer aloud\nGive a version of the sheet for every one of these letters: F. Where the sheet already suits a need, write \"same sheet.\"",
     );
-    expect(materialsText('P', [], 'Hindi')).toBe('Class plan to make materials for:\n\nP\n\nLanguage of the materials: Hindi');
+    expect(materialsText('P', [], 'Hindi')).toBe('Class plan to make materials for:\n\nP\n\nLanguage of the materials: Hindi, in Devanagari script (हिन्दी, देवनागरी लिपि में)');
   });
 
   it('asks for the four sections and never a name', () => {
@@ -35,6 +35,8 @@ describe('materials for a lesson', () => {
     expect(MATERIALS_SYSTEM).toContain('exactly 3 short questions');
     expect(MATERIALS_SYSTEM).toContain('Never write a name');
     expect(MATERIALS_SYSTEM).toContain('Do not guess who or how many');
+    expect(MATERIALS_SYSTEM).toContain('exactly one for every listed need');
+    expect(MATERIALS_SYSTEM).toContain('the text is exactly "same sheet."');
   });
 
   it('reads the reply strictly: sections cut to size, versions only for letters that were sent, once', () => {
@@ -46,6 +48,10 @@ describe('materials for a lesson', () => {
       { need: 'B', text: 'Uses the printed pictures.' },
     ]);
     expect(m.dropped).toBe(3);
+    expect(m.same).toEqual([]);
+    expect(m.missing).toEqual(['A']);
+    const all = readMaterials(JSON.stringify({ ...good, versions: [{ need: 'A', text: 'Same sheet.' }, { need: 'B', text: 'same sheet' }, { need: 'B', text: 'A second for B.' }, { need: 'F', text: 'Answers aloud.' }] }), ['A', 'B', 'F', 'G'])!;
+    expect([all.same, all.versions.map((v) => v.need), all.missing, all.dropped]).toEqual([['A', 'B'], ['F'], ['G'], 1]);
     expect(m.ticket).toHaveLength(3);
     const long = readMaterials(JSON.stringify({ ...good, board: Array.from({ length: 12 }, (_, i) => `line ${i}`), sheet: Array.from({ length: 11 }, (_, i) => `q ${i}`) }), [])!;
     expect([long.board.length, long.sheet.length, long.versions.length]).toEqual([8, 8, 0]);

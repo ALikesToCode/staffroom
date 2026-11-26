@@ -149,8 +149,8 @@ describe('the lesson as the first job', () => {
     expect(html).toContain('Need B: no phone or internet at home');
     // The name is on the device's side only.
     expect(html.slice(html.indexOf('mini cloud'))).not.toContain('Tanvi');
-    expect(LESSON_STEPS).toEqual(['Write', 'What leaves', 'Lesson', 'Fit to each child', 'Sign off']);
-    expect(renderToStaticMarkup(<Stepper step={3} lesson />)).toContain('Fit to each child');
+    expect(LESSON_STEPS).toEqual(['Write', 'What leaves', 'Lesson', 'Beside each child', 'Sign off']);
+    expect(renderToStaticMarkup(<Stepper step={3} lesson />)).toContain('Beside each child');
     expect(renderToStaticMarkup(<Stepper step={3} />)).toContain(STEPS[3]);
   });
 });

@@ -197,22 +197,28 @@ export const LESSON_NEEDS_HEADING = 'Needs in this class (no names and no reason
 /** A need as it is written in the outgoing text and on the screen. */
 export const needLabel = (n: Pick<LessonNeed, 'letter' | 'line'>) => `Need ${n.letter}: ${n.line}`;
 
-/** The outgoing text with the needs of the lesson under their heading. With no need, the text as it is. */
+/** The heading of the last item of a lesson: the section where the cloud answers every need it was told. */
+export const NEEDS_SECTION = 'For each need';
+
+/** The line under the needs that lists the letters the cloud must answer. It is part of the text the teacher approves. */
+export const needsAsk = (letters: readonly string[]) => `Under "${NEEDS_SECTION}", give an entry for every one of these letters: ${letters.join(', ')}.`;
+
+/** The outgoing text with the needs of the lesson under their heading, and the letters that must be answered. With no need, the text as it is. */
 export function withLessonNeeds(text: string, needs: readonly LessonNeed[]): string {
   if (needs.length === 0) return text;
-  return `${text}\n\n${LESSON_NEEDS_HEADING}\n${needs.map(needLabel).join('\n')}`;
+  return `${text}\n\n${LESSON_NEEDS_HEADING}\n${needs.map(needLabel).join('\n')}\n${needsAsk(needs.map((n) => n.letter))}`;
 }
 
-/** The sentence added to the lesson's instruction: the cloud writes a line for a need where a stage needs one. */
+/** The sentences added to the lesson's instruction: the cloud answers every listed need, in one section after the stages. */
 export const VARIATION_INSTRUCTION =
-  'After each stage, where a listed need changes what a pupil can do in that stage, add one line for that need: "For Need A: <what such a pupil does instead, for the same purpose>". Add a line only where the stage needs it. Do not guess who or how many.';
+  'If the notes list needs, the stages say nothing about them. After the stages, add one last item with the heading "For each need". Its text has an entry for every listed need, each on its own line, in exactly this form: "Need A | <stage name> | <one or two sentences: what such a pupil does in that stage instead, for the same purpose>". If the lesson already suits a need, write "Need A | none | This lesson already suits this need." A need may have two entries, for two stages. Every listed letter must appear. Do not guess who or how many.';
 
 /** The sentence added to the lesson's instruction for a plan in another language. The stage names and the marker stay in English so that the plan can still be read by the parser. */
 export const LANGUAGE_INSTRUCTION =
-  'If the lesson lines give a "Language of the plan", write the title, the text of every stage and every line for a need in that language. Keep the stage names in the headings (Starter, Teach, Practise, Check, Homework), the minutes and the marker "For Need A:" in English.';
+  'If the lesson lines give a "Language of the plan", write the title, the text of every stage and the text of every entry for a need in that language, in its own script (Hindi in Devanagari). Keep in English the stage names in the headings and in the entries (Starter, Teach, Practise, Check, Homework), the minutes, the heading "For each need", and "Need A |" and "none" in the entries.';
 
 /** The sentence added to the instruction for messages home in another language. */
-export const MESSAGES_LANGUAGE_INSTRUCTION = 'If the notes end with a "Language of the messages" line, write every note home in that language.';
+export const MESSAGES_LANGUAGE_INSTRUCTION = 'If the notes end with a "Language of the messages" line, write every note home in that language, in its own script (Hindi in Devanagari).';
 
 /** What the cloud wrote for one need at one stage. */
 export interface Variation {
@@ -222,30 +228,109 @@ export interface Variation {
   text: string;
 }
 
-const VARIATION = /(?:^|\s)For\s+Need\s+([A-Za-z]{1,2})\s*[:.–-]\s*/giu;
+const INLINE = /(?:^|\s)For\s+Need\s+([A-Za-z]{1,2})\s*[:.–-]\s*/giu;
+const ENTRY = /(?:^|\s)Need\s+([A-Za-z]{1,2})\s*\|\s*([^|\n]*?)\s*\|[ \t]*/gu;
+const isSection = (heading: string) => heading.replace(/[\s:.]+$/, '').trim().toLowerCase() === NEEDS_SECTION.toLowerCase();
+const stageKey = (s: string) => s.replace(/\[[^\]]*\]/g, '').replace(/\s*[(\[–—:-]\s*\d+\s*min(?:ute)?s?\.?\s*[)\]]?\s*$/iu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** The most entries one need may have: one for each of two stages. */
+export const NEED_ENTRIES_MAX = 2;
+
+/** What was read of the section "For each need". */
+export interface NeedsReading {
+  /** The class plan: the reply without the section. */
+  draft: Draft;
+  variations: Variation[];
+  /** Entries left out: an unknown letter, an unknown stage, no words, or a third entry for one need. */
+  dropped: number;
+  /** The needs the cloud says the lesson already suits. */
+  none: string[];
+  /** The needs that were told and have no entry at all. */
+  missing: string[];
+  /** The section as the cloud returned it. Empty when there was none. */
+  section: string;
+}
 
 /**
- * Take the lines for needs out of the lesson the cloud returned. The class
- * plan is each stage without them. A line for a letter that was not sent
- * is dropped and counted, as is one with no words. Read strictly: only
- * "For Need <letter>:" begins a line for a need.
+ * Take the section "For each need" out of the lesson the cloud returned
+ * and read it strictly. The class plan is the stages. An entry is "Need
+ * <letter> | <stage name> | <text>"; its stage must be a stage of this
+ * lesson by name, or "none". An entry for a letter that was not sent or a
+ * stage that is not there, one with no words, and a third for the same
+ * need are dropped and counted. A need that was told and has no entry is
+ * listed as missing.
  */
-export function splitVariations(draft: Draft, letters: readonly string[]): { draft: Draft; variations: Variation[]; dropped: number } {
+export function splitVariations(draft: Draft, letters: readonly string[]): NeedsReading {
+  const at = draft.items.map((i) => isSection(i.heading)).lastIndexOf(true);
+  const items = draft.items.filter((_, i) => i !== at);
+  const section = at < 0 ? '' : draft.items[at].text.trim();
   const variations: Variation[] = [];
+  const none: string[] = [];
   let dropped = 0;
-  const items = draft.items.map((item, itemIndex): DraftItem => {
-    const marks = [...item.text.matchAll(VARIATION)];
+  const marks = [...section.matchAll(ENTRY)];
+  marks.forEach((m, i) => {
+    const text = section.slice(m.index + m[0].length, i + 1 < marks.length ? marks[i + 1].index : undefined).replace(/\s+/g, ' ').trim();
+    const need = m[1].toUpperCase();
+    const stage = stageKey(m[2]);
+    if (!letters.includes(need)) return void dropped++;
+    if (stage === 'none') return void (none.includes(need) || none.push(need));
+    const itemIndex = stage === '' ? -1 : items.findIndex((item) => stageKey(item.heading) === stage);
+    if (itemIndex < 0 || text.length === 0 || variations.filter((v) => v.need === need).length >= NEED_ENTRIES_MAX) return void dropped++;
+    if (!variations.some((v) => v.itemIndex === itemIndex && v.need === need)) variations.push({ itemIndex, need, text });
+  });
+  const answered = new Set(variations.map((v) => v.need));
+  const suits = none.filter((n) => !answered.has(n));
+  return {
+    draft: { title: draft.title, items },
+    variations: variations.sort((a, b) => a.itemIndex - b.itemIndex),
+    dropped,
+    none: suits,
+    missing: letters.filter((l) => !answered.has(l) && !suits.includes(l)),
+    section,
+  };
+}
+
+/** True when so many needs went unanswered that the cloud is asked once more: over a third of those told. */
+export const askAgain = (missing: readonly string[], letters: readonly string[]) => missing.length * 3 > letters.length;
+
+/** The text of the second request: the same approved text, and the letters still to answer. */
+export const secondAsk = (approved: string, missing: readonly string[]) => `${approved}\n\nWrite the entries for: ${missing.join(', ')}`;
+
+/** Put the entries of a second reply with the first, for the letters that were missing only. The class plan stays the first reply's. */
+export function withSecondReading(first: NeedsReading, second: Draft): NeedsReading {
+  const more = splitVariations(second, first.missing);
+  // The second reply may name its stages differently; an entry counts only for a stage of the first plan.
+  const byName = more.variations
+    .map((v) => ({ ...v, itemIndex: first.draft.items.findIndex((item) => stageKey(item.heading) === stageKey(more.draft.items[v.itemIndex]?.heading ?? '')) }))
+    .filter((v) => v.itemIndex >= 0);
+  const answered = new Set(byName.map((v) => v.need));
+  return {
+    ...first,
+    variations: [...first.variations, ...byName].sort((a, b) => a.itemIndex - b.itemIndex),
+    dropped: first.dropped + more.dropped + (more.variations.length - byName.length),
+    none: [...first.none, ...more.none.filter((n) => !answered.has(n))],
+    missing: first.missing.filter((l) => !answered.has(l) && !more.none.includes(l)),
+    section: [first.section, more.section].filter(Boolean).join('\n'),
+  };
+}
+
+/** A need entry as the section has it. */
+export const entryLine = (v: Variation, stage: string) => `Need ${v.need} | ${stage} | ${v.text}`;
+
+/**
+ * A reply written in the earlier form, with "For Need A: …" inside the
+ * stages, turned into the form with a section. The fixed sets were written
+ * in the earlier form; this carries each of their lines over as it is.
+ */
+export function inlineToSection(draft: Draft): Draft {
+  const entries: string[] = [];
+  const items = draft.items.map((item): DraftItem => {
+    const marks = [...item.text.matchAll(INLINE)];
     if (marks.length === 0) return item;
-    marks.forEach((m, i) => {
-      const from = m.index + m[0].length;
-      const text = item.text.slice(from, i + 1 < marks.length ? marks[i + 1].index : undefined).replace(/\s+/g, ' ').trim();
-      const need = m[1].toUpperCase();
-      if (text.length === 0 || !letters.includes(need)) dropped++;
-      else if (!variations.some((v) => v.itemIndex === itemIndex && v.need === need && v.text === text)) variations.push({ itemIndex, need, text });
-    });
+    marks.forEach((m, i) => entries.push(`Need ${m[1]} | ${stageKey(item.heading)} | ${item.text.slice(m.index + m[0].length, i + 1 < marks.length ? marks[i + 1].index : undefined).trim()}`));
     return { heading: item.heading, text: item.text.slice(0, marks[0].index).trim() };
   });
-  return { draft: { title: draft.title, items }, variations, dropped };
+  return { title: draft.title, items: entries.length > 0 ? [...items, { heading: NEEDS_SECTION, text: entries.join('\n') }] : items };
 }
 
 /** The lines for needs under one stage, as the cloud wrote them: "For Need A: …". No name is in them. */

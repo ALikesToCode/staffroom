@@ -12,7 +12,11 @@ import {
   needLabel,
   planWithNeeds,
   proposeLearning,
+  askAgain,
+  needsAsk,
+  secondAsk,
   splitVariations,
+  withSecondReading,
   VARIATION_INSTRUCTION,
   variationLine,
 } from './lessonNeeds';
@@ -157,15 +161,34 @@ describe('what the cloud wrote for a need', () => {
     title: 'Describing a place',
     items: [
       { heading: 'Starter (5 minutes)', text: 'Show a picture of a market. Pupils call out what they see.' },
-      { heading: 'Practise (15 minutes)', text: 'Pupils write a description in pairs. For Need G: such a pupil adds a second paragraph on sounds. For Need I: such pupils work in different pairs.' },
-      { heading: 'Check (10 minutes)', text: 'A short written quiz.\nFor Need F: a pupil with this need answers the quiz aloud, and may finish it after school.\nFor Need Q: sits near the door.' },
-      { heading: 'Homework', text: 'Pupils find a picture of a place online and describe it. For need b: such a pupil describes a picture from the textbook. For Need C: ' },
+      { heading: 'Practise (15 minutes)', text: 'Pupils write a description in pairs.' },
+      { heading: 'Check (10 minutes)', text: 'A short written quiz.' },
+      { heading: 'Homework', text: 'Pupils find a picture of a place online and describe it.' },
+      {
+        heading: 'For each need',
+        text: [
+          'Need G | Practise | such a pupil adds a second paragraph on sounds.',
+          'Need I | Practise (15 minutes) | such pupils work in different pairs.',
+          'Need F | Check | a pupil with this need answers the quiz aloud, and may finish it after school.',
+          'Need Q | Check | sits near the door.',
+          'Need b | homework | such a pupil describes a picture from the textbook.',
+          'Need C | Homework | ',
+          'Need A | Plenary | leaves at the bell.',
+          'Need D | none | This lesson already suits this need.',
+          'Need H | none | This lesson already suits this need.',
+        ].join('\n'),
+      },
     ],
   };
-  const { draft, variations, dropped } = splitVariations(reply, letters);
+  const { draft, variations, dropped, none, missing, section } = splitVariations(reply, letters);
 
   it('asks the cloud for a line only where a stage needs one, and not to guess who', () => {
-    expect(VARIATION_INSTRUCTION).toContain('For Need A:');
+    expect(VARIATION_INSTRUCTION).toContain('one last item with the heading "For each need"');
+    expect(VARIATION_INSTRUCTION).toContain('"Need A | <stage name> | <one or two sentences: what such a pupil does in that stage instead, for the same purpose>"');
+    expect(VARIATION_INSTRUCTION).toContain('"Need A | none | This lesson already suits this need."');
+    expect(VARIATION_INSTRUCTION).toContain('Every listed letter must appear.');
+    expect(needsAsk(['A', 'B'])).toBe('Under "For each need", give an entry for every one of these letters: A, B.');
+    expect(outgoingOf(SAMPLE_NOTE, entities, all, true).text).toContain(`\n${needsAsk(letters)}`);
     expect(VARIATION_INSTRUCTION).toContain('Do not guess who or how many.');
   });
 
@@ -182,14 +205,45 @@ describe('what the cloud wrote for a need', () => {
       { itemIndex: 2, need: 'F', text: 'a pupil with this need answers the quiz aloud, and may finish it after school.' },
       { itemIndex: 3, need: 'B', text: 'such a pupil describes a picture from the textbook.' },
     ]);
-    expect(dropped).toBe(2);
-    expect(splitVariations({ title: 't', items: [{ heading: 'h', text: 'Plan for needs of the class.' }] }, letters)).toEqual({ draft: { title: 't', items: [{ heading: 'h', text: 'Plan for needs of the class.' }] }, variations: [], dropped: 0 });
+    // Left out: letter Q, no words for C, a stage that is not there for A.
+    expect(dropped).toBe(3);
+    expect(none).toEqual(['D', 'H']);
+    // A need may have two entries and no more, and one with a real entry is not also "none".
+    const two = splitVariations({ title: 't', items: [{ heading: 'Starter', text: 'a' }, { heading: 'Teach', text: 'b' }, { heading: 'Check', text: 'c' }, { heading: 'For each need:', text: 'Need G | none | suits. Need G | Starter | one. Need G | Teach | two. Need G | Check | three.' }] }, ['G']);
+    expect(two).toMatchObject({ variations: [{ itemIndex: 0, need: 'G', text: 'one.' }, { itemIndex: 1, need: 'G', text: 'two.' }], dropped: 1, none: [], missing: [] });
+    expect(missing).toEqual(letters.filter((l) => !['B', 'D', 'F', 'G', 'H', 'I'].includes(l)));
+    expect(section).toContain('Need Q | Check | sits near the door.');
+    const bare = splitVariations({ title: 't', items: [{ heading: 'h', text: 'Plan for needs of the class. Need A | h | not in a section.' }] }, letters);
+    expect(bare).toMatchObject({ draft: { title: 't', items: [{ heading: 'h', text: 'Plan for needs of the class. Need A | h | not in a section.' }] }, variations: [], dropped: 0, none: [], missing: letters, section: '' });
     expect(variationLine(variations[0])).toBe('For Need G: such a pupil adds a second paragraph on sounds.');
+  });
+
+  it('asks once more when over a third of the needs have no entry, for the missing letters only', () => {
+    expect(askAgain(['A', 'B'], ['A', 'B', 'C', 'D', 'E', 'F'])).toBe(false);
+    expect(askAgain(['A', 'B', 'C'], ['A', 'B', 'C', 'D', 'E', 'F'])).toBe(true);
+    expect(askAgain([], [])).toBe(false);
+    expect(secondAsk('approved text', ['B', 'D'])).toBe('approved text\n\nWrite the entries for: B, D');
+    const first = splitVariations(reply, letters);
+    const again = withSecondReading(first, {
+      title: 'x',
+      items: [
+        { heading: 'Opening (5 minutes)', text: 'A different lesson.' },
+        { heading: 'Homework', text: 'x' },
+        { heading: 'For each need', text: 'Need A | Homework | hands it in before the last bell.\nNeed C | Opening | no such stage in the first plan.\nNeed M | none | This lesson already suits this need.\nNeed G | Homework | not asked for again.' },
+      ],
+    });
+    expect(again.draft).toEqual(first.draft);
+    expect(again.variations.filter((v) => v.need === 'A')).toEqual([{ itemIndex: 3, need: 'A', text: 'hands it in before the last bell.' }]);
+    expect(again.none).toEqual(['D', 'H', 'M']);
+    expect(again.missing).toEqual(first.missing.filter((l) => l !== 'A' && l !== 'M'));
+    expect(again.dropped).toBe(first.dropped + 2);
+    expect(again.variations.filter((v) => v.need === 'G')).toHaveLength(1);
   });
 
   it('gives the plan that can be shared: the stages and the lines by letter, with no name', () => {
     const text = planWithNeeds(draft, variations);
     expect(text).toContain('Practise (15 minutes)\nPupils write a description in pairs.\nFor Need G: such a pupil adds a second paragraph on sounds.\nFor Need I: such pupils work in different pairs.');
+    expect(text).not.toContain('For each need');
     expect(text).not.toMatch(/Meenal|Ishaan|Kabir|Tanvi|Aarav/);
   });
 

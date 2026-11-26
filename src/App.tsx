@@ -44,7 +44,7 @@ import { keptAfterRecheck, modelSaid, recheckItems, rewriteStep, stepIndexOf, st
 import { canFit, FIT_CHILD_FAILED, FIT_FAILED, FIT_LABEL, fitForChild, fitInputFor, fitLessonForChild, fitStep } from './ai/fit';
 import { useInstall, useUpdate } from './ui/pwa';
 import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
-import { lessonNeedIsTyped, lessonNeedLine, lessonNeeds, needLabel, planWithNeeds, proposeLearning, splitVariations, variationLine, type LessonNeed, type Variation } from './core/lessonNeeds';
+import { lessonNeedIsTyped, lessonNeedLine, askAgain, entryLine, lessonNeeds, needLabel, planWithNeeds, proposeLearning, secondAsk, splitVariations, variationLine, withSecondReading, type LessonNeed, type NeedsReading, type Variation } from './core/lessonNeeds';
 import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, RECORDED_SOURCE, replayBanner, sourceOf, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyAfterRewrite, familyFor } from './core/family';
 import { REPEATS_NOTE, repeatsForChild, repeatsPrivate } from './core/repeats';
@@ -76,14 +76,15 @@ import {
   type SavedLesson,
 } from './core/lesson';
 import { ChildSections, ForTheseChildren, Lessons, type PointActions } from './ui/Lesson';
-import { acceptablePoints, acceptedPoints, childFitSaid, childNotes, fitSummary, inNoteOrder, namesForNeed, placeVariations, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
+import { acceptablePoints, acceptedPoints, childFitSaid, childNotes, fitSummary, inNoteOrder, missingPoints, namesForNeed, pairPoints, placeVariations, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
 import { constraintsOnDevice, mergeProposals, type ConstraintReport } from './ai/constraints';
 import { learningOnDevice, mergeLearning } from './ai/learning';
 import { classView, withoutClass, withTicketNeeds } from './core/ticket';
-import { materialsReply, materialsText } from './core/materials';
+import { materialsReply, materialsText, type Materials } from './core/materials';
+import { stageName } from './core/lesson';
 import { MaterialsCard, MaterialsPages, MaterialsWire } from './ui/Materials';
 import { ReadAloud } from './ui/ReadAloud';
 import { NOTE_MAX } from './core/text';
@@ -303,6 +304,8 @@ export function App() {
   /** For a lesson: the lines the cloud wrote for needs, by stage and letter, and how many it wrote for a letter it was not sent. */
   const [variations, setVariations] = useState<Variation[]>([]);
   const [variationsDropped, setVariationsDropped] = useState(0);
+  /** For a lesson: the section "For each need" as the cloud returned it, the needs it says the lesson suits, the needs with no entry, and the text of the second request if one was made. */
+  const [needsReply, setNeedsReply] = useState<{ section: string; none: string[]; missing: string[]; second: string | null } | null>(null);
   /** For a signed lesson: the materials the cloud wrote from the signed plan and the needs by letter, and what the return gate found in them. */
   const [materials, setMaterials] = useState<(MaterialsResult & { text: string; issues: Violation[] }) | null>(null);
   const [materialsBusy, setMaterialsBusy] = useState(false);
@@ -313,6 +316,8 @@ export function App() {
   const signedId = useRef<string | null>(null);
   /** The lessons signed off on this device. */
   const [lessons, setLessons] = useState<SavedLesson[]>(loadLessons);
+  const lessonsRef = useRef(lessons);
+  lessonsRef.current = lessons;
   /** Where the fit ran in this run. NOT_RUN until the on-device model has answered once. */
   const [fitWhere, setFitWhere] = useState<Where>('NOT_RUN');
   const [checkWhere, setCheckWhere] = useState<Where>('NOT_RUN');
@@ -776,10 +781,28 @@ export function App() {
     // The note was forgotten, or the run cleared, while the draft was being written: nothing of it is kept.
     if (gone()) return;
     // The return gate reads the reply as it came, the lines for needs included.
-    const replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
-    // For a lesson, the lines the cloud wrote for needs are taken out of the stages: the class plan is what is left.
+    let replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
+    // For a lesson, the section "For each need" is taken out of the reply: the class plan is the stages.
     const toldNeeds = approved.lessonNeeds ?? [];
-    const split = approved.lessonNeeds ? splitVariations(drafted.draft, toldNeeds.map((n) => n.letter)) : { draft: drafted.draft, variations: [], dropped: 0 };
+    const letters = toldNeeds.map((n) => n.letter);
+    let split: NeedsReading = approved.lessonNeeds ? splitVariations(drafted.draft, letters) : { draft: drafted.draft, variations: [], dropped: 0, none: [], missing: [], section: '' };
+    let second: string | null = null;
+    if (askAgain(split.missing, letters)) {
+      // Over a third of the needs have no entry: the cloud is asked once more, for those letters only. The text is the one
+      // the teacher approved and one more line, so there is no new tick; Inspect shows that it was sent, word for word.
+      second = secondAsk(text, split.missing);
+      setProgress('Asking the cloud once more for the needs it left out');
+      try {
+        const more = await writeDraft(second, currentTask, cloudModel);
+        if (gone()) return;
+        split = withSecondReading(split, more.draft);
+        // The return gate reads the second reply too.
+        replyText = [replyText, ...more.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
+      } catch {
+        if (gone()) return;
+        // The second request failed: the first reply stands, and the needs it left out are shown as left out.
+      }
+    }
     drafted = { ...drafted, draft: split.draft };
     setResult(drafted);
     // A stand-in the model wrote without its brackets is read as that stand-in, if it was one that was sent.
@@ -869,7 +892,13 @@ export function App() {
     // What the cloud wrote for a need is put beside each child who has it. Only this device knows who that is.
     setVariations(split.variations);
     setVariationsDropped(split.dropped);
-    setPoints(placeVariations(split.variations, toldNeeds, entities, items, language ? [] : constraints, note));
+    setNeedsReply(approved.lessonNeeds ? { section: split.section, none: split.none, missing: split.missing, second } : null);
+    setPoints([
+      ...placeVariations(split.variations, toldNeeds, entities, items, language ? [] : constraints, note),
+      ...missingPoints(split.missing, toldNeeds, entities, constraints, note),
+      // Two children who work better apart: only this device knows they are each other's classmate.
+      ...(approved.lessonNeeds ? pairPoints(constraints, entities, items, note) : []),
+    ]);
     setPointsSuggested(0);
     setChildSaid({});
     setFitChild(null);
@@ -928,7 +957,7 @@ export function App() {
       constraints: { ...constraintCounts(liveConstraints), shared: task === 'lesson' ? sent.lessonNeeds.length : sent.needs.length },
       rewritten: signed.filter((k, i) => k === true && i in edits).length,
       fittedOnDevice: signed.filter((k, i) => k === true && i in edits && fitted.includes(i)).length,
-      lesson: task === 'lesson' ? { ...lessonCounts(hits, adj), ...pointCounts(points, pointsSuggested), needsTold: sent.lessonNeeds.length } : undefined,
+      lesson: task === 'lesson' ? { ...lessonCounts(hits, adj), ...pointCounts(points, pointsSuggested), needsTold: sent.lessonNeeds.length, ...(materials ? { materialsVersions: materials.materials.versions.length } : {}) } : undefined,
       kept: signed.filter((k) => k === true).length,
       struck: signed.filter((k) => k === false).length,
     });
@@ -944,6 +973,7 @@ export function App() {
       const saved = savedLesson(receipt.id, receipt.createdAt, lesson, draft.title, stages, inNoteOrder([...acceptedAdjustments(hits, adj), ...acceptedPoints(points)], notesByChild), liveConstraints, {
         needs: sent.lessonNeeds.map((n) => ({ letter: n.letter, line: n.line, children: n.children })),
         // A saved lesson counts the kept stages, so a line for a struck stage is not kept.
+        ...(materials ? { materials: savedMaterials(materials.materials) } : {}),
         variations: variations.filter((v) => signed[v.itemIndex] === true).map((v) => ({ ...v, itemIndex: signed.slice(0, v.itemIndex).filter((k) => k === true).length })),
       });
       setLessons((l) => {
@@ -1277,7 +1307,7 @@ export function App() {
       setPoints((ps) =>
         ps.map((p) => {
           if (p.key !== key || !p.starter) return p;
-          const { why: _why, starter, ...rest } = p;
+          const { why: _why, starter, nothing: _nothing, ...rest } = p;
           return { ...rest, text: starter, source: 'starter', state: 'offered', seen: true };
         }),
       );
@@ -1337,7 +1367,8 @@ export function App() {
   }, [draft, kept, entities, sent]);
 
   /** The class plan of a lesson as it is copied: the kept stages with stand-ins as they came, so no name and no adjustment is in it. */
-  const keptIndexes = draft ? draft.items.map((_, i) => i).filter((i) => kept[i] === true) : [];
+  // Before sign-off the plan is every stage that is not struck; after it, the stages that were kept.
+  const keptIndexes = draft ? draft.items.map((_, i) => i).filter((i) => (stage === 'signed' ? kept[i] === true : kept[i] !== false)) : [];
   const classPlan = draft
     ? variations.length > 0
       ? // With the lines for needs under each stage, by letter: no name is in them either.
@@ -1345,9 +1376,17 @@ export function App() {
       : classPlanText({ title: draft.title, items: keptIndexes.map((i) => draft.items[i]) })
     : '';
 
+  const savedMaterials = (m: Materials) => ({ board: m.board, sheet: m.sheet, versions: m.versions, ticket: m.ticket, same: m.same });
+
   /** The request for materials, exactly as it would be sent: the signed class plan and the needs by letter. */
-  const materialsRequest = task === 'lesson' && sent && stage === 'signed' && classPlan ? materialsText(classPlan, sent.lessonNeeds, sent.language) : '';
+  const materialsRequest = task === 'lesson' && sent && (stage === 'signed' || stage === 'result') && classPlan ? materialsText(classPlan, sent.lessonNeeds, sent.language) : '';
   const materialsStopped = useMemo(() => (materialsRequest && sent ? checkOutgoing(materialsRequest, sent.entities) : []), [materialsRequest, sent]);
+  /** The section "For each need" as the cloud returned it; in a replay, the entries that were kept. */
+  const sectionLines = needsReply?.section
+    ? needsReply.section.split('\n').map((l) => l.trim()).filter(Boolean)
+    : result
+      ? variations.map((v) => entryLine(v, stageName(result.draft.items[v.itemIndex]?.heading ?? '')))
+      : [];
   const needNames = (letter: string) => (sent ? namesForNeed(letter, sent.lessonNeeds, notesByChild, sent.entities) : []);
 
   const makeMaterials = async () => {
@@ -1362,6 +1401,8 @@ export function App() {
       setMaterials({ ...got, text, issues: checkReply(materialsReply(got.materials), sent.entities, sent.tokens, text) });
       // Counted on the receipt in this browser. Nothing of it is in the record that may leave the device.
       const id = signedId.current;
+      // Kept with the saved lesson, if it is signed already. Letters only: no name is in them.
+      if (id) changeLessons(lessonsRef.current.map((l) => (l.id === id ? { ...l, materials: savedMaterials(got.materials) } : l)));
       setReceipts((rs) => {
         const next = rs.map((r) => (r.id === id && r.lesson ? { ...r, lesson: { ...r.lesson, materialsVersions: got.materials.versions.length } } : r));
         storeReceipts(next);
@@ -1449,6 +1490,7 @@ export function App() {
     setPoints([]);
     setVariations([]);
     setVariationsDropped(0);
+    setNeedsReply(null);
     setMaterials(null);
     setMaterialsBusy(false);
     setMaterialsFail(null);
@@ -1561,6 +1603,7 @@ export function App() {
         lessonNeeds: (recordedNeeds ?? []).map((n) => ({ ...n, constraintIds: [], children: replay.needChildren?.[n.letter] ?? [], others: [], issues: [], sensitive: [] })),
       });
       setVariations(replay.variations ?? []);
+      setMaterials(replay.materials ? { materials: { ...replay.materials, dropped: 0, same: [], missing: [] }, where: replay.where.draft, model: replay.draftModel, text: '', issues: [] } : null);
       setResult({ draft: replay.draft, where: replay.where.draft, model: replay.draftModel });
       const replyText = [replay.draft.title, ...replay.draft.items.flatMap((i) => [i.heading, i.text]), ...(replay.variations ?? []).map(variationLine)].join('\n');
       // The return gate is plain code, so it is run again here on the recorded reply.
@@ -2350,7 +2393,7 @@ export function App() {
                 </article>
               )}
 
-              {isLesson && stage === 'signed' && !replay && keptCount > 0 && sent && !replyBlocked && (
+              {isLesson && sent && !replyBlocked && (replay ? Boolean(materials) && (stage === 'result' || stage === 'signed') : stage === 'result' || (stage === 'signed' && keptCount > 0)) && (
                 <MaterialsCard
                   request={materialsRequest}
                   stopped={materialsStopped}
@@ -2361,7 +2404,8 @@ export function App() {
                   where={materials ? (materials.where === 'IN_CLOUD' ? `Written in the cloud by ${materials.model}` : 'The cloud failed, so the on-device model wrote these') : ''}
                   namesFor={needNames}
                   onSend={() => void makeMaterials()}
-                  onPrint={printMaterials}
+                  onPrint={stage === 'signed' && !replay ? printMaterials : undefined}
+                  noPrint={replay ? 'From the recorded run.' : 'Sign off the lesson to print these.'}
                 />
               )}
 
@@ -2370,6 +2414,11 @@ export function App() {
                   {sent?.language && (
                     <p className="caution" role="status">
                       {NOT_ENGLISH}
+                    </p>
+                  )}
+                  {isLesson && needsReply && needsReply.none.length > 0 && (
+                    <p className="hint">
+                      The cloud says this lesson already suits {needsReply.none.map((l) => `Need ${l}${needNames(l).length > 0 ? ` (${needNames(l).join(', ')})` : ''}`).join('; ')}. Read it against what you know.
                     </p>
                   )}
                   <p className="eyebrow">{restore(draft.title, entities, sent?.tokens)}</p>
@@ -3017,16 +3066,19 @@ export function App() {
                         </b>
                         <br />
                         <CloudText text={item.text} />
-                        {variations
-                          .filter((v) => v.itemIndex === i)
-                          .map((v, k) => (
-                            <span key={k}>
-                              <br />
-                              <CloudText text={variationLine(v)} />
-                            </span>
-                          ))}
                       </p>
                     ))}
+                    {sectionLines.length > 0 && (
+                      <p>
+                        <b>For each need</b>
+                        {sectionLines.map((l, k) => (
+                          <span key={k}>
+                            <br />
+                            <CloudText text={l} />
+                          </span>
+                        ))}
+                      </p>
+                    )}
                   </div>
                   <p className="hint">
                     {variations.length > 0
@@ -3035,9 +3087,11 @@ export function App() {
                   </p>
                   {variationsDropped > 0 && (
                     <p className="hint">
-                      {variationsDropped} {variationsDropped === 1 ? 'line was' : 'lines were'} for a need you did not tell the cloud, or had no words, so {variationsDropped === 1 ? 'it is' : 'they are'} left out.
+                      {variationsDropped} {variationsDropped === 1 ? 'entry was' : 'entries were'} for a need you did not tell the cloud or a stage that is not in the lesson, or had no words, so{' '}
+                      {variationsDropped === 1 ? 'it is' : 'they are'} left out.
                     </p>
                   )}
+                  {needsReply?.second && <p className="hint">The cloud was asked once more for the needs its first reply left out. Inspect shows the exact text of that second request.</p>}
                 </article>
               )}
 
@@ -3178,6 +3232,7 @@ export function App() {
           heading={DRAFT_NOTES_HEADING}
           labelSystem={LABEL_SYSTEM}
           labelChars={LABEL_CHARS}
+          secondRequest={needsReply?.second ?? undefined}
           policyLine={
             replay
               ? `Policy on the day: ${replay.policy.from}. Drafting model: ${replay.policy.cloudModel}.`

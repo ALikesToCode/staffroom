@@ -180,3 +180,45 @@ describe('what is said after the device read the note about a child', () => {
     expect(childFitSaid('Meenal', { ...got, read: false })).toBe('The on-device model gave no answer that could be read for Meenal. Write what Meenal needs yourself.');
   });
 });
+
+describe('needs the cloud left out, and two children who work better apart', () => {
+  it('gives a waiting row with no text beside each child of a need with no entry, with starter wording where the kind has some', async () => {
+    const { sampleNeeds } = await import('../eval/needs');
+    const { missingPoints, acceptablePoints, fitSummary, pointCounts } = await import('./points');
+    const s = sampleNeeds();
+    const rows = missingPoints(['B', 'I', 'Z'], s.needs, s.entities, s.constraints, s.note);
+    expect(rows.map((p) => [p.child.split(' ')[0], p.need, p.text, p.nothing, Boolean(p.starter)])).toEqual([
+      ['Tanvi', 'B', '', true, true],
+      ['Kabir', 'I', '', true, false],
+      ['Ishaan', 'I', '', true, false],
+    ]);
+    // Nothing to accept, and not counted as placed.
+    expect(acceptablePoints(rows.map((p) => ({ ...p, seen: true })))).toEqual({ keys: [], allSeen: true });
+    expect(pointCounts(rows, 0).variationsPlaced).toBe(0);
+    expect(fitSummary(5, 0, [], rows)).toBe('5 children have private notes. The cloud wrote nothing for 2 needs.');
+  });
+
+  it('seats a pair in different groups, by rule, on the Practise stage and on a stage with group work', async () => {
+    const { sampleNeeds } = await import('../eval/needs');
+    const { pairPoints, pairLine } = await import('./points');
+    const s = sampleNeeds();
+    const items = [
+      { heading: 'Starter (5 minutes)', text: 'Pupils look at a picture.' },
+      { heading: 'Teach (10 minutes)', text: 'In groups of four, pupils sort the words.' },
+      { heading: 'Practise (15 minutes)', text: 'Pupils write alone.' },
+      { heading: 'Check (10 minutes)', text: 'The teacher regroups the answers on the board.' },
+    ];
+    const got = pairPoints(s.constraints, s.entities, items, s.note);
+    expect(pairLine('Kabir', 'Ishaan')).toBe('Seat Kabir and Ishaan in different groups.');
+    expect(got.map((p) => [p.child, p.itemIndex, p.text, p.source, p.state, p.pair])).toEqual([
+      ['Kabir', 1, 'Seat Kabir and Ishaan in different groups.', 'starter', 'offered', true],
+      ['Ishaan', 1, 'Seat Kabir and Ishaan in different groups.', 'starter', 'offered', true],
+      ['Kabir', 2, 'Seat Kabir and Ishaan in different groups.', 'starter', 'offered', true],
+      ['Ishaan', 2, 'Seat Kabir and Ishaan in different groups.', 'starter', 'offered', true],
+    ]);
+    // Not a pair: one child alone, or the need not confirmed.
+    const one = s.constraints.filter((c) => !(c.learn === 'group' && c.aboutName?.startsWith('Ishaan')));
+    expect(pairPoints(one, s.entities, items, s.note)).toEqual([]);
+    expect(pairPoints(s.constraints.map((c) => (c.learn === 'group' ? { ...c, confirmed: false } : c)), s.entities, items, s.note)).toEqual([]);
+  });
+});

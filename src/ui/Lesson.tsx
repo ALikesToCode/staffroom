@@ -1,3 +1,4 @@
+import { MaterialsWire } from './Materials';
 import { allGotIt, SAMPLE_TICKET, TICKET_MARK, TICKET_MARKS, type ClassRow, type Ticket } from '../core/ticket';
 import { useEffect, useRef, useState } from 'react';
 import type { DraftItem } from '../core/types';
@@ -22,6 +23,10 @@ export const MODEL_LABEL = 'Suggested on this device from your private note. Not
 export const TEACHER_LABEL = 'Written by you';
 /** Said over a line the cloud wrote for a need, placed beside a child here. */
 export const CLOUD_LABEL = 'Written by the cloud for a need you approved. It did not know whose. Placed beside this child on this device.';
+/** Said beside a child for a need the cloud was told and wrote nothing for. */
+export const NOTHING_WRITTEN = (letter: string) => `The cloud wrote nothing for Need ${letter}.`;
+/** Said over a line this device wrote about two children together. */
+export const PAIR_LABEL = 'By rule, on this device';
 /** Said over a point the on-device model wrote when asked for more ideas. */
 export const MORE_LABEL = 'Suggested on this device from your private note. Read it closely: a small model wrote it.';
 const SOURCE_LABEL = { model: MODEL_LABEL, starter: STARTER_LABEL, teacher: TEACHER_LABEL, cloud: CLOUD_LABEL } as const;
@@ -269,12 +274,21 @@ function PointRow({ point, stages, live, recorded, actions }: { point: Point; st
     <li className={`child-hit ${point.state}`}>
       {!changing && (
         <div className="adjustment" ref={offer}>
-          <span className="adj-source">{recorded && point.source === 'model' ? RECORDED_FIT_LABEL : POINT_LABEL[point.source]}</span>
-          <p>
-            <span className="stage-tag">{stages[point.itemIndex]}</span>
-            {point.need && <span className="stage-tag need-tag">Need {point.need}</span>}
-            {point.text}
-          </p>
+          {point.nothing ? (
+            <p>
+              <span className="stage-tag need-tag">Need {point.need}</span>
+              {NOTHING_WRITTEN(point.need ?? '')}
+            </p>
+          ) : (
+            <>
+              <span className="adj-source">{point.pair ? PAIR_LABEL : recorded && point.source === 'model' ? RECORDED_FIT_LABEL : POINT_LABEL[point.source]}</span>
+              <p>
+                <span className="stage-tag">{stages[point.itemIndex]}</span>
+                {point.need && <span className="stage-tag need-tag">Need {point.need}</span>}
+                {point.text}
+              </p>
+            </>
+          )}
           {point.why && <span className="caution">{point.why}</span>}
           {actions.repeats(point.childId, point.text) && <span className="caution">{ADJUSTMENT_REPEATS}</span>}
         </div>
@@ -284,16 +298,18 @@ function PointRow({ point, stages, live, recorded, actions }: { point: Point; st
         <div className="actions hit-actions">
           {point.state === 'offered' ? (
             <>
-              <button className="primary small" onClick={() => actions.onAccept(point.key)}>
-                Accept
-              </button>
-              {point.why && point.starter && (
+              {!point.nothing && (
+                <button className="primary small" onClick={() => actions.onAccept(point.key)}>
+                  Accept
+                </button>
+              )}
+              {(point.why || point.nothing) && point.starter && (
                 <button className="secondary small" onClick={() => actions.onStarter(point.key)} title={point.starter}>
                   Use starter wording
                 </button>
               )}
               <button className="link" onClick={() => setChanging(true)}>
-                Change
+                {point.nothing ? 'Write it yourself' : 'Change'}
               </button>
             </>
           ) : (
@@ -478,6 +494,12 @@ function LessonCard({
         </ol>
         <h4>For these children</h4>
         <ForTheseChildren stages={lesson.stages} adjustments={lesson.adjustments} />
+        {lesson.materials && (
+          <details className="saved-materials">
+            <summary>Materials</summary>
+            <MaterialsWire result={{ ...lesson.materials, dropped: 0, same: lesson.materials.same ?? [], missing: [] }} />
+          </details>
+        )}
         <h4>How did it go?</h4>
         <ul className="how-went">
           {lesson.stages.map((s, i) => (
