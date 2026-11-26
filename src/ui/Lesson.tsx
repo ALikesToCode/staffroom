@@ -1,4 +1,5 @@
 import { MaterialsWire } from './Materials';
+import { asVersion } from '../core/materials';
 import { allGotIt, SAMPLE_TICKET, TICKET_MARK, TICKET_MARKS, type ClassRow, type Ticket } from '../core/ticket';
 import { useEffect, useRef, useState } from 'react';
 import type { DraftItem } from '../core/types';
@@ -497,7 +498,7 @@ function LessonCard({
         {lesson.materials && (
           <details className="saved-materials">
             <summary>Materials</summary>
-            <MaterialsWire result={{ ...lesson.materials, dropped: 0, same: lesson.materials.same ?? [], missing: [] }} />
+            <MaterialsWire result={{ ...lesson.materials, versions: lesson.materials.versions.map(asVersion), dropped: 0, same: lesson.materials.same ?? [], missing: [] }} />
           </details>
         )}
         <h4>How did it go?</h4>

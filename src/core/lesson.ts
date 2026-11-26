@@ -3,6 +3,7 @@ import type { Violation } from './gate';
 import { afterBellActivities, nameInNote, ruleConflicts, ruleHitsForItem, type RuleHit } from './conflicts';
 import { findByRule, findSensitive, listedParts, wholeWordMatcher } from './rules';
 import { BARE_RE, LOOKALIKE_RE } from './vault';
+import type { StoredVersion } from './materials';
 
 // Tomorrow's lesson. The cloud plans the lesson for the class from what is not private: the class, the
 // subject, the topic, the length. The device then reads each step against what the teacher confirmed about
@@ -248,7 +249,7 @@ export interface SavedLesson {
   /** The lines the cloud wrote for needs. `itemIndex` counts the kept stages. */
   variations?: { itemIndex: number; need: string; text: string }[];
   /** The materials the cloud wrote for this lesson, by letter. No name is in them. */
-  materials?: { board: string[]; sheet: string[]; versions: { need: string; text: string }[]; ticket: { question: string; answer: string }[]; same?: string[] };
+  materials?: { board: string[]; sheet: string[]; versions: StoredVersion[]; ticket: { question: string; answer: string }[]; same?: string[] };
   /** How it went, said after teaching. */
   after?: { stages: (StageDone | null)[]; line: string; at: string; ticket?: Record<string, 'got' | 'partly' | 'not' | 'absent'> };
 }

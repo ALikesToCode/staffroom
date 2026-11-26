@@ -80,7 +80,7 @@ export function MaterialsCard({
             <li key={i}>{q}</li>
           ))}
         </ol>
-        {result.versions.length > 0 && <h4>The sheet, for a need</h4>}
+        {result.versions.length > 0 && <h4>A sheet for each need</h4>}
         {result.versions.map((v) => (
           <div className="version" key={v.need}>
             <p>
@@ -91,7 +91,18 @@ export function MaterialsCard({
                 </span>
               ))}
             </p>
-            <p>{v.text}</p>
+            {v.items.length > 0 ? (
+              <>
+                {v.note && <p className="hint">For you: {v.note}</p>}
+                <ol className="sheet">
+                  {v.items.map((l, i) => (
+                    <li key={i}>{l}</li>
+                  ))}
+                </ol>
+              </>
+            ) : (
+              v.note && <p>{v.note}</p>
+            )}
           </div>
         ))}
         {result.same.length > 0 && (
@@ -101,12 +112,12 @@ export function MaterialsCard({
         )}
         {result.missing.length > 0 && (
           <p className="caution">
-            The cloud wrote no sheet for {result.missing.map((l) => `Need ${l}${namesFor(l).length > 0 ? ` (${namesFor(l).join(', ')})` : ''}`).join('; ')}. Decide yourself what such a pupil does.
+            The cloud wrote no sheet with lines on it for {result.missing.map((l) => `Need ${l}${namesFor(l).length > 0 ? ` (${namesFor(l).join(', ')})` : ''}`).join('; ')}. Decide yourself what such a pupil does.
           </p>
         )}
         {result.dropped > 0 && (
           <p className="hint">
-            {result.dropped} {result.dropped === 1 ? 'version was' : 'versions were'} for a need you did not tell the cloud, or said nothing, so {result.dropped === 1 ? 'it is' : 'they are'} left out.
+            {result.dropped} {result.dropped === 1 ? 'version was' : 'versions were'} for a need you did not tell the cloud, or a second for one need, so {result.dropped === 1 ? 'it is' : 'they are'} left out.
           </p>
         )}
         <h4>Exit ticket</h4>
@@ -129,7 +140,7 @@ export function MaterialsCard({
               </label>
             </div>
             <p className="hint">
-              Prints the class sheet, one page for each need{noNames ? ', by its letter' : ' headed with the names, for you to hand out'}, the exit ticket and your answer key.
+              Prints the class sheet, a sheet for each need{noNames ? ', by its letter' : ' with the names over it, for you to hand out'}, the exit ticket and your answer key.
             </p>
           </>
         ) : (
@@ -148,7 +159,7 @@ export function MaterialsCard({
           <button className="primary" onClick={() => setAsking(true)}>
             Make the materials
           </button>
-          <span className="hint">Board work, a practice sheet with a version for each need, and an exit ticket. One more request to the cloud: you read it first.</span>
+          <span className="hint">Board work, a practice sheet, a sheet written out for each need, and an exit ticket. One more request to the cloud: you read it first.</span>
         </div>
       ) : (
         <>
@@ -213,8 +224,18 @@ export function MaterialsWire({ result }: { result: Materials }) {
       {result.versions.map((v) => (
         <p key={v.need}>
           <b>Sheet for Need {v.need}</b>
-          <br />
-          {v.text}
+          {v.note && (
+            <>
+              <br />
+              {v.note}
+            </>
+          )}
+          {v.items.map((l, i) => (
+            <span key={i}>
+              <br />
+              {i + 1}. {l}
+            </span>
+          ))}
         </p>
       ))}
       <p>
@@ -230,7 +251,13 @@ export function MaterialsWire({ result }: { result: Materials }) {
   );
 }
 
-/** The pages of the materials, as they are printed. Names stand over a version only on the teacher's own print, and only if asked. */
+/**
+ * The pages of the materials, as they are printed. Each need's sheet is a
+ * page of its own with its lines numbered. Names stand over it only on the
+ * teacher's own print, and only if asked; the class sheet has none. What
+ * the cloud wrote for the teacher about a sheet is on the teacher's copy,
+ * not on the page a pupil is handed.
+ */
 export function MaterialsPages({ title, result, namesFor, withNames }: { title: string; result: Materials; namesFor: (letter: string) => string[]; withNames: boolean }) {
   return (
     <>
@@ -247,14 +274,26 @@ export function MaterialsPages({ title, result, namesFor, withNames }: { title: 
         const names = withNames ? namesFor(v.need) : [];
         return (
           <div className="print-page" key={v.need}>
-            <h1>{names.length > 0 ? names.join(', ') : `Sheet for Need ${v.need}`}</h1>
-            <h2>{title}: practice sheet</h2>
-            <p>{v.text}</p>
-            <ol>
-              {result.sheet.map((q, i) => (
-                <li key={i}>{q}</li>
-              ))}
-            </ol>
+            {names.length > 0 && <p className="print-names">{names.join(', ')}</p>}
+            <h1>Sheet for Need {v.need}</h1>
+            <h2>{title}</h2>
+            {v.items.length > 0 ? (
+              <ol>
+                {v.items.map((l, i) => (
+                  <li key={i}>{l}</li>
+                ))}
+              </ol>
+            ) : (
+              // A version kept before the lines were asked for says how to do the class sheet.
+              <>
+                <p>{v.note}</p>
+                <ol>
+                  {result.sheet.map((q, i) => (
+                    <li key={i}>{q}</li>
+                  ))}
+                </ol>
+              </>
+            )}
           </div>
         );
       })}
@@ -280,6 +319,18 @@ export function MaterialsPages({ title, result, namesFor, withNames }: { title: 
         {result.board.map((l, i) => (
           <p key={i}>{l}</p>
         ))}
+        {result.versions.some((v) => v.note && v.items.length > 0) && <h2>The sheets for needs</h2>}
+        {result.versions
+          .filter((v) => v.note && v.items.length > 0)
+          .map((v) => {
+            const names = withNames ? namesFor(v.need) : [];
+            return (
+              <p key={v.need}>
+                Need {v.need}
+                {names.length > 0 ? ` (${names.join(', ')})` : ''}: {v.note}
+              </p>
+            );
+          })}
       </div>
     </>
   );

@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { materialsReply, materialsText, MATERIALS_SCHEMA, MATERIALS_SYSTEM, readMaterials } from './materials';
+import { asVersion, materialsReply, materialsText, MATERIALS_SCHEMA, MATERIALS_SYSTEM, readMaterials } from './materials';
 
 const good = {
   board: ['Describing a place', 'see / hear / smell'],
   sheet: ['Q1', 'Q2', 'Q3', 'Q4', 'Q5'],
   versions: [
-    { need: 'F', text: 'Same questions, answered aloud to a partner who writes.' },
-    { need: 'Need B:', text: 'Uses the printed pictures.' },
-    { need: 'Z', text: 'Not a need that was sent.' },
-    { need: 'F', text: 'A second one for F.' },
-    { need: 'A', text: '  ' },
+    { need: 'F', note: 'Read each one aloud; a partner writes the answer.', items: ['1. Say what you see.', 'Say what you hear.', 'Say one word for how it feels.'] },
+    { need: 'Need B:', note: '', items: ['Look at picture 1. Name the place.', 'Write one thing you see in it.', 'Write one sound you might hear there.'] },
+    { need: 'Z', note: 'Not a need that was sent.', items: ['x'] },
+    { need: 'F', note: 'A second one for F.', items: ['y'] },
+    { need: 'A', note: 'Use a recap card.', items: [] },
   ],
   ticket: [
     { question: 'T1?', answer: 'A1' },
@@ -36,7 +36,12 @@ describe('materials for a lesson', () => {
     expect(MATERIALS_SYSTEM).toContain('Never write a name');
     expect(MATERIALS_SYSTEM).toContain('Do not guess who or how many');
     expect(MATERIALS_SYSTEM).toContain('exactly one for every listed need');
-    expect(MATERIALS_SYSTEM).toContain('the text is exactly "same sheet."');
+    expect(MATERIALS_SYSTEM).toContain('the note is exactly "same sheet."');
+    // A version is a sheet the pupil works from, not an instruction that names one.
+    expect(MATERIALS_SYSTEM).toContain('Never only name a resource; write out every line of it');
+    expect(MATERIALS_SYSTEM).toContain('3 to 8 lines, each one line');
+    expect(MATERIALS_SYSTEM).toContain('"note" is at most one sentence for the teacher');
+    expect(MATERIALS_SCHEMA.properties.versions.items.required).toEqual(['need', 'note', 'items']);
   });
 
   it('reads the reply strictly: sections cut to size, versions only for letters that were sent, once', () => {
@@ -44,18 +49,37 @@ describe('materials for a lesson', () => {
     expect(m.board).toHaveLength(2);
     expect(m.sheet).toHaveLength(5);
     expect(m.versions).toEqual([
-      { need: 'F', text: 'Same questions, answered aloud to a partner who writes.' },
-      { need: 'B', text: 'Uses the printed pictures.' },
+      { need: 'F', note: 'Read each one aloud; a partner writes the answer.', items: ['Say what you see.', 'Say what you hear.', 'Say one word for how it feels.'] },
+      { need: 'B', note: '', items: ['Look at picture 1. Name the place.', 'Write one thing you see in it.', 'Write one sound you might hear there.'] },
     ]);
-    expect(m.dropped).toBe(3);
+    // Z was not sent and F came twice. A only named a recap card and wrote none of it, so A has no sheet.
+    expect(m.dropped).toBe(2);
     expect(m.same).toEqual([]);
     expect(m.missing).toEqual(['A']);
-    const all = readMaterials(JSON.stringify({ ...good, versions: [{ need: 'A', text: 'Same sheet.' }, { need: 'B', text: 'same sheet' }, { need: 'B', text: 'A second for B.' }, { need: 'F', text: 'Answers aloud.' }] }), ['A', 'B', 'F', 'G'])!;
+    const all = readMaterials(
+      JSON.stringify({
+        ...good,
+        versions: [
+          { need: 'A', note: 'Same sheet.', items: [] },
+          { need: 'B', note: '', items: ['same sheet'] },
+          { need: 'B', note: 'A second for B.', items: ['z'] },
+          { need: 'F', note: 'Answers aloud.', items: ['Say it.'] },
+          // A version in the old form, with only a text: no lines, so G is missing.
+          { need: 'G', text: 'Does the same sheet with a partner.' },
+        ],
+      }),
+      ['A', 'B', 'F', 'G'],
+    )!;
     expect([all.same, all.versions.map((v) => v.need), all.missing, all.dropped]).toEqual([['A', 'B'], ['F'], ['G'], 1]);
+    const many = readMaterials(JSON.stringify({ ...good, versions: [{ need: 'F', note: 'n', items: Array.from({ length: 12 }, (_, i) => `line ${i}`) }] }), ['F'])!;
+    expect(many.versions[0].items).toHaveLength(8);
     expect(m.ticket).toHaveLength(3);
     const long = readMaterials(JSON.stringify({ ...good, board: Array.from({ length: 12 }, (_, i) => `line ${i}`), sheet: Array.from({ length: 11 }, (_, i) => `q ${i}`) }), [])!;
     expect([long.board.length, long.sheet.length, long.versions.length]).toEqual([8, 8, 0]);
-    expect(materialsReply(m)).toContain('Sheet for Need F: Same questions');
+    // The return gate reads every line of every sheet.
+    expect(materialsReply(m)).toContain('Sheet for Need F: Read each one aloud');
+    expect(materialsReply(m)).toContain('Say one word for how it feels.');
+    expect(materialsReply(m)).toContain('Sheet for Need B\nLook at picture 1. Name the place.');
     expect(materialsReply(m)).toContain('A3');
   });
 
@@ -64,12 +88,12 @@ describe('materials for a lesson', () => {
       JSON.stringify({
         board: ['किसी जगह का वर्णन'],
         sheet: ['प्रश्न १', 'प्रश्न २', 'प्रश्न ३', 'प्रश्न ४', 'प्रश्न ५'],
-        versions: [{ need: 'F', text: 'वही प्रश्न, उत्तर साथी को बोलकर बताएँ।' }],
+        versions: [{ need: 'F', note: 'साथी लिखता है।', items: ['वही प्रश्न, उत्तर साथी को बोलकर बताएँ।'] }],
         ticket: [1, 2, 3].map((n) => ({ question: `प्रश्न ${n}?`, answer: `उत्तर ${n}` })),
       }),
       ['F'],
     )!;
-    expect(m.versions).toEqual([{ need: 'F', text: 'वही प्रश्न, उत्तर साथी को बोलकर बताएँ।' }]);
+    expect(m.versions).toEqual([{ need: 'F', note: 'साथी लिखता है।', items: ['वही प्रश्न, उत्तर साथी को बोलकर बताएँ।'] }]);
     expect(m.sheet).toHaveLength(5);
   });
 
@@ -86,5 +110,10 @@ describe('materials for a lesson', () => {
     const m = readMaterials(raw, [])!;
     expect(m.sheet).toEqual(['One', 'Two', 'Three', 'Four', 'Five', '10 apples in a bag']);
     expect(m.ticket.map((t) => t.question)).toEqual(['Q1', 'Q2', 'Q3']);
+  });
+
+  it('reads a version kept before the lines were asked for: its text is the note, with no lines', () => {
+    expect(asVersion({ need: 'G', text: 'Writes a second paragraph.' })).toEqual({ need: 'G', note: 'Writes a second paragraph.', items: [] });
+    expect(asVersion({ need: 'G', note: 'n', items: ['a', 'b'] })).toEqual({ need: 'G', note: 'n', items: ['a', 'b'] });
   });
 });

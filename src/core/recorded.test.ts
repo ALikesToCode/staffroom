@@ -79,7 +79,7 @@ describe('a recorded lesson', () => {
     const materials = {
       board: ['A place'],
       sheet: ['1', '2', '3', '4', '5'],
-      versions: [{ need: 'A', text: 'Does the sheet in class.' }],
+      versions: [{ need: 'A', note: 'Hand it out in class.', items: ['Name the place.', 'Write what you see.', 'Write what you hear.'] }],
       ticket: [1, 2, 3].map((n) => ({ question: `q${n}`, answer: `a${n}` })),
     };
     const full = { ...run, task: 'lesson' as const, lesson: { ...lesson, language: 'Hindi' }, needs, needChildren: { A: [student] }, variations, materials };
@@ -101,10 +101,15 @@ describe('a recorded lesson', () => {
       { materials: { ...materials, board: [] } },
       { materials: { ...materials, sheet: ['1', '2'] } },
       { materials: { ...materials, ticket: materials.ticket.slice(0, 2) } },
-      { materials: { ...materials, versions: [{ need: 'B', text: 'x' }] } },
+      { materials: { ...materials, versions: [{ need: 'B', note: 'x', items: ['y'] }] } },
       { materials: { ...materials, versions: [...materials.versions, ...materials.versions] } },
+      { materials: { ...materials, versions: [{ need: 'A', note: 'x', items: [] }] } },
+      { materials: { ...materials, versions: [{ need: 'A', note: 'x', items: ['y'], text: 'z' }] } },
+      { materials: { ...materials, versions: [{ need: 'A', note: 'x', items: Array.from({ length: 9 }, () => 'y') }] } },
       { lesson: { ...lesson, language: 'x'.repeat(41) } },
     ]) expect(asRecordedRun({ ...json(), ...bad }), JSON.stringify(bad).slice(0, 60)).toBeUndefined();
+    // A file recorded before the lines were asked for has one text for each version: it is read as the note, with no lines.
+    expect(asRecordedRun({ ...json(), materials: { ...materials, versions: [{ need: 'A', text: 'Does the sheet in class.' }] } })!.materials!.versions).toEqual([{ need: 'A', note: 'Does the sheet in class.', items: [] }]);
     // No materials outside a lesson.
     expect(asRecordedRun({ ...(JSON.parse(JSON.stringify(run)) as object), materials })).toBeUndefined();
     expect(captureRun({ ...run, task: 'lesson', lesson, needs: [], variations: [] }, new Date(run.recordedAt), 'x')).not.toHaveProperty('needs');

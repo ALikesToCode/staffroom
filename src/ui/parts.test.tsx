@@ -5,6 +5,8 @@ import { CloudText, DeviceText } from './parts';
 import { Caught, ConstraintsPanel } from './Constraints';
 import type { Constraint } from '../core/types';
 import { App } from '../App';
+import { MaterialsPages } from './Materials';
+import type { Materials } from '../core/materials';
 
 describe('CloudText', () => {
   it('shows each stand-in literally, square brackets included', () => {
@@ -152,5 +154,38 @@ describe('the lesson as the first job', () => {
     expect(LESSON_STEPS).toEqual(['Write', 'What leaves', 'Lesson', 'Beside each child', 'Sign off']);
     expect(renderToStaticMarkup(<Stepper step={3} lesson />)).toContain('Beside each child');
     expect(renderToStaticMarkup(<Stepper step={3} />)).toContain(STEPS[3]);
+  });
+});
+
+describe('MaterialsPages', () => {
+  const result: Materials = {
+    board: ['A place'],
+    sheet: ['Name the place.', 'Q2', 'Q3', 'Q4', 'Q5'],
+    versions: [{ need: 'G', note: 'Hand this out once the class sheet is done.', items: ['Write a second paragraph about a market.', 'Use three sound words.', 'Underline your best sentence.'] }],
+    ticket: [1, 2, 3].map((n) => ({ question: `T${n}?`, answer: `A${n}` })),
+    dropped: 0,
+    same: [],
+    missing: [],
+  };
+  const pages = (withNames: boolean) =>
+    renderToStaticMarkup(<MaterialsPages title="A place" result={result} namesFor={(l) => (l === 'G' ? ['Ishaan Verma'] : [])} withNames={withNames} />)
+      .split('<div class="print-page">')
+      .slice(1);
+
+  it("prints each need's sheet as a page of its own, with its own lines numbered and not the class questions", () => {
+    const [, sheetG] = pages(true);
+    expect(sheetG).toContain('<h1>Sheet for Need G</h1>');
+    expect(sheetG).toContain('<li>Write a second paragraph about a market.</li>');
+    expect(sheetG).not.toContain('Name the place.');
+    // What the cloud wrote for the teacher is on the teacher's copy, not on the pupil's page.
+    expect(sheetG).not.toContain('Hand this out');
+    expect(pages(true).at(-1)).toContain('Need G (Ishaan Verma): Hand this out once the class sheet is done.');
+  });
+
+  it('puts the names over a sheet only on the teacher’s print, and never on the class sheet', () => {
+    const named = pages(true);
+    expect(named[1]).toContain('<p class="print-names">Ishaan Verma</p>');
+    expect(named[0]).not.toContain('Ishaan');
+    expect(pages(false).join('')).not.toContain('Ishaan');
   });
 });

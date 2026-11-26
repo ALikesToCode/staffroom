@@ -1,4 +1,4 @@
-import { BOARD_MAX, MATERIAL_LINE_MAX, SHEET_MAX, SHEET_MIN, TICKET_QUESTIONS, type Materials } from './materials';
+import { asVersion, BOARD_MAX, MATERIAL_LINE_MAX, SHEET_MAX, SHEET_MIN, TICKET_QUESTIONS, VERSION_ITEMS_MAX, type Materials, type StoredVersion } from './materials';
 import type { Constraint, Draft, Entity, ItemCheck, Kind, TaskId, Where } from './types';
 import type { Policy } from './policy';
 import { KINDS } from './policy';
@@ -248,7 +248,14 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
       obj(materials) &&
       list(materials.board, line) && materials.board.length >= 1 && materials.board.length <= BOARD_MAX &&
       list(materials.sheet, line) && materials.sheet.length >= SHEET_MIN && materials.sheet.length <= SHEET_MAX &&
-      list(materials.versions, (v): v is { need: string; text: string } => obj(v) && letter(v.need) && letters.has(v.need) && line(v.text)) &&
+      // A version is a sheet with its lines, or, in a file recorded before the lines were asked for, one text.
+      list(
+        materials.versions,
+        (v): v is StoredVersion =>
+          obj(v) && letter(v.need) && letters.has(v.need) &&
+          ((str(v.note) && v.note.length <= MATERIAL_LINE_MAX && list(v.items, line) && v.items.length >= 1 && v.items.length <= VERSION_ITEMS_MAX && v.text === undefined) ||
+            (line(v.text) && v.note === undefined && v.items === undefined)),
+      ) &&
       new Set(materials.versions.map((v) => v.need)).size === materials.versions.length &&
       list(materials.ticket, (t): t is { question: string; answer: string } => obj(t) && line(t.question) && line(t.answer)) && materials.ticket.length === TICKET_QUESTIONS;
     if (!whole) return undefined;
@@ -290,8 +297,8 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
     ...(variations ? { variations: (variations as Variation[]).map((v) => ({ itemIndex: v.itemIndex, need: v.need, text: v.text })) } : {}),
     ...(materials
       ? (() => {
-          const m = materials as RecordedMaterials;
-          return { materials: { board: [...m.board], sheet: [...m.sheet], versions: m.versions.map((v) => ({ need: v.need, text: v.text })), ticket: m.ticket.map((t) => ({ question: t.question, answer: t.answer })) } };
+          const m = materials as Omit<RecordedMaterials, 'versions'> & { versions: StoredVersion[] };
+          return { materials: { board: [...m.board], sheet: [...m.sheet], versions: m.versions.map(asVersion), ticket: m.ticket.map((t) => ({ question: t.question, answer: t.answer })) } };
         })()
       : {}),
   };
@@ -320,7 +327,7 @@ export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now:
     ...(adjustments && adjustments.length > 0 ? { adjustments } : {}),
     ...(needs && needs.length > 0 ? { needs, ...(needChildren ? { needChildren } : {}) } : {}),
     ...(variations && variations.length > 0 ? { variations } : {}),
-    ...(materials ? { materials: { board: materials.board, sheet: materials.sheet, versions: materials.versions, ticket: materials.ticket } } : {}),
+    ...(materials ? { materials: { board: materials.board, sheet: materials.sheet, versions: materials.versions.map((v) => ({ need: v.need, note: v.note, items: v.items })), ticket: materials.ticket } } : {}),
   };
 }
 

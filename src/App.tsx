@@ -1619,7 +1619,7 @@ export function App() {
         lessonNeeds: (recordedNeeds ?? []).map((n) => ({ ...n, constraintIds: [], children: replay.needChildren?.[n.letter] ?? [], others: [], issues: [], sensitive: [] })),
       });
       setVariations(replay.variations ?? []);
-      setMaterials(replay.materials ? { materials: { ...replay.materials, sheet: replay.materials.sheet.map(unnumbered), ticket: replay.materials.ticket.map((t) => ({ ...t, question: unnumbered(t.question) })), dropped: 0, same: [], missing: [] }, where: replay.where.draft, model: replay.draftModel, text: '', issues: [] } : null);
+      setMaterials(replay.materials ? { materials: { ...replay.materials, sheet: replay.materials.sheet.map(unnumbered), versions: replay.materials.versions.map((v) => ({ ...v, items: v.items.map(unnumbered) })), ticket: replay.materials.ticket.map((t) => ({ ...t, question: unnumbered(t.question) })), dropped: 0, same: [], missing: [] }, where: replay.where.draft, model: replay.draftModel, text: '', issues: [] } : null);
       setResult({ draft: replay.draft, where: replay.where.draft, model: replay.draftModel });
       const replyText = [replay.draft.title, ...replay.draft.items.flatMap((i) => [i.heading, i.text]), ...(replay.variations ?? []).map(variationLine)].join('\n');
       // The return gate is plain code, so it is run again here on the recorded reply.

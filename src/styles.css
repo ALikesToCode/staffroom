@@ -2736,6 +2736,14 @@ mark.hit {
   .print-sheet p {
     white-space: pre-wrap;
   }
+
+  /* The names over a need's sheet, on the teacher's own print. */
+  .print-sheet .print-names {
+    font-weight: 600;
+    margin: 0 0 4pt;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
 }
 
 /* ------------------------------------------------------------------ narrow screens */
