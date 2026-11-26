@@ -118,6 +118,19 @@ describe('the needs a lesson is told', () => {
     expect(outgoingOf(SAMPLE_NOTE, entities, all).text).not.toMatch(/Need [A-Z]:|written tests hard/);
   });
 
+  it('carries no sentence about one pupil: what is about the class, then every need by letter', () => {
+    const going = outgoingOf(SAMPLE_NOTE, entities, all, true);
+    const note = going.text.slice(0, going.text.indexOf(LESSON_NEEDS_HEADING));
+    expect(going.text).not.toContain('[Student');
+    expect(note).not.toMatch(/\b(?:he|she|his|her)\b|\[withheld\]|\[Place|\[ID|\[Adult|\[Contact/i);
+    // The class-level sentences of the note are still sent.
+    expect(note.trim()).toBe('Class 6B, week of 16 November. Notes for myself.');
+    expect(going.notSent).toBe(14);
+    for (const n of going.lessonNeeds!) expect(going.text).toContain(`\n${needLabel(n)}\n`);
+    expect(going.tokens).toEqual([]);
+    expect(going.violations).toEqual([]);
+  });
+
   it('keeps a need that is switched off, or not confirmed, to itself', () => {
     const tests = all.find((c) => c.learn === 'tests')!;
     expect(lessonNeeds(setShare(all, tests.id, false), entities).some((n) => n.letter === 'F')).toBe(false);

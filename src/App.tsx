@@ -45,7 +45,7 @@ import { draftFailure, resultOrder, summaryLine } from './ui/say';
 import { keptAfterRecheck, modelSaid, recheckItems, rewriteStep, stepIndexOf, stepToRewrite } from './core/recheck';
 import { canFit, FIT_CHILD_FAILED, FIT_FAILED, FIT_LABEL, fitForChild, fitInputFor, fitLessonForChild, fitStep } from './ai/fit';
 import { useInstall, useUpdate } from './ui/pwa';
-import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
+import { checkNeed, needIsTyped, needLine, notSentLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
 import { lessonNeedIsTyped, lessonNeedLine, askAgain, entryLine, lessonNeeds, needLabel, planWithNeeds, proposeLearning, secondAsk, splitVariations, variationLine, withSecondReading, type LessonNeed, type NeedsReading, type Variation } from './core/lessonNeeds';
 import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, RECORDED_SOURCE, replayBanner, sourceOf, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyAfterRewrite, familyFor } from './core/family';
@@ -3033,6 +3033,7 @@ export function App() {
                   <pre className="wire">
                     <CloudText text={outgoing} />
                   </pre>
+                  {!replay && (going.notSent ?? 0) > 0 && <p className="hint">{notSentLine(going.notSent!)}</p>}
                   {violations.length > 0 && (
                     <ul className="stops">
                       {violations.map((v, i) => (

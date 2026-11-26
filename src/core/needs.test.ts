@@ -4,7 +4,8 @@ import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redact } from './vault';
 import { approvalKey } from './policy';
 import { confirmConstraint, constraintCounts, proposeConstraints, setConstraintKind, setNeed, setShare, unconfirmConstraint } from './constraints';
-import { checkNeed, NEEDS_HEADING, needLine, needTemplate, outgoingOf, sharedNeeds, withNeeds } from './needs';
+import { checkNeed, classSentences, NEEDS_HEADING, needLine, needTemplate, notSentLine, outgoingOf, sharedNeeds, withNeeds } from './needs';
+import { LESSON_NEEDS_HEADING } from './lessonNeeds';
 import { ruleCheckItem } from './conflicts';
 
 const entities0 = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
@@ -155,5 +156,53 @@ describe('the check against a need the cloud was told', () => {
   it('counts the needs that were told', () => {
     expect(constraintCounts(on)).toMatchObject({ confirmed: 5 });
     expect(sharedNeeds(on, entities)).toHaveLength(1);
+  });
+});
+
+describe('a lesson request', () => {
+  const note = 'The class is behind on fractions. Asha reads well. The class visits Rampur on Friday.\n\nBina is ahead; she could help.\nThe hall is shut this week.';
+  const vault = buildVault(note, [
+    { kind: 'student', text: 'Asha', source: 'class list' },
+    { kind: 'student', text: 'Bina', source: 'class list' },
+    { kind: 'place', text: 'Rampur', source: 'rule' },
+  ]);
+  const learning = (id: string, about: string): Constraint => ({ id, kind: 'learning', learn: 'early', text: 'x', source: 'teacher', confirmed: true, share: true, about, need: 'finishes early and needs more to do' });
+
+  it('sends only the sentences about the class, keeping its lines and paragraphs, and the needs by letter', () => {
+    const out = outgoingOf(note, vault, [learning('l', vault[1].id)], true);
+    expect(out.text).toBe(
+      `The class is behind on fractions. The class visits [Place 1] on Friday.\n\nThe hall is shut this week.\n\n${LESSON_NEEDS_HEADING}\nNeed G: finishes early and needs more to do\nUnder "For each need", give an entry for every one of these letters: G.`,
+    );
+    expect(out.notSent).toBe(2);
+    // Only a stand-in still in the text may come back.
+    expect(out.tokens).toEqual(['[Place 1]']);
+    expect(out.noteAsWritten).toBe(false);
+    expect(out.violations).toEqual([]);
+    expect(notSentLine(out.notSent!)).toBe('Not sent: 2 sentences about one pupil. Their needs go by letter.');
+    expect(notSentLine(1)).toBe('Not sent: 1 sentence about one pupil. Their needs go by letter.');
+    // The other tasks still send the whole redacted note.
+    expect(outgoingOf(note, vault, []).text).toContain('[Student 1] reads well.');
+    expect(outgoingOf(note, vault, []).notSent).toBeUndefined();
+  });
+
+  it('leaves out a sentence that says he or she, names a pupil the teacher released, or is nothing but withheld items', () => {
+    const released = vault.map((e) => (e.surfaces[0] === 'Asha' ? { ...e, withheld: false } : e));
+    expect(classSentences('Asha reads well. Her mother rang. [withheld]. The class sings.', released)).toEqual({ text: 'The class sings.', notSent: 3 });
+    expect(classSentences('Then he left. The room is cold!', vault)).toEqual({ text: 'The room is cold!', notSent: 1 });
+    // A word that only holds "he" is no pronoun.
+    expect(classSentences('The theme is the harvest.', vault)).toEqual({ text: 'The theme is the harvest.', notSent: 0 });
+  });
+
+  it('with nothing about the class, sends the needs alone', () => {
+    const out = outgoingOf('Asha reads well.', vault, [learning('l', vault[0].id)], true);
+    expect(out.text.startsWith(LESSON_NEEDS_HEADING)).toBe(true);
+    expect(out.tokens).toEqual([]);
+  });
+
+  it('still stops what the exit gate stops, in the sentences that are sent and in the need lines', () => {
+    const out = outgoingOf('Ring the office on 98765 43210 before the trip.', [], [], true);
+    expect(out.violations.map((v) => v.what)).toEqual(['98765 43210']);
+    const typed = outgoingOf(note, vault, [{ ...learning('l', vault[0].id), need: 'has epilepsy' }], true);
+    expect(typed.violations.map((v) => v.what)).toEqual(['epilepsy']);
   });
 });

@@ -75,7 +75,7 @@ export function lessonBlock(f: LessonFields): string {
 }
 
 /** The outgoing text with the lesson under it. */
-export const withLesson = (text: string, f: LessonFields) => `${text.trimEnd()}\n\n${lessonBlock(f)}`;
+export const withLesson = (text: string, f: LessonFields) => (text.trim() ? `${text.trimEnd()}\n\n${lessonBlock(f)}` : lessonBlock(f));
 
 /**
  * What stops the lesson lines from being sent. They are not redacted: they

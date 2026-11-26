@@ -206,7 +206,8 @@ export const needsAsk = (letters: readonly string[]) => `Under "${NEEDS_SECTION}
 /** The outgoing text with the needs of the lesson under their heading, and the letters that must be answered. With no need, the text as it is. */
 export function withLessonNeeds(text: string, needs: readonly LessonNeed[]): string {
   if (needs.length === 0) return text;
-  return `${text}\n\n${LESSON_NEEDS_HEADING}\n${needs.map(needLabel).join('\n')}\n${needsAsk(needs.map((n) => n.letter))}`;
+  const block = `${LESSON_NEEDS_HEADING}\n${needs.map(needLabel).join('\n')}\n${needsAsk(needs.map((n) => n.letter))}`;
+  return text.trim() ? `${text}\n\n${block}` : block;
 }
 
 /** The sentences added to the lesson's instruction: the cloud answers every listed need, in one section after the stages. */

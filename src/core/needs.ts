@@ -1,8 +1,8 @@
 import type { Constraint, Entity } from './types';
 import type { Violation } from './gate';
 import { checkOutgoing } from './gate';
-import { findByRule, findPossibleNames, sensitiveWords, wholeWordMatcher } from './rules';
-import { LOOKALIKE_RE, redactWithTokens, RESERVED, TOKEN_RE } from './vault';
+import { findByRule, findPossibleNames, sensitiveWords, sentences, wholeWordMatcher } from './rules';
+import { LOOKALIKE_RE, PRIVATE_TOKEN, redactWithTokens, RESERVED, TOKEN_RE } from './vault';
 import { lessonNeeds, needLabel, withLessonNeeds, type LessonNeed } from './lessonNeeds';
 
 // A confirmed constraint can be told to the cloud as a need, without its reason: "cannot stay after the
@@ -125,14 +125,59 @@ export function withNeeds(text: string, lines: string[]): string {
   return `${text}\n\n${NEEDS_HEADING}\n${unique.map((l) => `- ${l}`).join('\n')}`;
 }
 
+/** He or she: a sentence that says it is about one person, most likely one pupil or a pupil's parent. */
+const ONE_PERSON = /(?<![\p{L}])(?:he|she|him|his|her|hers|himself|herself)(?![\p{L}])/iu;
+
+/** Said under the exact text of a lesson: how many sentences of the note stay here. A count only. */
+export const notSentLine = (n: number) => `Not sent: ${n} ${n === 1 ? 'sentence' : 'sentences'} about one pupil. Their needs go by letter.`;
+
+/**
+ * For a lesson, the redacted note keeps only what is about the class. A
+ * sentence is not sent when it holds the stand-in of a pupil, an adult, a
+ * contact or an identity number, or a pupil's or adult's name the teacher
+ * released; when it says he or she; or when it is nothing but withheld
+ * items. What the cloud needs about one pupil goes as a need, by letter.
+ * The note keeps its lines and paragraphs; a sentence that is kept is
+ * kept character for character.
+ */
+export function classSentences(redacted: string, entities: Entity[]): { text: string; notSent: number } {
+  const ofOne = entities.filter((e) => e.kind !== 'place' && e.kind !== 'private');
+  const tokens = ofOne.filter((e) => e.withheld).map((e) => e.token);
+  const names = wholeWordMatcher(ofOne.filter((e) => !e.withheld && (e.kind === 'student' || e.kind === 'adult')).flatMap((e) => e.surfaces));
+  const aboutOne = (s: string) =>
+    tokens.some((t) => s.includes(t)) ||
+    (names?.test(s) ?? false) ||
+    ONE_PERSON.test(s) ||
+    s.split(PRIVATE_TOKEN).join('').replace(/[\s\p{P}]/gu, '') === '';
+  let notSent = 0;
+  const paragraphs = redacted.split(/\n[ \t]*\n/).map((para) =>
+    para
+      .split('\n')
+      .map((line) => {
+        const kept: string[] = [];
+        for (const s of sentences(line)) {
+          const whole = s.text + (/^[.!?]*/.exec(line.slice(s.end))?.[0] ?? '');
+          if (aboutOne(s.text)) notSent++;
+          else kept.push(whole);
+        }
+        return kept.join(' ');
+      })
+      .filter(Boolean)
+      .join('\n'),
+  );
+  return { text: paragraphs.filter(Boolean).join('\n\n'), notSent };
+}
+
 /** Everything that would be sent, and whether it may be. */
 export interface Outgoing {
   /** The exact text: the redacted note, then the needs. */
   text: string;
   /** Every stand-in written into it, in the note or in a need line. Only these may come back and be restored. */
   tokens: string[];
-  /** True when the redacted note has no stand-in in it at all: it is the note as written. */
+  /** True when the note part is the note as written: no stand-in in it, and no sentence left out. */
   noteAsWritten: boolean;
+  /** For a lesson: how many sentences of the note were left out because they are about one pupil. Absent for the other tasks. */
+  notSent?: number;
   needs: Need[];
   /** For a lesson: the needs by letter, with (on the device only) whose each is. Absent for the other tasks. */
   lessonNeeds?: LessonNeed[];
@@ -143,21 +188,25 @@ export interface Outgoing {
 /**
  * Work out the outgoing text: the redacted note, with the needs the
  * teacher chose to tell appended. This is the one place it is made, for
- * the screen and for the moment of sending.
+ * the screen and for the moment of sending. For a lesson the note keeps
+ * only its sentences about the class (see classSentences).
  */
 export function outgoingOf(note: string, entities: Entity[], constraints: Constraint[], lesson = false): Outgoing {
   const redaction = redactWithTokens(note, entities);
   if (lesson) {
-    // A lesson is told its needs by letter, with no child in any line. Whose each is stays here.
+    // A lesson is told its needs by letter, with no child in any line, and no sentence about one pupil. Whose each need is stays here.
     const byLetter = lessonNeeds(constraints, entities);
+    const kept = classSentences(redaction.text, entities);
     return {
-      text: withLessonNeeds(redaction.text, byLetter),
-      tokens: redaction.tokens,
-      noteAsWritten: redaction.tokens.length === 0,
+      text: withLessonNeeds(kept.text, byLetter),
+      // Only the stand-ins that are still in the text may come back.
+      tokens: redaction.tokens.filter((t) => kept.text.includes(t)),
+      noteAsWritten: redaction.tokens.length === 0 && kept.notSent === 0,
+      notSent: kept.notSent,
       // One entry for each constraint behind a need, so that a rule hit can say the cloud was told it.
       needs: byLetter.flatMap((n) => n.constraintIds.map((id) => ({ id, line: needLabel(n), issues: n.issues }))),
       lessonNeeds: byLetter,
-      violations: [...checkOutgoing(redaction.text, entities, note), ...byLetter.flatMap((n) => n.issues)],
+      violations: [...checkOutgoing(kept.text, entities, note), ...byLetter.flatMap((n) => n.issues)],
     };
   }
   const needs = sharedNeeds(constraints, entities);
