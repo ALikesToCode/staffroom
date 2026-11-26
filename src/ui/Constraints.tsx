@@ -227,6 +227,7 @@ function ConstraintRow({ c, who, need, editable, actions }: { c: Constraint; who
                 spellCheck={false}
                 autoComplete="off"
               />
+              <span className="hint">The rule looks for these words. It is not medical advice.</span>
             </label>
           )}
           {editable && (

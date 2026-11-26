@@ -1,5 +1,6 @@
 import type { Constraint } from '../core/types';
 import { ruleConflicts } from '../core/conflicts';
+import { defaultsFor } from '../core/constraints';
 
 /**
  * A set for measuring the rule layer of the check (Layer A) on its own: a
@@ -8,8 +9,10 @@ import { ruleConflicts } from '../core/conflicts';
  *
  * Every case here is invented, and none is taken from the 24 single-fact
  * cases or from the sample note. They were written before the rules were
- * run on them, and the rules were not changed afterwards to make them
- * pass: a case the rules get wrong stays in the set and is counted.
+ * run on them, and no rule was changed to make one of them pass: a case
+ * the rules get wrong stays in the set and is counted. Rules were changed
+ * later for cases outside this set, by someone who had seen it, so it is
+ * no longer fresh for those rules. Its counts did not move.
  *
  * - conflict: the step cannot be followed, given the constraint.
  * - harmless: an ordinary step that has nothing to do with it.
@@ -39,9 +42,9 @@ const MONEY = made('money', 'the family cannot pay for anything extra');
 const OFFLINE = made('no-phone-internet', 'has no phone and no internet at home');
 const FATHER = made('contact', 'his father must not be contacted', { who: 'father' });
 const GUARDIAN = made('contact', 'lives with his grandmother', { who: 'parents', guardian: 'grandmother', away: true });
-const EPILEPSY = made('health', 'has epilepsy', { triggers: ['flashing lights', 'flashing', 'strobe', 'flickering'] });
-const ASTHMA = made('health', 'has asthma', { triggers: ['running', 'sprint', 'race', 'laps', 'dust', 'smoke'] });
-const NUTS = made('health', 'has a nut allergy', { triggers: ['nut', 'peanut'] });
+const EPILEPSY = made('health', 'has epilepsy', defaultsFor('health', 'has epilepsy'));
+const ASTHMA = made('health', 'has asthma', defaultsFor('health', 'has asthma'));
+const NUTS = made('health', 'has a nut allergy', defaultsFor('health', 'has a nut allergy'));
 
 const LIST: [string, RuleCase['sort'], Constraint, string][] = [
   ['after-1', 'conflict', AFTER, 'Offer her twenty minutes of extra help once the final bell has gone.'],

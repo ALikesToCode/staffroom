@@ -69,8 +69,8 @@ function contactOf(text: string): Pick<Constraint, 'who' | 'guardian' | 'away'> 
 
 /** Health conditions the rules know, with words that go against each in a step. The teacher can change the words. */
 const CONDITIONS: { re: RegExp; triggers: string[] }[] = [
-  { re: /\b(?:epilepsy|epileptic|seizures?)\b/iu, triggers: ['flashing lights', 'flashing', 'strobe', 'flickering'] },
-  { re: /\basthma(?:tic)?\b/iu, triggers: ['running', 'sprint', 'race', 'laps', 'dust', 'smoke'] },
+  { re: /\b(?:epilepsy|epileptic|seizures?)\b/iu, triggers: ['flashing', 'flicker', 'flickering', 'strobe', 'strobing'] },
+  { re: /\basthma(?:tic)?\b/iu, triggers: ['running', 'sprint', 'race', 'laps', 'dust', 'chalk dust', 'smoke'] },
 ];
 
 const ALLERGY = /\b(\p{L}+)\s+allerg(?:y|ies)\b|\ballergic\s+to\s+(\p{L}+)(?:\s+and\s+(\p{L}+))?|\ballerg(?:y|ies)\s+to\s+(\p{L}+)/iu;

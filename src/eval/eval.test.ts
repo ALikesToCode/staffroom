@@ -26,8 +26,11 @@ describe('the rule layer measured on fresh pairs', () => {
   });
 
   it('reports what the rules get right and wrong, as it is', () => {
-    // These numbers are a measurement, not a target. The rules were not changed to move them, and a case
-    // the rules get wrong stays here by name. If a rule changes, these change, and say so in the commit.
+    // These numbers are a measurement, not a target. A case the rules get wrong stays here by name.
+    // The rules have since been changed for other cases (a negation cancels only what it governs, things to
+    // bring from home count as a cost, the phone and internet rule is about home, more health words). Those
+    // changes were made knowing this set, so it is no longer fresh for them. They moved nothing here:
+    // the totals and both lists are the same before and after.
     expect(totals).toEqual({ cases: 62, conflictCases: 29, caught: 19, queried: 0, missed: 10, otherCases: 33, passed: 30, falseAlarms: 3 });
     expect(rows.filter((r) => r.expected === 'conflict' && r.got !== 'conflict').map((r) => r.id)).toEqual([
       'after-1', // "once the final bell has gone": no "after"
@@ -179,18 +182,17 @@ describe('the lesson set: whole lessons against the sample class, by rule', () =
   });
 
   it('is measured as it is: what the rules miss and flag wrongly stays listed', () => {
-    // A measurement, not a target. The rules were not changed for this set.
-    expect(totals).toEqual({ lessons: 5, stages: 25, expected: 13, caught: 10, missed: 3, falseAlarms: 1 });
-    expect(rows.filter((r) => r.outcome === 'missed').map((r) => `${r.id}/${r.stage}/${r.child}`)).toEqual([
-      // "bring one from home": the money rule knows "bring money", not things to bring.
-      'english/Practise (15 minutes)/Aarav',
-      // A flickering light: the health constraint has no trigger words until the teacher gives some.
-      'science/Teach (10 minutes)/Meenal',
-      // "those without can purchase a kit": the rule reads "without" as turning the clause round.
-      'art/Starter (5 minutes)/Aarav',
-    ]);
-    // A phone used in class is flagged for the child with no phone at home.
-    expect(rows.filter((r) => r.outcome === 'false alarm').map((r) => `${r.id}/${r.stage}/${r.child}/${r.matched}`)).toEqual(['social/Practise (15 minutes)/Tanvi/phone']);
+    // A measurement, not a target. As first measured, before any rule was changed: 13 labelled, 10 caught,
+    // 3 missed, 1 false alarm. The three misses were "bring one from home" (english, Aarav), a light that
+    // "flickers" (science, Meenal) and "those without can purchase a kit" (art, Aarav); the false alarm was
+    // the teacher's phone used in class (social, Tanvi).
+    //
+    // The rules were then changed after seeing these cases: a negation now cancels only what it governs,
+    // the money rule knows things to bring from home, the phone and internet rule is about home, and the
+    // health words gained "flicker". So this set is no longer fresh for those rules, and the numbers
+    // below say only that the fixes do what they were written to do on the cases they were written from.
+    expect(totals).toEqual({ lessons: 5, stages: 25, expected: 13, caught: 13, missed: 0, falseAlarms: 0 });
+    expect(rows.filter((r) => r.outcome !== 'caught')).toEqual([]);
   });
 });
 

@@ -4,11 +4,13 @@ import type { Constraint, Entity } from './types';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redact } from './vault';
 import { checkOutgoing } from './gate';
+import { ruleConflicts } from './conflicts';
 import {
   addConstraint,
   confirmConstraint,
   constraintCounts,
   daysIn,
+  defaultsFor,
   lockConstraints,
   proposeConstraints,
   removeConstraint,
@@ -70,6 +72,29 @@ describe('constraints proposed by rule', () => {
     expect(found[0]).toMatchObject({ kind: 'contact', who: 'parents', guardian: 'grandmother', away: true, text: 'lives with his grandmother' });
     expect(one('Her father passed away last year.').found[0]).toMatchObject({ kind: 'contact', who: 'father', away: true });
     expect(one('Do not phone his mother at work.').found[0]).toMatchObject({ kind: 'contact', who: 'mother' });
+  });
+
+  it('gives a health constraint the words its condition is known by, which the rule then finds in a step and not elsewhere', () => {
+    const of = (text: string): Constraint => ({ id: 'h', kind: 'health', text, source: 'teacher', confirmed: true, ...defaultsFor('health', text) });
+    expect(of('has epilepsy').triggers).toEqual(['flashing', 'flicker', 'flickering', 'strobe', 'strobing']);
+    expect(of('gets seizures').triggers).toEqual(['flashing', 'flicker', 'flickering', 'strobe', 'strobing']);
+    expect(of('has asthma').triggers).toEqual(['running', 'sprint', 'race', 'laps', 'dust', 'chalk dust', 'smoke']);
+    expect(of('is allergic to eggs').triggers).toEqual(['egg']);
+    expect(of('has a weak ankle').triggers).toEqual([]);
+    const says = (step: string, text: string) => ruleConflicts(step, of(text))?.matched;
+    expect(says('Switch the torch on and off quickly so the light flickers.', 'has epilepsy')).toBe('flickers');
+    expect(says('Use a strobing light for the dance.', 'has epilepsy')).toBe('strobing');
+    expect(says('Dim the lights and read the poem aloud.', 'has epilepsy')).toBeUndefined();
+    expect(says('Use a steady lamp, with no flashing or flicker.', 'has epilepsy')).toBeUndefined();
+    expect(says('Pupils clean the board and shake out the chalk dust.', 'has asthma')).toBe('chalk dust');
+    expect(says('Pupils sprint to the far wall and back.', 'has asthma')).toBe('sprint');
+    expect(says('Pupils walk to the far wall and back.', 'has asthma')).toBeUndefined();
+    expect(says('Each pupil boils two eggs.', 'is allergic to eggs')).toBe('eggs');
+    expect(says('Each pupil peels two potatoes.', 'is allergic to eggs')).toBeUndefined();
+    // The teacher's own words replace the defaults.
+    const own = setTriggers([of('has epilepsy')], 'h', 'screen')[0];
+    expect(ruleConflicts('The light flickers.', own)).toBeUndefined();
+    expect(ruleConflicts('Sit near the screen.', own)?.matched).toBe('screen');
   });
 
   it('reads an allergy and what it is to', () => {
@@ -185,7 +210,7 @@ describe('a confirmed constraint', () => {
     expect(changed.kind).toBe('other');
     expect(changed.triggers).toBeUndefined();
     const back = setConstraintKind([changed], changed.id, 'health')[0];
-    expect(back.triggers).toContain('flashing lights');
+    expect(back.triggers).toEqual(['flashing', 'flicker', 'flickering', 'strobe', 'strobing']);
     expect(setTriggers([back], back.id, ' Strobe , screens,,strobe ')[0].triggers).toEqual(['strobe', 'screens']);
   });
 

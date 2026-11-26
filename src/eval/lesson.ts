@@ -13,9 +13,12 @@ import { buildVault, deterministicCandidates, possibleNameCandidates } from '../
  * labelled, with the child.
  *
  * Everything here is invented. The plans were written before the rules
- * were run on them and the rules were not changed afterwards: a stage the
- * rules miss, or flag wrongly, stays in the set and is counted. No model
- * is involved, so it runs in any browser and in the unit tests.
+ * were run on them. As first measured the rules caught 10 of the 13
+ * labelled pairs, missed 3 and raised 1 false alarm. Four rules were then
+ * changed after seeing those cases, so the set is no longer fresh for
+ * them: it now shows that the fixes hold, not how the rules do on lessons
+ * they have not seen. No model is involved, so it runs in any browser and
+ * in the unit tests.
  */
 export interface LessonCase {
   id: string;

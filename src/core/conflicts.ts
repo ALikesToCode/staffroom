@@ -27,57 +27,83 @@ export interface RuleContext {
   afterBell?: string[];
   /** Whether the cloud was told this constraint as a need. Said in the reason when given. */
   told?: boolean;
+  /**
+   * Where the step stands, when the item says: the homework of a lesson is done at home, and the other
+   * stages of a lesson are taught in class. Left out for a step that could be either.
+   */
+  stage?: 'homework' | 'class';
 }
 
 const BEFORE = '(?<![\\p{L}\\p{N}])';
 const AFTER = '(?![\\p{L}\\p{N}])';
 const words = (alternatives: string[]) => new RegExp(`${BEFORE}(?:${alternatives.join('|')})${AFTER}`, 'giu');
 
-/** Words that turn a step round when they stand before the matched words in the same clause. */
+/** Words that turn a step round when they stand just before the matched words in the same clause. */
 const NEGATION = words([
-  'without',
+  'no need to',
   'instead of',
   'rather than',
   'in place of',
+  'free of',
+  'without',
   'do not',
-  "don't",
   'does not',
-  "doesn't",
   'should not',
-  "shouldn't",
   'must not',
-  "mustn't",
   'need not',
-  "needn't",
-  'cannot',
-  "can't",
   'will not',
-  "won't",
+  "[\\p{L}]+n't",
+  'cannot',
   'never',
   'avoid',
   'avoids',
   'avoiding',
-  'no need to',
   'not',
   'no',
-  'free of',
 ]);
 
 const CLAUSE_BREAK = /[,;:.!?()–—]|\sbut\s|\sso\s|\sthen\s/giu;
 
-/** True when the words at `index` are negated: a negation stands before them in the same clause. */
+/**
+ * How many words may stand between a negation and the words it turns round, small words not counted:
+ * "do not ask him to come before school" has two, "ask" and "come".
+ */
+const NEGATION_REACH = 3;
+const SMALL = /^(?:to|the|a|an|for|of|in|at|on|by|any|be|him|her|them|it|his|their|your|its)$/iu;
+/** These stand before a thing: "without a phone". Followed at once by a verb they stand alone: "those without can buy a kit". */
+const BEFORE_A_THING = /^(?:without|instead of|rather than|in place of|free of)$/iu;
+const VERB_NEXT = /^(?:can|could|may|might|must|should|will|would|is|are|was|were|do|does|did|have|has|had|need|needs)$/iu;
+/** "has not finished": the negation is spent on the next word. What follows ("stays after school") stands. */
+const PERFECT = /(?:^|\s)(?:(?:has|have|had)\s+not|hasn't|haven't|hadn't)$/iu;
+
+/**
+ * True when the words at `index` are negated: a negation stands before
+ * them in the same clause and governs them. It governs what follows it
+ * within a few words. It does not reach across a clause, and a "not"
+ * earlier in the clause that belongs to other words does not count:
+ * "anyone who has not finished stays after school" is not negated.
+ */
 export function negated(step: string, index: number): boolean {
   const before = step.slice(0, index);
   let from = 0;
   for (const m of before.matchAll(CLAUSE_BREAK)) from = m.index + m[0].length;
-  NEGATION.lastIndex = 0;
-  return NEGATION.test(before.slice(from));
+  const clause = before.slice(from);
+  for (const n of clause.matchAll(NEGATION)) {
+    const end = n.index + n[0].length;
+    const between = clause.slice(end).trim().split(/\s+/).filter(Boolean);
+    const counted = between.filter((w) => !SMALL.test(w)).length;
+    if (counted > NEGATION_REACH) continue;
+    if (BEFORE_A_THING.test(n[0]) && between.length > 0 && VERB_NEXT.test(between[0])) continue;
+    if (PERFECT.test(clause.slice(0, end)) && counted > 1) continue;
+    return true;
+  }
+  return false;
 }
 
-/** The first place one of the alternatives stands in the step as whole words and is not negated. */
-function firstMatch(step: string, alternatives: string[]): RegExpMatchArray | undefined {
+/** The first place one of the alternatives stands in the step as whole words and is not negated. `accept` can pass a match over. */
+function firstMatch(step: string, alternatives: string[], accept?: (m: RegExpMatchArray) => boolean): RegExpMatchArray | undefined {
   if (alternatives.length === 0) return undefined;
-  for (const m of step.matchAll(words(alternatives))) if (!negated(step, m.index)) return m;
+  for (const m of step.matchAll(words(alternatives))) if (!negated(step, m.index) && (!accept || accept(m))) return m;
   return undefined;
 }
 
@@ -154,6 +180,8 @@ const MONEY = [
   'costs?',
   'bring(?:s|ing)? (?:in )?(?:some |the )?money',
   'donat(?:e|es|ed|ing|ion|ions)',
+  // "Contribute an idea" is no payment: the word counts with money, a sum or a cost after it.
+  'contribut(?:e|es|ed|ing|ion|ions)(?=\\s+(?:[\\p{L}]+\\s+){0,3}?(?:towards|rupees?|rs\\.?|₹|money|\\d|cost|costs|fund|funds))',
   '(?<!in )order(?:s|ed|ing)?(?! of)',
   // Things a family is usually asked to pay for. A step that lends one is flagged too: the rule cannot tell.
   'workbooks?',
@@ -161,6 +189,15 @@ const MONEY = [
   'kits?',
   'tuitions?',
 ];
+
+/** Things a family has to find and send in. The words after "bring" are kept in the match, so that what is brought can be read. */
+const BRING = [
+  "bring(?:s|ing)?\\s+(?:[\\p{L}\\p{N}'-]+\\s+){1,6}?from\\s+home",
+  'bring(?:s|ing)?\\s+(?:your|their|his|her|its)\\s+own(?:\\s+[\\p{L}-]+){0,3}',
+  '(?:each|every)\\s+(?:pupil|child|student|learner|group|pair)\\s+(?:brings|(?:needs|has|is)\\s+to\\s+bring|must\\s+bring|should\\s+bring)(?:\\s+[\\p{L}\\p{N}-]+){0,4}',
+];
+/** What every pupil brings to school anyway. */
+const SCHOOL_THINGS = words(['notebooks?', 'textbooks?', 'homework', 'pens?', 'pencils?']);
 
 const PHONE_INTERNET = [
   'online',
@@ -181,6 +218,37 @@ const PHONE_INTERNET = [
   'e-?mails?',
   'download(?:s|ed|ing)?',
 ];
+
+/** Words that put a step at home, or with the family. */
+const HOME_SIDE = words([
+  'home',
+  'homework',
+  'tonight',
+  'this evening',
+  'evenings?',
+  '(?:over|at|on|for) the weekend',
+  'after school',
+  'famil(?:y|ies)',
+  'parents?',
+  'mothers?',
+  'fathers?',
+  'guardians?',
+]);
+/** Words that put a phone or the internet at school, in the teacher's hands or on a device the school has. */
+const SCHOOL_DEVICE = words([
+  'in (?:the )?class(?:room)?',
+  '(?:at|in) school',
+  '(?:computer|ict|it) (?:lab|room|suite)s?',
+  'shared (?:device|computer|tablet|laptop|phone|screen)s?',
+  "(?:school|class|classroom)(?:'s)? (?:device|computer|tablet|laptop|projector|phone|screen)s?",
+  'projectors?',
+  'smart ?boards?',
+  "teacher(?:'s)? (?:own )?(?:phone|mobile|laptop|device|computer|tablet)",
+  'teacher (?:shows|plays|projects|displays|screens)',
+  'on the board',
+]);
+/** These reach the family at home whatever else the step says. */
+const TO_THE_FAMILY = /^(?:whatsapp|call(?:s|ing)? home)$/iu;
 
 const CONTACT_VERBS =
   '(?:phone|phones|phoning|call|calls|calling|telephone|telephones|ring|rings|meet|meets|meeting|invite|invites|inviting|message|messages|contact|contacts|write to|writes to|writing to|speak to|speak with|talk to|talk with|send|sends|ask|asks|tell|tells|inform|informs|visit|visits|note to|note for|letter to|letter for)';
@@ -266,11 +334,28 @@ export function ruleConflicts(step: string, c: Constraint, context: RuleContext 
     }
     case 'money': {
       const m = firstMatch(step, MONEY);
-      return m ? hit(m[0], `This step asks the family of ${name} to pay for something (${quote(m[0])}).`) : undefined;
+      if (m) return hit(m[0], `This step asks the family of ${name} to pay for something (${quote(m[0])}).`);
+      const b = firstMatch(step, BRING, (x) => !has(SCHOOL_THINGS, x[0]));
+      return b ? hit(b[0], `This step asks the family of ${name} to provide something (${quote(b[0])}).`) : undefined;
     }
     case 'no-phone-internet': {
-      const m = firstMatch(step, PHONE_INTERNET);
-      return m ? hit(m[0], `This step needs a phone or the internet, which ${name} does not have at home (${quote(m[0])}).`) : undefined;
+      // The constraint is about home. A phone or the internet used in class, on a device the school has, is no conflict.
+      const home = has(HOME_SIDE, step);
+      const school = has(SCHOOL_DEVICE, step) || context.stage === 'class';
+      let query: RuleHit | undefined;
+      for (const m of step.matchAll(words(PHONE_INTERNET))) {
+        if (negated(step, m.index)) continue;
+        if (home || TO_THE_FAMILY.test(m[0]) || (!school && context.stage === 'homework')) {
+          return hit(m[0], `This step needs a phone or the internet, which ${name} does not have at home (${quote(m[0])}).`);
+        }
+        if (school) continue;
+        query ??= hit(
+          m[0],
+          `This step uses a phone or the internet (${quote(m[0])}). The rule cannot tell whether that is at school or at home, where ${name} has none. Read it against the constraint.`,
+          'unsure',
+        );
+      }
+      return query;
     }
     case 'contact': {
       if (c.away && c.who) {
@@ -296,6 +381,15 @@ export function ruleConflicts(step: string, c: Constraint, context: RuleContext 
     default:
       return undefined;
   }
+}
+
+/**
+ * Where an item's steps are done, by its heading: an item headed "Homework" is done at home, and any
+ * other stage of a lesson is taught in class. An item of another task that is not homework could be either.
+ */
+export function stageOf(item: DraftItem, lesson: boolean): RuleContext['stage'] {
+  if (/^\s*home\s?work(?![\p{L}])/iu.test(item.heading)) return 'homework';
+  return lesson ? 'class' : undefined;
 }
 
 /** What the rules found for one item: the hit, if any, and how many confirmed constraints its steps were compared with. */
@@ -337,6 +431,7 @@ export function ruleCheckItem(
   const applies = constraints.filter((c) => c.confirmed && (!c.about || everyone || named.includes(c.about)));
   if (applies.length === 0) return { compared: 0 };
   const afterBell = afterBellActivities(note);
+  const stage = stageOf(item, wholeClass);
   const parts = [restore(item.heading, entities, allowed), ...steps(restore(item.text, entities, allowed))];
   let found: RuleHit | undefined;
   for (const step of parts) {
@@ -344,7 +439,7 @@ export function ruleCheckItem(
       const student = entities.find((e) => e.id === c.about);
       const name = student ? nameInNote(note, student) : undefined;
       const line = told.get(c.id);
-      const said = ruleConflicts(step, c, { name, afterBell, told: line !== undefined });
+      const said = ruleConflicts(step, c, { name, afterBell, told: line !== undefined, stage });
       if (!said) continue;
       const hit = line === undefined ? said : { ...said, told: line };
       if (hit.verdict === 'conflict') {
@@ -384,13 +479,14 @@ export function ruleHitsForItem(
   const applies = constraints.filter((c) => c.confirmed);
   if (applies.length === 0) return [];
   const afterBell = afterBellActivities(note);
+  const stage = stageOf(item, true);
   const parts = [restore(item.heading, entities, allowed), ...steps(restore(item.text, entities, allowed).trim())];
   const out: StepHit[] = [];
   parts.forEach((step, i) => {
     for (const c of applies) {
       const student = entities.find((e) => e.id === c.about);
       const line = told.get(c.id);
-      const said = ruleConflicts(step, c, { name: student ? nameInNote(note, student) : undefined, afterBell, told: line !== undefined });
+      const said = ruleConflicts(step, c, { name: student ? nameInNote(note, student) : undefined, afterBell, told: line !== undefined, stage });
       if (said) out.push({ stepIndex: i - 1, step, constraint: c, hit: line === undefined ? said : { ...said, told: line } });
     }
   });

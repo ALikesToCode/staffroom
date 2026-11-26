@@ -3,7 +3,7 @@ import type { Constraint, ConstraintKind, ItemCheck } from './types';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redactRange, redactWithTokens } from './vault';
 import { confirmConstraint, proposeConstraints } from './constraints';
-import { afterBellActivities, cloudSawAround, combineChecks, layerCounts, negated, ruleCheckItem, ruleConflicts, ruleOnlyReason, verdictLabel } from './conflicts';
+import { afterBellActivities, cloudSawAround, combineChecks, layerCounts, negated, ruleCheckItem, ruleConflicts, ruleOnlyReason, stageOf, verdictLabel } from './conflicts';
 import { keepNoConflict, NOT_ANSWERED, NOTHING_WITHHELD, startsKept } from '../ai/check';
 import { makeReceipt, plainTitle, receiptRecord } from './receipts';
 import { constraintCounts } from './constraints';
@@ -125,10 +125,77 @@ describe('the rule layer, kind by kind', () => {
 
   it('no phone or internet: a step that needs one', () => {
     const k = c('no-phone-internet');
-    for (const step of ['Send the worksheet on WhatsApp.', 'Ask him to watch a video at home.', 'Practise on the maths app.', 'Set an online quiz.', 'Email the notes to the family.']) {
+    for (const step of [
+      'Send the worksheet on WhatsApp.',
+      'Ask him to watch a video at home.',
+      'Set an online quiz for homework.',
+      'Email the notes to the family.',
+      'Pupils look up two facts on the internet tonight.',
+      'Find a picture online over the weekend.',
+      'Watch the video with a parent and talk about it.',
+      'Phone the mother on her mobile.',
+    ]) {
       expect(verdict(step, k), step).toBe('conflict');
     }
     for (const step of ['Practise phonics for ten minutes.', 'Ask him to apply the rule.', 'Give him a printed worksheet.']) expect(verdict(step, k), step).toBe('none');
+  });
+
+  it('no phone or internet is about home: use at school is no conflict, and a step that says neither is a query', () => {
+    const k = c('no-phone-internet');
+    for (const step of [
+      'Pupils search the internet in the computer lab.',
+      'Show the video in class.',
+      'The teacher plays a short video of the water cycle.',
+      "Pupils look at the map on the teacher's phone.",
+      'Groups take turns on a shared device to look up one website.',
+      'Play the clip on the projector.',
+      'Pupils use the school tablets to read the online article.',
+    ]) expect(verdict(step, k), step).toBe('none');
+    // Neither side is plain: the rule asks, and does not call it a conflict.
+    for (const step of ['Practise on the maths app.', 'Set an online quiz.', 'Pupils watch a short video about rivers.']) expect(verdict(step, k), step).toBe('unsure');
+    expect(ruleConflicts('Set an online quiz.', k, { name: 'Tanvi' })?.reason).toBe(
+      'This step uses a phone or the internet (“online”). The rule cannot tell whether that is at school or at home, where Tanvi has none. Read it against the constraint. You confirmed: “the words the teacher confirmed”.',
+    );
+    // The stage of a lesson settles it: homework is at home, the other stages are in class.
+    expect(ruleConflicts('Pupils watch a short video about rivers.', k, { stage: 'homework' })?.verdict).toBe('conflict');
+    expect(ruleConflicts('Pupils watch a short video about rivers.', k, { stage: 'class' })).toBeUndefined();
+    expect(ruleConflicts('Pupils watch the video again at home.', k, { stage: 'class' })?.verdict).toBe('conflict');
+    expect(ruleConflicts('Send the clip to the class WhatsApp group.', k, { stage: 'class' })?.verdict).toBe('conflict');
+    expect(ruleConflicts('Pupils write up the video the teacher shows on the projector.', k, { stage: 'homework' })).toBeUndefined();
+    expect(stageOf({ heading: 'Homework', text: '' }, true)).toBe('homework');
+    expect(stageOf({ heading: 'Home work (no minutes)', text: '' }, false)).toBe('homework');
+    expect(stageOf({ heading: 'Practise (15 minutes)', text: '' }, true)).toBe('class');
+    expect(stageOf({ heading: '[Student 1]', text: '' }, false)).toBeUndefined();
+  });
+
+  it('money: things to bring from home count, and what every pupil brings anyway does not', () => {
+    const k = c('money');
+    for (const step of [
+      'Ask pupils to bring one from home tomorrow.',
+      'Pupils bring old magazines and coloured paper from home.',
+      'Bring your own scissors and glue.',
+      'Each pupil brings a small mirror.',
+      'Each child needs to bring two plastic bottles.',
+      'Every group must bring a torch.',
+      'Collect ₹10 from each pupil.',
+      'Each family is asked to contribute twenty rupees.',
+      'Parents contribute towards the cost of the visit.',
+      'Those who forget can purchase one at the gate.',
+    ]) expect(verdict(step, k), step).toBe('conflict');
+    for (const step of [
+      'Bring your notebook and pencil.',
+      'Bring your own pencil.',
+      'Each pupil brings their homework to the front.',
+      'Pupils bring their textbooks from home as usual.',
+      'Each pupil needs to bring a pen.',
+      'Each group contributes one idea to the list.',
+      'Pupils bring their answers to the board.',
+      'There is no need to bring anything from home.',
+    ]) expect(verdict(step, k), step).toBe('none');
+    expect(ruleConflicts('Ask pupils to bring one from home tomorrow.', k, { name: 'Aarav' })).toMatchObject({
+      matched: 'bring one from home',
+      reason: 'This step asks the family of Aarav to provide something (“bring one from home”). You confirmed: “the words the teacher confirmed”.',
+    });
   });
 
   it('contact: a step that reaches the adult who is not to be contacted', () => {
@@ -194,6 +261,13 @@ describe('the rule layer, kind by kind', () => {
     expect(verdict('Do not rush her, and keep her after school to finish.', k)).toBe('conflict');
     expect(verdict('She is not confident, so send her to the club after the last bell.', k)).toBe('conflict');
     expect(negated('Meet her at lunch instead of after school.', 31)).toBe(true);
+    // A negation governs what stands just after it, not everything later in the clause.
+    expect(verdict('Anyone who has not finished stays after school.', k)).toBe('conflict');
+    expect(verdict('Pupils who have not handed in the sheet stay back for ten minutes.', k)).toBe('conflict');
+    expect(verdict('Those without can purchase a kit.', c('money'))).toBe('conflict');
+    expect(verdict('Pupils not yet sure of the method and still working on the first five sums stay after school.', k)).toBe('conflict');
+    for (const step of ['Do not ask her to stay after school.', 'She has not got to stay back.', 'No pupil is asked to stay behind.', 'She cannot stay after school.']) expect(verdict(step, k), step).toBe('none');
+    for (const step of ['Make the model without buying anything.', 'Use scrap card instead of a kit.', 'Pupils do not need to buy a kit.', 'Avoid any cost to families.', 'She has not paid.']) expect(verdict(step, c('money')), step).toBe('none');
     expect(verdict('The trip is free of cost.', c('money'))).toBe('none');
     expect(verdict('No fee is asked for.', c('money'))).toBe('none');
   });
