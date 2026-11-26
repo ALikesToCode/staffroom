@@ -65,7 +65,7 @@ Hybrid inference is more than a cost or latency choice. Routing by the sensitivi
 ## Limits, stated plainly
 
 - The on-device model needs Chrome on a desktop that supports the built-in model, and English.
-- The guard and the check are a small model's judgement. They can miss a detail or doubt good advice. In nine runs of the sample note on 26 November 2026 (Chrome 158), the cloud draft suggested the after-school club each time it was checked by hand, and the on-device check flagged a conflict in four of the nine runs. The teacher's read and the gates are the safeguard.
+- The guard and the check are a small model's judgement. They can miss a detail or doubt good advice. In nine runs of the sample note on 26 November 2026 (Chrome 158), the on-device check flagged a conflict with the after-school club in four. I did not record, for every run, whether the cloud draft proposed the club, so the true catch rate may be higher than four in nine. The teacher's read and the gates are the safeguard.
 - The demo uses invented data only. Before use with real pupils a school would need its own data agreement and the paid Gemini backend, because the free Gemini Developer API tier is not meant for personal data.
 - "Offline" means the guard, the check and the fallback draft keep working once the page and the on-device model have loaded. The page itself is not installed for an offline start.
 - Sign-off is by the person using the browser. Anonymous sign-in gives the browser an account; it does not prove who that person is.
