@@ -142,3 +142,55 @@ export async function receiptRecord(r: Receipt): Promise<ReceiptRecord> {
     },
   };
 }
+
+const KIND_KEYS: Kind[] = ['student', 'adult', 'place', 'contact', 'id', 'private'];
+const VERDICT_KEYS = ['fits', 'conflict', 'unsure', 'nothingWithheld', 'notChecked'] as const;
+
+/**
+ * Read back a record that was stored in the cloud. Returns undefined for
+ * anything that is not a record in the present form (an entry written by
+ * an earlier version, say), so nothing unexpected is ever shown. Only the
+ * fields of a record are copied out.
+ */
+export function asReceiptRecord(data: unknown): ReceiptRecord | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const d = data as Record<string, unknown>;
+  const str = (v: unknown): v is string => typeof v === 'string' && v.length <= 100;
+  const count = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+  const counts = <K extends string>(v: unknown, keys: readonly K[]): Record<K, number> | undefined => {
+    if (!v || typeof v !== 'object') return undefined;
+    const m = v as Record<string, unknown>;
+    if (!keys.every((k) => count(m[k]))) return undefined;
+    return Object.fromEntries(keys.map((k) => [k, m[k] as number])) as Record<K, number>;
+  };
+  const withheld = counts(d.withheld, KIND_KEYS);
+  const verdicts = counts(d.verdicts, VERDICT_KEYS);
+  const flags = d.flags as Record<string, unknown> | null | undefined;
+  const strings = [d.id, d.createdAt, d.task, d.approvedAt, d.approvedSha256, d.guardWhere, d.draftWhere, d.draftModel, d.checkWhere, d.labelWhere];
+  if (!withheld || !verdicts || !flags || typeof flags !== 'object' || !strings.every(str)) return undefined;
+  if (![d.released, d.approvedChars, d.kept, d.struck, flags.unreadParagraphs, flags.droppedDetails].every(count)) return undefined;
+  if (typeof flags.replyFlagged !== 'boolean' || !['plan', 'parents', 'handover'].includes(d.task as string)) return undefined;
+  return {
+    id: d.id as string,
+    createdAt: d.createdAt as string,
+    task: d.task as TaskId,
+    withheld,
+    released: d.released as number,
+    approvedAt: d.approvedAt as string,
+    approvedChars: d.approvedChars as number,
+    approvedSha256: d.approvedSha256 as string,
+    guardWhere: d.guardWhere as Where,
+    draftWhere: d.draftWhere as Where,
+    draftModel: d.draftModel as string,
+    checkWhere: d.checkWhere as Where,
+    labelWhere: d.labelWhere as LabelWhere,
+    verdicts,
+    kept: d.kept as number,
+    struck: d.struck as number,
+    flags: {
+      replyFlagged: flags.replyFlagged,
+      unreadParagraphs: flags.unreadParagraphs as number,
+      droppedDetails: flags.droppedDetails as number,
+    },
+  };
+}

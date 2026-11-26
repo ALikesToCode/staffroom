@@ -329,7 +329,7 @@ describe('vault', () => {
 
 import { anchorQuote, MAX_CHUNK, paragraphs, readGuardAnswer } from '../ai/guard';
 import { anythingToCheck, checkPrompt, contextParagraphs, detailsFor, readVerdict, startsKept, studentsNamed } from '../ai/check';
-import { makeReceipt, receiptRecord, sha256Hex } from './receipts';
+import { asReceiptRecord, makeReceipt, receiptRecord, sha256Hex } from './receipts';
 
 describe('guard helpers', () => {
   const para = "Kabir's parents are separating and he is staying with his grandmother.";
@@ -553,6 +553,19 @@ describe('check and receipt', () => {
     // Every value is a number, a boolean, or one of a few short fixed strings.
     const strings = Object.values(record).filter((v): v is string => typeof v === 'string');
     expect(strings.every((v) => v.length <= 100)).toBe(true);
+  });
+
+  it('reads a stored record back, and refuses anything in another form', async () => {
+    const record = await receiptRecord(receipt);
+    expect(asReceiptRecord(JSON.parse(JSON.stringify(record)))).toEqual(record);
+    // Only the fields of a record come back, whatever else an entry holds.
+    expect(asReceiptRecord({ ...record, sent: { text: 'approved text' }, label: 'A title' })).toEqual(record);
+    // An entry written by an earlier version (a whole receipt) is not a record.
+    expect(asReceiptRecord(receipt)).toBeUndefined();
+    expect(asReceiptRecord({ ...record, task: 'other' })).toBeUndefined();
+    expect(asReceiptRecord({ ...record, kept: -1 })).toBeUndefined();
+    expect(asReceiptRecord({ ...record, draftModel: 'x'.repeat(101) })).toBeUndefined();
+    expect(asReceiptRecord(null)).toBeUndefined();
   });
 });
 

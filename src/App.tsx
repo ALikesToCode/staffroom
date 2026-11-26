@@ -3,8 +3,8 @@ import type { Entity, ItemCheck, Kind, LabelWhere, Receipt, TaskId, Where } from
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './core/samples';
 import { addByTeacher, appearsIn, applyLocks, buildVault, deterministicCandidates, redact, restore, segment } from './core/vault';
 import { checkOutgoing, checkReply, type Violation } from './core/gate';
-import { loadReceipts, makeReceipt, storeReceipts } from './core/receipts';
-import { configured, DEFAULT_POLICY, loadPolicy, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
+import { loadReceipts, makeReceipt, storeReceipts, type ReceiptRecord } from './core/receipts';
+import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, paragraphs } from './ai/guard';
 import {
@@ -59,6 +59,11 @@ try {
   // Storage is switched off, so there is nothing to remove.
 }
 
+/** The records read back from the teacher's account. */
+type Records =
+  | { state: 'idle' | 'loading' | 'failed' }
+  | { state: 'ready'; list: ReceiptRecord[]; unreadable: number };
+
 const NO_GAPS: { unread: number[]; dropped: number } = { unread: [], dropped: 0 };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -99,6 +104,7 @@ export function App() {
   const [label, setLabel] = useState<{ title: string; where: LabelWhere } | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>(loadReceipts);
   const [copyState, setCopyState] = useState<'idle' | 'saved' | 'failed'>('idle');
+  const [records, setRecords] = useState<Records>({ state: 'idle' });
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const noteRef = useRef<HTMLDivElement>(null);
@@ -128,6 +134,23 @@ export function App() {
   useEffect(() => write(session, NOTE_KEY, note, note === ''), [note]);
   useEffect(() => write(session, CLASS_LIST_KEY, classList, classList.length === 0), [classList]);
   useEffect(() => write(local, 'staffroom.keepCopies', keepCopies, false), [keepCopies]);
+
+  /** Read the records kept in the teacher's account. They hold no text, so there is none to show. */
+  const refreshRecords = useCallback(async (user: string) => {
+    setRecords((r) => (r.state === 'ready' ? r : { state: 'loading' }));
+    try {
+      const { records: list, unreadable } = await loadReceiptCopies(user);
+      setRecords({ state: 'ready', list, unreadable });
+    } catch {
+      setRecords({ state: 'failed' });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view !== 'receipts') return;
+    if (uid) void refreshRecords(uid);
+    else setRecords({ state: 'idle' });
+  }, [view, uid, refreshRecords]);
 
   const currentTask = TASKS.find((t) => t.id === task)!;
   // The school's locks are part of how the outgoing text is computed, not only a disabled switch:
@@ -317,6 +340,7 @@ export function App() {
       try {
         await saveReceiptCopy(uid, receipt);
         setCopyState('saved');
+        void refreshRecords(uid);
       } catch {
         setCopyState('failed');
       }
@@ -432,6 +456,7 @@ export function App() {
           keepCopies={keepCopies}
           setKeepCopies={setKeepCopies}
           signedIn={Boolean(uid)}
+          records={records}
           onClear={() => {
             setReceipts([]);
             storeReceipts([]);
@@ -907,6 +932,14 @@ const VERDICT_LABEL: Record<ItemCheck['verdict'], string> = {
   'not checked': 'Not checked',
 };
 
+const RECORD_WHERE: Record<Where, string> = {
+  ON_DEVICE: 'on the device',
+  IN_CLOUD: 'in the cloud',
+  RULES_ONLY: 'by rules only',
+  NOT_RUN: 'did not run',
+  SKIPPED: 'skipped, nothing to check',
+};
+
 const LABEL_WHERE: Record<LabelWhere | 'UNKNOWN', string> = {
   ON_DEVICE: 'Written on the device from the approved text',
   IN_CLOUD: 'Written in the cloud from the approved text',
@@ -1024,12 +1057,14 @@ function Receipts({
   keepCopies,
   setKeepCopies,
   signedIn,
+  records,
   onClear,
 }: {
   receipts: Receipt[];
   keepCopies: boolean;
   setKeepCopies: (v: boolean) => void;
   signedIn: boolean;
+  records: Records;
   onClear: () => void;
 }) {
   return (
@@ -1042,8 +1077,40 @@ function Receipts({
       <label className="read-it">
         <input type="checkbox" checked={keepCopies} disabled={!signedIn} onChange={(e) => setKeepCopies(e.target.checked)} />
         Keep a copy of each receipt's record (no text) in my account (Firestore).
-        {!signedIn && <em> Not available: no Firebase project is connected.</em>}
+        {!signedIn && <em>{configured ? ' Sign-in is not available right now.' : ' Not available: no Firebase project is connected.'}</em>}
       </label>
+      {signedIn && records.state === 'loading' && <p className="hint">Looking up the records kept in your account.</p>}
+      {signedIn && records.state === 'failed' && <p className="caution">The records kept in your account could not be read just now.</p>}
+      {signedIn && records.state === 'ready' && (
+        <div className="records">
+          <p className="hint">
+            Records kept in your account: {records.list.length}
+            {records.unreadable > 0 &&
+              `. ${records.unreadable} older ${records.unreadable === 1 ? 'entry is' : 'entries are'} in an earlier form and ${records.unreadable === 1 ? 'is' : 'are'} not listed`}
+          </p>
+          {records.list.length > 0 && (
+            <ul className="record-list">
+              {records.list.map((r) => {
+                const total = Object.values(r.withheld).reduce((a, b) => a + b, 0);
+                return (
+                  <li key={r.id}>
+                    <b>{new Date(r.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</b>
+                    <span>{TASKS.find((t) => t.id === r.task)?.label ?? r.task}</span>
+                    <span>
+                      {total} withheld, {r.kept} kept, {r.struck} struck
+                    </span>
+                    <span>
+                      Guard {RECORD_WHERE[r.guardWhere]} · draft {RECORD_WHERE[r.draftWhere]} ({r.draftModel}) · check{' '}
+                      {RECORD_WHERE[r.checkWhere]}
+                      {r.flags.replyFlagged ? ' · reply flagged' : ''}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
       {receipts.length === 0 ? (
         <p className="empty">No receipts yet. Finish a run on the desk.</p>
       ) : (

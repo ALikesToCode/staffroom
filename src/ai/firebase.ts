@@ -5,7 +5,7 @@ import { getAuth, onAuthStateChanged, signInAnonymously, type User } from 'fireb
 import { collection, doc, getDocs, getFirestore, orderBy, query, setDoc } from 'firebase/firestore';
 import { fetchAndActivate, getRemoteConfig, getValue } from 'firebase/remote-config';
 import type { Kind, Receipt } from '../core/types';
-import { receiptRecord, type ReceiptRecord } from '../core/receipts';
+import { asReceiptRecord, receiptRecord, type ReceiptRecord } from '../core/receipts';
 
 const env = import.meta.env;
 
@@ -79,15 +79,18 @@ export async function loadPolicy(): Promise<Policy> {
     };
     await fetchAndActivate(rc);
     const locked = getValue(rc, 'locked_kinds');
+    const model = getValue(rc, 'cloud_model');
     const lockedKinds = locked
       .asString()
       .split(',')
       .map((s) => s.trim())
       .filter((s): s is Kind => (KINDS as string[]).includes(s));
+    // The policy counts as the school's when either value was published, not only the locks.
+    const published = locked.getSource() === 'remote' || model.getSource() === 'remote';
     return {
-      cloudModel: getValue(rc, 'cloud_model').asString() || DEFAULT_POLICY.cloudModel,
+      cloudModel: model.asString() || DEFAULT_POLICY.cloudModel,
       lockedKinds,
-      from: locked.getSource() === 'remote' ? 'school policy (Remote Config)' : 'built-in defaults',
+      from: published ? 'school policy (Remote Config)' : 'built-in defaults',
     };
   } catch {
     return DEFAULT_POLICY;
@@ -119,9 +122,14 @@ export async function saveReceiptCopy(uid: string, receipt: Receipt): Promise<vo
   await setDoc(doc(getFirestore(app), 'users', uid, 'receipts', record.id), record);
 }
 
-export async function loadReceiptCopies(uid: string): Promise<ReceiptRecord[]> {
+/**
+ * Read back the records kept under the signed-in user, newest first. An
+ * entry that is not a record in the present form is counted, not shown.
+ */
+export async function loadReceiptCopies(uid: string): Promise<{ records: ReceiptRecord[]; unreadable: number }> {
   const snap = await getDocs(
     query(collection(getFirestore(app), 'users', uid, 'receipts'), orderBy('createdAt', 'desc')),
   );
-  return snap.docs.map((d) => d.data() as ReceiptRecord);
+  const records = snap.docs.map((d) => asReceiptRecord(d.data())).filter((r): r is ReceiptRecord => r !== undefined);
+  return { records, unreadable: snap.docs.length - records.length };
 }
