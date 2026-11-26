@@ -793,7 +793,7 @@ export function App() {
           <span className="logo" aria-hidden="true" />
           <div>
             <h1>Staffroom</h1>
-            <p>Your raw note stays on this device. What you approve is the only note text sent.</p>
+            <p>The guard reads your note on this device. What you approve is the only note text sent.</p>
           </div>
         </div>
         <nav aria-label="Sections">
@@ -852,7 +852,7 @@ export function App() {
             <section className="lane device" aria-label="On this device">
               <h2 className="lane-title">
                 <span>On this device</span>
-                <small>Your raw note, the real names and the private details stay on this side. What you approve is the only note text sent.</small>
+                <small>Your note is read here. What you withhold stays on this side. What you approve is the only note text sent.</small>
               </h2>
 
               <article className="card">
@@ -1541,8 +1541,9 @@ function How({ policy, device }: { policy: Policy; device: DeviceStatus }) {
           tick is cleared.
         </li>
         <li>
-          <b>The return gate.</b> Plain code checks that the reply uses only the stand-ins that were in the text you approved and
-          contains no withheld item. It blocks sign-off until you have read a flagged reply.
+          <b>The return gate.</b> Plain code checks that the reply uses only the stand-ins that were in the text you approved,
+          contains no withheld item, and brings in no word from the sensitive list that your approved text did not have. It blocks
+          sign-off until you have read a flagged reply.
         </li>
       </ul>
       <h3>What is in force now</h3>
