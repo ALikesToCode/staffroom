@@ -104,6 +104,9 @@ export interface Receipt {
     unsure: number;
     nothingWithheld: number;
     notChecked: number;
+    /** Requests made to the on-device model, and how many of them failed. Receipts made before this was recorded do not have them. */
+    requests?: number;
+    failedRequests?: number;
   };
   signOff: { kept: number; struck: number; at: string };
 }

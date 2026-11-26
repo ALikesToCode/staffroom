@@ -47,6 +47,8 @@ interface Run {
   /** When the device wrote the draft: whether the request went out and got no answer, or could not go out. */
   draftCloud?: 'no answer' | 'not reached';
   checkWhere: Where;
+  /** Requests the check made to the on-device model, and how many failed. */
+  checkRequests?: { asked: number; failed: number };
   replyFlagged: boolean;
   checks: ItemCheck[];
   kept: number;
@@ -88,6 +90,7 @@ export function makeReceipt(run: Run): Receipt {
       unsure: count('unsure'),
       nothingWithheld: count('nothing withheld'),
       notChecked: count('not checked'),
+      ...(run.checkRequests ? { requests: run.checkRequests.asked, failedRequests: run.checkRequests.failed } : {}),
     },
     signOff: { kept: run.kept, struck: run.struck, at: now },
   };

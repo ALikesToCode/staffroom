@@ -587,7 +587,7 @@ describe('vault', () => {
 });
 
 import { anchor, anchorQuote, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
-import { anythingToCheck, checkItems, checkPrompt, contextParagraphs, detailsFor, readVerdict, startsKept, studentsNamed, UNCLEAR, worse } from '../ai/check';
+import { anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, NOT_ANSWERED, readVerdict, startsKept, studentsNamed, UNCLEAR, worse } from '../ai/check';
 import { asReceiptRecord, digestPrefix, makeReceipt, receiptRecord, recordModelName, sha256Hex } from './receipts';
 import { approvalKey, withTimeout } from './policy';
 
@@ -754,7 +754,7 @@ describe('check and receipt', () => {
       expect(groups[0].student).toBeUndefined();
       expect(groups[0].details.map((d) => d.surfaces[0])).toEqual(['She has epilepsy']);
     }
-    const prompt = checkPrompt(detailsFor({ heading: 'Whole class', text: 'Timed test for [Student 2].' }, vault)[0], { heading: 'Whole class', text: 'Timed test for [Student 2].' }, ['Meenal reads well. She has epilepsy.', 'Tanvi is shy.'], vault);
+    const prompt = checkPrompt(detailsFor({ heading: 'Whole class', text: 'Timed test for [Student 2].' }, vault)[0], { heading: 'Whole class', text: 'Timed test for [Student 2].' }, ['Meenal reads well. She has epilepsy.', 'Tanvi is shy.'], vault, ['[Student 1]', '[Student 2]']);
     expect(prompt).toContain('Private facts about children in this class:\n- (about Meenal) She has epilepsy');
     expect(prompt).toContain('What the teacher wrote:\nMeenal reads well. She has epilepsy.\n');
     expect(prompt).toContain('Whole class. Timed test for Tanvi.');
@@ -802,7 +802,11 @@ describe('check and receipt', () => {
   it('gives a warning with no reason a reason the teacher can act on', () => {
     expect(readVerdict('{"verdict":"conflict","reason":""}').reason).toMatch(/gave no reason/);
     expect(readVerdict('{"verdict":"unsure"}').reason).toMatch(/gave no reason/);
-    expect(readVerdict('{"verdict":"fits","reason":""}')).toEqual({ verdict: 'fits', reason: '' });
+    // "fits" with no reason is not taken as a pass.
+    for (const raw of ['{"verdict":"fits","reason":""}', '{"verdict":"fits"}', '{"verdict":"fits","reason":"  "}']) {
+      expect(readVerdict(raw).verdict).toBe('unsure');
+      expect(readVerdict(raw).reason).toMatch(/gave no reason/);
+    }
     expect(UNCLEAR).toEqual({ verdict: 'unsure', reason: 'The on-device check gave no clear answer. Read this item yourself.' });
   });
 
@@ -838,26 +842,120 @@ describe('check and receipt', () => {
       { heading: '[Student 1]', text: 'reading aloud' },
     ];
     let asked = 0;
-    const checks = await checkItems(items, vault, [note], async () => {
+    const run = await checkItems(items, vault, [note], ['[Student 1]'], async () => {
       asked++;
       if (asked === 1) throw new Error('the model stopped');
       if (asked === 2) return { text: 'not json', onDevice: true };
       return { text: '{"verdict":"fits","reason":"ok"}', onDevice: true };
     });
-    expect(checks).toEqual([UNCLEAR, UNCLEAR, { verdict: 'fits', reason: 'ok' }]);
+    expect(run.checks).toEqual([NOT_ANSWERED, UNCLEAR, { verdict: 'fits', reason: 'ok' }]);
+    expect(NOT_ANSWERED.verdict).toBe('not checked');
     expect(asked).toBe(3);
+    expect([run.asked, run.answered, run.failed]).toEqual([3, 2, 1]);
+    expect(checkDidNotRun(run)).toBe(false);
+  });
+
+  it('says the check did not run when every request failed', async () => {
+    const items = [
+      { heading: '[Student 1]', text: 'timed quiz' },
+      { heading: 'Seating', text: 'Move desks.' },
+    ];
+    const run = await checkItems(items, vault, [note], ['[Student 1]'], async () => {
+      throw new Error('the model stopped');
+    });
+    expect(run.checks).toEqual([NOT_ANSWERED, NOT_ANSWERED]);
+    expect([run.asked, run.answered, run.failed]).toEqual([2, 0, 2]);
+    expect(checkDidNotRun(run)).toBe(true);
+    expect(checkDidNotRun({ checks: [], asked: 0, answered: 0, failed: 0 })).toBe(false);
+  });
+
+  it('marks an item unsure when only some of its requests were answered', async () => {
+    const text = 'The hostel children get no dinner.\n\nMeenal reads well. She has epilepsy.';
+    const v = buildVault(text, [
+      { kind: 'student', text: 'Meenal', source: 'class list' },
+      { kind: 'private', text: 'She has epilepsy', source: 'on-device model' },
+      { kind: 'private', text: 'The hostel children get no dinner', source: 'teacher' },
+    ]);
+    let asked = 0;
+    const run = await checkItems([{ heading: '[Student 1]', text: 'Stay late for practice.' }], v, paragraphs(text), ['[Student 1]'], async () => {
+      if (++asked === 2) throw new Error('the model stopped');
+      return { text: '{"verdict":"fits","reason":"ok"}', onDevice: true };
+    });
+    expect(run.checks[0].verdict).toBe('unsure');
+    expect(run.checks[0].reason).toMatch(/did not answer for part of this check/);
+    expect([run.asked, run.answered, run.failed]).toEqual([2, 1, 1]);
+  });
+
+  it('puts back only the stand-ins that were sent when it writes the check prompt', () => {
+    const item = { heading: '[Student 1]', text: 'Pair with [Student 2] for a timed quiz.' };
+    const group = detailsFor(item, vault)[0];
+    const prompt = checkPrompt(group, item, [note], vault, ['[Student 1]']);
+    expect(prompt).toContain('Meenal. Pair with [Student 2] for a timed quiz.');
+    expect(prompt.split('Advice to check:')[1]).not.toContain('Tanvi');
   });
 
   it('stops the whole check when an answer did not come from the device', async () => {
     const items = [{ heading: '[Student 1]', text: 'timed quiz' }];
-    await expect(checkItems(items, vault, [note], async () => ({ text: '{"verdict":"fits","reason":"ok"}', onDevice: false }))).rejects.toThrow(
+    await expect(checkItems(items, vault, [note], ['[Student 1]'], async () => ({ text: '{"verdict":"fits","reason":"ok"}', onDevice: false }))).rejects.toThrow(
       /did not run on the device/,
     );
   });
 
-  it('starts an item in conflict as struck and the rest as kept', () => {
+  it('starts a conflict struck, and leaves an unsure or unchecked item for the teacher to decide', () => {
     const verdicts = ['fits', 'conflict', 'unsure', 'not checked', 'nothing withheld'] as const;
-    expect(startsKept(verdicts.map((verdict) => ({ verdict, reason: '' })))).toEqual([true, false, true, true, true]);
+    expect(startsKept(verdicts.map((verdict) => ({ verdict, reason: '' })))).toEqual([true, false, null, null, true]);
+  });
+
+  it('keeps two details about different children even when one is inside the other', () => {
+    const text = 'Tanvi was told that Meenal has epilepsy. Meenal reads well.';
+    const v = buildVault(text, [
+      { kind: 'student', text: 'Meenal', source: 'class list' },
+      { kind: 'student', text: 'Tanvi', source: 'class list' },
+      { kind: 'private', text: 'Tanvi was told that Meenal has epilepsy', source: 'on-device model', aboutName: 'Tanvi' },
+      { kind: 'private', text: 'Meenal has epilepsy', source: 'on-device model', aboutName: 'Meenal' },
+    ]);
+    const meenal = v.find((e) => e.surfaces[0] === 'Meenal')!;
+    const groups = detailsFor({ heading: meenal.token, text: 'Give a timed quiz.' }, v);
+    expect(groups.map((g) => [g.student?.surfaces[0], g.details.map((d) => d.surfaces[0])])).toEqual([['Meenal', ['Meenal has epilepsy']]]);
+    expect(detailsFor({ heading: 'Seating', text: 'Move desks.' }, v)[0].details.map((d) => d.surfaces[0])).toEqual([
+      'Tanvi was told that Meenal has epilepsy',
+      'Meenal has epilepsy',
+    ]);
+  });
+
+  it('checks advice for children in general against every withheld fact', () => {
+    const text = 'Meenal reads well. She has epilepsy.\n\nTanvi is shy. Her father is unemployed.';
+    const v = buildVault(text, [
+      { kind: 'student', text: 'Meenal', source: 'class list' },
+      { kind: 'student', text: 'Tanvi', source: 'class list' },
+      { kind: 'private', text: 'She has epilepsy', source: 'on-device model' },
+      { kind: 'private', text: 'Her father is unemployed', source: 'on-device model' },
+    ]);
+    for (const words of [
+      'Have all children stay late and ask [Student 2] to lead',
+      'Every child brings ten rupees; [Student 2] collects it',
+      'Each pupil reads aloud after [Student 2]',
+      'The children line up behind [Student 2]',
+      'Pupils swap books with [Student 2]',
+      'Students who finish early help [Student 2]',
+      'The group waits for [Student 2]',
+      'Anyone may ask [Student 2] for help',
+      'Nobody leaves before [Student 2]',
+      'All the students stay with [Student 2]',
+      'Everybody claps for [Student 2]',
+      'No one sits beside [Student 2] today',
+      'Her classmates read with [Student 2]',
+      'The rest follow [Student 2]',
+    ]) {
+      const groups = detailsFor({ heading: 'Plan', text: `${words}.` }, v);
+      expect(groups, words).toHaveLength(1);
+      expect(groups[0].student, words).toBeUndefined();
+      expect(groups[0].details.map((d) => d.surfaces[0]), words).toEqual(['She has epilepsy', 'Her father is unemployed']);
+    }
+    // Ordinary advice for one named child is still checked against that child only.
+    for (const words of ['Give [Student 2] group work with a friend', 'Let [Student 2] finish in class']) {
+      expect(detailsFor({ heading: 'Plan', text: `${words}.` }, v).map((g) => g.student?.surfaces[0]), words).toEqual(['Tanvi']);
+    }
   });
 
   it('collects context paragraphs by whole word', () => {
@@ -906,6 +1004,31 @@ describe('check and receipt', () => {
     expect(receipt.guard.unreadParagraphs).toBe(1);
     expect(receipt.labelWhere).toBe('ON_DEVICE');
     expect(receipt.check.conflict).toBe(1);
+  });
+
+  it('records how many check requests were made and how many failed', () => {
+    expect(receipt.check.requests).toBeUndefined();
+    const failed = makeReceipt({
+      task: 'plan',
+      label: 'x',
+      labelWhere: 'FALLBACK',
+      entities: vault,
+      guardWhere: 'ON_DEVICE',
+      unreadParagraphs: 0,
+      droppedDetails: 0,
+      sentText,
+      sentSha256: '',
+      approvedAt: new Date().toISOString(),
+      draftWhere: 'IN_CLOUD',
+      draftModel: 'gemini-3.5-flash-lite',
+      checkWhere: 'NOT_RUN',
+      checkRequests: { asked: 4, failed: 4 },
+      replyFlagged: false,
+      checks: [{ verdict: 'not checked', reason: 'x' }],
+      kept: 1,
+      struck: 0,
+    });
+    expect([failed.check.where, failed.check.requests, failed.check.failedRequests, failed.check.notChecked]).toEqual(['NOT_RUN', 4, 4, 1]);
   });
 
   it('computes a SHA-256 digest in hex', async () => {

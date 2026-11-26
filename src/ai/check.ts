@@ -31,13 +31,24 @@ const NO_CLEAR_ANSWER = 'The on-device check gave no clear answer. Read this ite
 
 const NO_REASON = 'The on-device check flagged this item and gave no reason. Read it against the private details yourself.';
 
+const FITS_NO_REASON = 'The on-device check found no conflict but gave no reason. Read this item against the private details yourself.';
+
+const NO_ANSWER = 'The on-device model did not answer for this item. Read it against the private details yourself.';
+
+const PART_ANSWER =
+  'The on-device model did not answer for part of this check. Read this item against the private details yourself.';
+
+/** The verdict for an item when none of its requests was answered: it was not checked at all. */
+export const NOT_ANSWERED: ItemCheck = { verdict: 'not checked', reason: NO_ANSWER };
+
 /** The verdict for a group whose request failed or whose answer could not be read. */
 export const UNCLEAR: ItemCheck = { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
 
 /**
  * Turn the check model's answer into a verdict. Anything that is not a
  * clear "fits" or "conflict" becomes "unsure", so a broken or unexpected
- * answer is never shown to the teacher as approval.
+ * answer is never shown to the teacher as approval. A "fits" with no reason
+ * is not clear either: the reason is what shows the model read the facts.
  */
 export function readVerdict(raw: string): ItemCheck {
   let parsed: { verdict?: unknown; reason?: unknown } | null;
@@ -48,7 +59,7 @@ export function readVerdict(raw: string): ItemCheck {
   }
   if (!parsed || typeof parsed !== 'object') return { verdict: 'unsure', reason: NO_CLEAR_ANSWER };
   const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
-  if (parsed.verdict === 'fits') return { verdict: 'fits', reason };
+  if (parsed.verdict === 'fits') return reason ? { verdict: 'fits', reason } : { verdict: 'unsure', reason: FITS_NO_REASON };
   // A warning with no reason still has to tell the teacher what to do.
   if (parsed.verdict === 'conflict' || parsed.verdict === 'unsure') {
     return { verdict: parsed.verdict, reason: reason || NO_REASON };
@@ -81,14 +92,40 @@ export interface CheckGroup {
   details: Entity[];
 }
 
-/** Words that make an item apply to every child, whoever else it names. */
-const WHOLE_CLASS = /(?<![\p{L}\p{N}])(?:whole class|everyone|all students|the class)(?![\p{L}\p{N}])/iu;
+/**
+ * Words that make an item apply to every child, whoever else it names:
+ * "whole class", "everyone", "all children", "every pupil", "each child",
+ * "students", "the group", "anyone", "nobody". The list is wide on purpose.
+ * A wrong match only means the item is checked against more facts.
+ */
+const WHOLE_CLASS = new RegExp(
+  '(?<![\\p{L}\\p{N}])(?:' +
+    [
+      '(?:the |whole |entire )class(?:room)?',
+      'every(?:one|body)',
+      'any(?:one|body)',
+      'no(?:body| one)',
+      '(?:all|every|each|any|no|most|some|other|the) (?:of the |the |other )?(?:child|children|pupils?|students?|learners?|boys?|girls?|kids?)',
+      'children|pupils|students|learners|classmates|peers',
+      'the (?:whole |entire |other )?groups?',
+      'all of (?:them|you)|the rest|the others|each other|one another',
+    ].join('|') +
+    ')(?![\\p{L}\\p{N}])',
+  'iu',
+);
 
 const flat = (e: Entity) => e.surfaces[0].toLowerCase().replace(/\s+/g, ' ');
 
-/** A detail that is wholly inside another in the list (a phrase inside its own sentence) is listed once, as the longer. */
+/**
+ * A detail that is wholly inside another about the same child (a phrase
+ * inside its own sentence) is listed once, as the longer. Two details about
+ * different children are both kept, even when one's words are inside the
+ * other's: each is a fact about its own child.
+ */
 const longestOnly = (all: Entity[]) =>
-  all.filter((d) => !all.some((o) => o !== d && flat(o).length > flat(d).length && flat(o).includes(flat(d))));
+  all.filter(
+    (d) => !all.some((o) => o !== d && o.about === d.about && flat(o).length > flat(d).length && flat(o).includes(flat(d))),
+  );
 
 /**
  * What one draft item must be checked against.
@@ -96,8 +133,9 @@ const longestOnly = (all: Entity[]) =>
  * - For each student the item names, the withheld private details about that student.
  * - Withheld details that are about nobody in particular are never left out: they form a class-wide group.
  * - When that gives nothing (the item names no student, or names only students with no detail of their
- *   own), or when the item speaks to the whole class ("whole class", "everyone", "all students",
- *   "the class") whoever else it names, it is checked against every withheld private detail, as one group.
+ *   own), or when the item speaks to the whole class or to children in general ("everyone", "all
+ *   children", "each pupil", "the group": see WHOLE_CLASS) whoever else it names, it is checked against
+ *   every withheld private detail, as one group.
  *
  * The result is empty only when no private detail is withheld at all.
  */
@@ -124,9 +162,14 @@ export function contextParagraphs(paras: string[], surfaces: string[]): string[]
   });
 }
 
-/** The prompt for one group. It holds withheld details, so it is only ever given to the on-device model. */
-export function checkPrompt(group: CheckGroup, item: DraftItem, paras: string[], entities: Entity[]): string {
-  const advice = restore(`${item.heading}. ${item.text}`, entities);
+/**
+ * The prompt for one group. It holds withheld details, so it is only ever
+ * given to the on-device model. `allowed` is the set of stand-ins that were
+ * in the approved text: only those are turned back into names, as everywhere
+ * else, so a stand-in the reply invented is never read as a real child.
+ */
+export function checkPrompt(group: CheckGroup, item: DraftItem, paras: string[], entities: Entity[], allowed: readonly string[]): string {
+  const advice = restore(`${item.heading}. ${item.text}`, entities, allowed);
   if (group.student) {
     const name = group.student.surfaces[0];
     return [
@@ -167,14 +210,16 @@ export async function checkOnDevice(
   note: string,
   items: DraftItem[],
   entities: Entity[],
+  allowed: readonly string[],
   onProgress: (done: number, total: number) => void,
-): Promise<ItemCheck[]> {
-  if (!anythingToCheck(items, entities)) return items.map(() => NOTHING_WITHHELD);
+): Promise<CheckRun> {
+  if (!anythingToCheck(items, entities)) return { checks: items.map(() => NOTHING_WITHHELD), asked: 0, answered: 0, failed: 0 };
   const model = modelFor('check', { system: SYSTEM, schema: SCHEMA });
   return checkItems(
     items,
     entities,
     paragraphs(note),
+    allowed,
     async (prompt) => {
       const result = await model.generateContent(prompt);
       const onDevice = result.response.inferenceSource === 'on_device';
@@ -185,42 +230,70 @@ export async function checkOnDevice(
   );
 }
 
+/** What a check run did: a verdict for each item, and how many requests were made, answered and failed. */
+export interface CheckRun {
+  checks: ItemCheck[];
+  /** Requests made to the on-device model. */
+  asked: number;
+  /** Requests that came back with an answer, readable or not. */
+  answered: number;
+  /** Requests that failed outright. When this equals `asked`, the check did not run. */
+  failed: number;
+}
+
+/** True when requests were made and every one of them failed: nothing was checked. */
+export function checkDidNotRun(run: CheckRun): boolean {
+  return run.asked > 0 && run.failed === run.asked;
+}
+
 /**
- * Check each item, one prompt per group. One request that fails, or one
- * answer that cannot be read, makes that group unsure and the run goes on.
- * An answer from anywhere but the device is different: the private details
- * were in that prompt, so the whole check stops.
+ * Check each item, one prompt per group. A request that fails does not stop
+ * the run. An item none of whose requests was answered is "not checked";
+ * one with some answered is at least "unsure"; an answer that cannot be
+ * read makes its group unsure. An answer from anywhere but the device is
+ * different: the private details were in that prompt, so the whole check
+ * stops.
  */
 export async function checkItems(
   items: DraftItem[],
   entities: Entity[],
   paras: string[],
+  allowed: readonly string[],
   ask: (prompt: string) => Promise<{ text: string; onDevice: boolean }>,
   onProgress: (done: number, total: number) => void = () => {},
-): Promise<ItemCheck[]> {
-  const checks: ItemCheck[] = [];
+): Promise<CheckRun> {
+  const run: CheckRun = { checks: [], asked: 0, answered: 0, failed: 0 };
   for (let i = 0; i < items.length; i++) {
     onProgress(i, items.length);
     const groups = detailsFor(items[i], entities);
     if (groups.length === 0) {
-      checks.push(NOTHING_WITHHELD);
+      run.checks.push(NOTHING_WITHHELD);
       continue;
     }
     let worst: ItemCheck | undefined;
+    let failedHere = 0;
     for (const group of groups) {
       let answer: { text: string; onDevice: boolean } | undefined;
+      run.asked++;
       try {
-        answer = await ask(checkPrompt(group, items[i], paras, entities));
+        answer = await ask(checkPrompt(group, items[i], paras, entities, allowed));
       } catch {
         answer = undefined;
       }
       if (answer && !answer.onDevice) throw new Error('The check did not run on the device. Stopped.');
-      worst = worse(worst, answer ? readVerdict(answer.text) : UNCLEAR);
+      if (!answer) {
+        run.failed++;
+        failedHere++;
+        continue;
+      }
+      run.answered++;
+      worst = worse(worst, readVerdict(answer.text));
     }
-    checks.push(worst ?? UNCLEAR);
+    if (!worst) run.checks.push(NOT_ANSWERED);
+    else run.checks.push(failedHere > 0 ? worse(worst, { verdict: 'unsure', reason: PART_ANSWER }) : worst);
   }
   onProgress(items.length, items.length);
-  return checks;
+  return run;
 }
 
 const rank = (c: ItemCheck) => (c.verdict === 'conflict' ? 2 : c.verdict === 'unsure' ? 1 : 0);
@@ -238,10 +311,12 @@ export function worse(current: ItemCheck | undefined, next: ItemCheck): ItemChec
 }
 
 /**
- * Which items start as kept. An item the check found in conflict starts
- * struck, so the teacher has to choose to keep it. The others start kept;
- * an unsure or unchecked one carries its warning with it.
+ * How each item starts. An item with no conflict found, or with nothing to
+ * check, starts kept (true). An item in conflict starts struck (false). An
+ * item the check was unsure about, or did not check, starts undecided
+ * (null): the teacher has to choose to keep it or strike it before signing
+ * off, so a warning is never carried through by default.
  */
-export function startsKept(checks: ItemCheck[]): boolean[] {
-  return checks.map((c) => c.verdict !== 'conflict');
+export function startsKept(checks: ItemCheck[]): (boolean | null)[] {
+  return checks.map((c) => (c.verdict === 'conflict' ? false : c.verdict === 'unsure' || c.verdict === 'not checked' ? null : true));
 }

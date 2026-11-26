@@ -31,7 +31,7 @@ import {
   writeDraft,
   type DraftResult,
 } from './ai/draft';
-import { anythingToCheck, checkOnDevice, detailsFor, NOTHING_WITHHELD, startsKept } from './ai/check';
+import { anythingToCheck, checkDidNotRun, checkOnDevice, detailsFor, NOTHING_WITHHELD, startsKept } from './ai/check';
 import { CloudText, DeviceText, KIND_LABEL, RouteChip, Spinner, Stepper } from './ui/parts';
 
 type Stage = 'write' | 'guarding' | 'review' | 'drafting' | 'checking' | 'result' | 'signed';
@@ -135,7 +135,15 @@ export function App() {
   const [replyRead, setReplyRead] = useState(false);
   const [checks, setChecks] = useState<ItemCheck[]>([]);
   const [checkWhere, setCheckWhere] = useState<Where>('NOT_RUN');
-  const [kept, setKept] = useState<boolean[]>([]);
+  /** How many requests the check made to the on-device model and how many failed. Null when it made none. */
+  const [checkRequests, setCheckRequests] = useState<{ asked: number; failed: number } | null>(null);
+  /** For each item: kept (true), struck (false), or not yet decided (null). An undecided item blocks sign-off. */
+  const [kept, setKept] = useState<(boolean | null)[]>([]);
+  /** True from the click on Sign off until the receipt is written: nothing can be kept or struck in between. */
+  const [signing, setSigning] = useState(false);
+  const signingRef = useRef(false);
+  /** Counts the runs on this page, so work that finishes after a run was cleared does not write into the next one. */
+  const runRef = useRef(0);
   const [label, setLabel] = useState<{ title: string; where: LabelWhere } | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>(loadReceipts);
   const [copyState, setCopyState] = useState<'idle' | 'pending' | 'saved' | 'failed'>('idle');
@@ -393,7 +401,7 @@ export function App() {
     setResult(drafted);
     // A stand-in the model wrote without its brackets is read as that stand-in, if it was one that was sent.
     const items = bracketDraft(drafted.draft, tokens).items;
-    setKept(items.map(() => true));
+    setKept(items.map(() => null));
     const replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
     setReplyIssues(checkReply(replyText, entities, tokens));
     setReplyRead(false);
@@ -401,6 +409,9 @@ export function App() {
     setStage('checking');
     let itemChecks: ItemCheck[];
     let where: Where = 'NOT_RUN';
+    let requests: { asked: number; failed: number } | null = null;
+    const unchecked = (reason: string): ItemCheck[] =>
+      items.map((item) => (detailsFor(item, entities).length > 0 ? { verdict: 'not checked', reason } : NOTHING_WITHHELD));
     if (!anythingToCheck(items, entities)) {
       // No private detail was withheld: there is nothing to check, so no model is asked.
       itemChecks = items.map(() => NOTHING_WITHHELD);
@@ -408,22 +419,29 @@ export function App() {
     } else {
       try {
         if ((await deviceStatus()) !== 'available') throw new Error('no on-device model was available.');
-        itemChecks = await checkOnDevice(note, items, entities, (done, total) =>
+        const run = await checkOnDevice(note, items, entities, tokens, (done, total) =>
           setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`),
         );
-        where = 'ON_DEVICE';
+        requests = { asked: run.asked, failed: run.failed };
+        if (checkDidNotRun(run)) {
+          // Every request failed, so nothing was checked. It is recorded as a check that did not run.
+          setError(
+            `The on-device check could not run: all ${run.asked} of its requests to the on-device model failed. The items below are not checked.`,
+          );
+          itemChecks = unchecked('The on-device model did not answer. Read this item against the private details yourself.');
+        } else {
+          itemChecks = run.checks;
+          where = 'ON_DEVICE';
+        }
       } catch (e) {
         // Say what happened. The draft stays; every item that had something to be checked against is marked unchecked.
         setError(`The on-device check stopped: ${message(e)} The items below are not checked.`);
-        itemChecks = items.map((item) =>
-          detailsFor(item, entities).length > 0
-            ? { verdict: 'not checked', reason: 'The on-device check did not run. Read this item against the private details yourself.' }
-            : NOTHING_WITHHELD,
-        );
+        itemChecks = unchecked('The on-device check did not run. Read this item against the private details yourself.');
       }
     }
+    setCheckRequests(requests);
     setChecks(itemChecks);
-    // An item in conflict starts struck: the teacher has to choose to keep it.
+    // An item in conflict starts struck. An unsure or unchecked one starts undecided: the teacher has to choose.
     setKept(startsKept(itemChecks));
     setCheckWhere(where);
     setProgress('Naming the receipt');
@@ -434,13 +452,21 @@ export function App() {
   // ---------------------------------------------------------------- step 6: sign off
 
   const signOff = async () => {
-    if (!result || !sent || replyBlocked) return;
+    // Locked at once, before anything is awaited: a second click, or a keep or strike made while the
+    // receipt is being written, changes nothing. What is recorded is what was on screen at the click.
+    if (signingRef.current || stage !== 'result' || !result || !sent || replyBlocked) return;
+    if (kept.some((k) => k === null) || !kept.some((k) => k === true)) return;
+    signingRef.current = true;
+    setSigning(true);
+    const run = runRef.current;
+    const signed = [...kept];
     let sentSha256 = '';
     try {
       sentSha256 = await sha256Hex(sent.text);
     } catch {
       // No digest in this browser. The receipt is still written; the record works one out if it can.
     }
+    if (runRef.current !== run) return;
     const receipt = makeReceipt({
       task,
       label: label?.title || currentTask.label,
@@ -456,28 +482,38 @@ export function App() {
       draftModel: result.model,
       draftCloud: result.where === 'ON_DEVICE' ? (sent.online ? 'no answer' : 'not reached') : undefined,
       checkWhere,
+      checkRequests: checkRequests ?? undefined,
       replyFlagged: replyIssues.length > 0,
       checks,
-      kept: kept.filter(Boolean).length,
-      struck: kept.filter((k) => !k).length,
+      kept: signed.filter((k) => k === true).length,
+      struck: signed.filter((k) => k === false).length,
     });
     const next = [receipt, ...receipts];
+    setKept(signed);
     setReceipts(next);
     // The browser can refuse to store (full, or switched off). Say so; the sign-off and the record go on.
     setStoreFailed(!storeReceipts(next));
     setStage('signed');
+    setSigning(false);
     setCopyState('idle');
     if (keepCopies && uid) {
       // Independent of the local store. With no network the write waits, and finishes when the network is back.
       setCopyState('pending');
+      // The write can finish long after this run was cleared. Its outcome is shown only while this run is on screen.
       try {
         await saveReceiptCopy(uid, receipt);
-        setCopyState('saved');
+        if (runRef.current === run) setCopyState('saved');
         void refreshRecords(uid);
       } catch {
-        setCopyState('failed');
+        if (runRef.current === run) setCopyState('failed');
       }
     }
+  };
+
+  /** Keep or strike one item. Nothing changes once sign-off has begun. */
+  const decide = (i: number, keep: boolean) => {
+    if (signingRef.current || stage !== 'result') return;
+    setKept((k) => k.map((v, j) => (j === i ? keep : v)));
   };
 
   /** The draft as it is read on this device: a bare stand-in that was sent has its brackets back. `result.draft` is the reply as it came. */
@@ -485,7 +521,7 @@ export function App() {
 
   const finalText = useMemo(() => {
     if (!draft) return '';
-    const items = draft.items.filter((_, i) => kept[i]);
+    const items = draft.items.filter((_, i) => kept[i] === true);
     return restore([draft.title, '', ...items.map((i) => `${i.heading}\n${i.text}\n`)].join('\n'), entities, sent?.tokens).trim();
   }, [draft, kept, entities, sent]);
 
@@ -507,6 +543,10 @@ export function App() {
 
   /** Clear everything a run produced. The note and the class list stay. */
   const clearRun = () => {
+    runRef.current++;
+    signingRef.current = false;
+    setSigning(false);
+    setCheckRequests(null);
     setStage('write');
     setEntities([]);
     setGuardWhere('NOT_RUN');
@@ -565,6 +605,8 @@ export function App() {
   const withheld = entities.filter((e) => e.withheld);
   /** A reply flagged at the return gate cannot be signed off or copied until the teacher has read it. */
   const replyBlocked = replyIssues.length > 0 && !replyRead;
+  /** Items the teacher has not yet chosen to keep or strike. */
+  const undecided = kept.filter((k) => k === null).length;
   const editing = stage === 'write';
   const busy = stage === 'guarding' || stage === 'drafting' || stage === 'checking';
 
@@ -933,8 +975,17 @@ export function App() {
                   )}
                   {checkWhere === 'NOT_RUN' && (
                     <p className="caution">
-                      The on-device check did not run, so this draft was not checked against what was withheld. The items below are
-                      not checked: read each one against the private details yourself.
+                      {checkRequests && checkRequests.asked > 0
+                        ? `The on-device check could not run: all ${checkRequests.asked} of its requests to the on-device model failed.`
+                        : 'The on-device check did not run.'}{' '}
+                      This draft was not checked against what was withheld. Read each item against the private details yourself,
+                      then choose to keep it or strike it.
+                    </p>
+                  )}
+                  {checkWhere === 'ON_DEVICE' && checkRequests && checkRequests.failed > 0 && (
+                    <p className="caution">
+                      The on-device check ran only in part: {checkRequests.failed} of its {checkRequests.asked} requests to the
+                      on-device model failed. The items it could not check say so. Read those against the private details yourself.
                     </p>
                   )}
                   <ol className="items">
@@ -942,7 +993,7 @@ export function App() {
                       const c = checks[i];
                       const facts = detailsFor(item, entities);
                       return (
-                        <li key={i} className={kept[i] ? '' : 'struck'}>
+                        <li key={i} className={kept[i] === null ? 'undecided' : kept[i] ? '' : 'struck'}>
                           <h4>
                             <DeviceText text={item.heading} entities={entities} allowed={sent?.tokens} />
                           </h4>
@@ -961,13 +1012,13 @@ export function App() {
                               )}
                             </div>
                           )}
-                          {stage === 'result' && c?.verdict === 'conflict' && !kept[i] && (
+                          {stage === 'result' && c?.verdict === 'conflict' && kept[i] === false && (
                             <p className="hint struck-why">
                               Struck to begin with, because it conflicts with what you know. Keep it only if you still want it.
                             </p>
                           )}
                           {/* A message home is copied one at a time, so one family's message never travels with another's. */}
-                          {stage === 'signed' && task === 'parents' && kept[i] && (
+                          {stage === 'signed' && task === 'parents' && kept[i] === true && (
                             <button
                               className="link copy-one"
                               disabled={replyBlocked}
@@ -976,8 +1027,22 @@ export function App() {
                               {copyLabel(i, 'Copy this message')}
                             </button>
                           )}
-                          {stage === 'result' && (
-                            <button className="link" onClick={() => setKept((k) => k.map((v, j) => (j === i ? !v : v)))}>
+                          {stage === 'result' && kept[i] === null && (
+                            <div className="decide">
+                              <p className="hint struck-why">
+                                {c?.verdict === 'not checked' ? 'This item was not checked.' : 'The check was not sure about this item.'}{' '}
+                                Choose to keep it or strike it before you sign off.
+                              </p>
+                              <button className="link" disabled={signing} onClick={() => decide(i, true)}>
+                                Keep this item
+                              </button>
+                              <button className="link" disabled={signing} onClick={() => decide(i, false)}>
+                                Strike this item
+                              </button>
+                            </div>
+                          )}
+                          {stage === 'result' && kept[i] !== null && (
+                            <button className="link" disabled={signing} onClick={() => decide(i, !kept[i])}>
                               {kept[i] ? 'Strike this item' : 'Keep this item'}
                             </button>
                           )}
@@ -998,11 +1063,20 @@ export function App() {
                   )}
                   {stage === 'result' ? (
                     <div className="actions">
-                      <button className="primary" onClick={signOff} disabled={!kept.some(Boolean) || replyBlocked}>
-                        Sign off {kept.filter(Boolean).length} of {kept.length} items
+                      <button
+                        className="primary"
+                        onClick={signOff}
+                        disabled={signing || undecided > 0 || !kept.some((k) => k === true) || replyBlocked}
+                      >
+                        Sign off {kept.filter((k) => k === true).length} of {kept.length} items
                       </button>
                       <span className="hint">
-                        {kept.some((k) => !k) ? 'Struck items are left out. ' : ''}Your sign-off is recorded on the receipt.
+                        {undecided > 0
+                          ? `Choose keep or strike for ${undecided} ${undecided === 1 ? 'item' : 'items'} first. `
+                          : kept.some((k) => k === false)
+                            ? 'Struck items are left out. '
+                            : ''}
+                        The numbers of items kept and struck are recorded on the receipt.
                       </span>
                     </div>
                   ) : (
@@ -1207,7 +1281,7 @@ export function App() {
 }
 
 const VERDICT_LABEL: Record<ItemCheck['verdict'], string> = {
-  fits: 'Fits what you know',
+  fits: 'No conflict found',
   conflict: 'Conflicts with what you know',
   unsure: 'Think before using',
   'nothing withheld': 'Nothing to check',
@@ -1442,10 +1516,18 @@ function Receipts({
                       <dt>Check</dt>
                       <dd>
                         {r.check.where === 'ON_DEVICE'
-                          ? `On device: ${r.check.fits} fit, ${r.check.unsure} to think about, ${r.check.conflict} in conflict, ${r.check.nothingWithheld} with nothing to check`
+                          ? `On device: ${r.check.fits} with no conflict found, ${r.check.unsure} to think about, ${r.check.conflict} in conflict, ${r.check.notChecked} not checked, ${r.check.nothingWithheld} with nothing to check${
+                              (r.check.failedRequests ?? 0) > 0
+                                ? `. It ran only in part: ${r.check.failedRequests} of its ${r.check.requests} requests to the on-device model failed`
+                                : ''
+                            }`
                           : r.check.where === 'SKIPPED'
                             ? `Skipped, nothing to check: ${r.check.nothingWithheld} with nothing withheld`
-                            : `Did not run: ${r.check.notChecked} not checked, ${r.check.nothingWithheld} with nothing to check`}
+                            : `${
+                                (r.check.failedRequests ?? 0) > 0
+                                  ? `Could not run, all ${r.check.requests} of its requests to the on-device model failed`
+                                  : 'Did not run'
+                              }: ${r.check.notChecked} not checked, ${r.check.nothingWithheld} with nothing to check`}
                         . Return gate {r.check.replyGate}.
                       </dd>
                       <dt>Sign-off</dt>

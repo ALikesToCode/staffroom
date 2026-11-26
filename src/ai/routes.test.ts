@@ -40,21 +40,22 @@ describe('ONLY_ON_DEVICE routes with no on-device model', () => {
 
   it('rejects the check without a request', async () => {
     const items = [{ heading: '[Student 1]', text: 'Set a timed written test.' }];
-    await expect(checkOnDevice(note, items, vault, () => {})).rejects.toThrow(/no on-device model/);
+    await expect(checkOnDevice(note, items, vault, ['[Student 1]'], () => {})).rejects.toThrow(/no on-device model/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('answers without any model when no private detail was withheld', async () => {
     const nothingPrivate = vault.filter((e) => e.kind !== 'private');
     const items = [{ heading: 'Whole class', text: 'Start with a quiet reading task.' }];
-    const checks = await checkOnDevice(note, items, nothingPrivate, () => {});
-    expect(checks.map((c) => c.verdict)).toEqual(['nothing withheld']);
+    const run = await checkOnDevice(note, items, nothingPrivate, ['[Student 1]'], () => {});
+    expect(run.checks.map((c) => c.verdict)).toEqual(['nothing withheld']);
+    expect(run.asked).toBe(0);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('refuses a whole-class item too when a private detail was withheld', async () => {
     const items = [{ heading: 'Whole class', text: 'Hold a timed written test.' }];
-    await expect(checkOnDevice(note, items, vault, () => {})).rejects.toThrow(/no on-device model/);
+    await expect(checkOnDevice(note, items, vault, ['[Student 1]'], () => {})).rejects.toThrow(/no on-device model/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
