@@ -326,7 +326,7 @@ describe('vault', () => {
   });
 });
 
-import { anchorQuote, paragraphs, readGuardAnswer } from '../ai/guard';
+import { anchorQuote, MAX_CHUNK, paragraphs, readGuardAnswer } from '../ai/guard';
 import { anythingToCheck, checkPrompt, contextParagraphs, detailsFor, readVerdict, studentsNamed } from '../ai/check';
 import { makeReceipt, receiptRecord, sha256Hex } from './receipts';
 
@@ -371,6 +371,34 @@ describe('guard helpers', () => {
 
   it('splits on blank lines', () => {
     expect(paragraphs('one\n\n two \n\n\nthree')).toEqual(['one', 'two', 'three']);
+  });
+
+  it('splits a long paragraph on line breaks, then on sentence ends', () => {
+    const sentence = 'Aarav handed in his maths homework late again this week.';
+    const line = Array.from({ length: 20 }, () => sentence).join(' ');
+    const long = ['A short first line.', line, 'A short last line.'].join('\n');
+    expect(long.length).toBeGreaterThan(MAX_CHUNK);
+    const chunks = paragraphs(`Heading\n\n${long}\n\nA short paragraph.`);
+    expect(chunks[0]).toBe('Heading');
+    expect(chunks[chunks.length - 1]).toBe('A short paragraph.');
+    expect(chunks.length).toBeGreaterThan(3);
+    expect(chunks.every((c) => c.length <= MAX_CHUNK)).toBe(true);
+    // Only at a line break or a sentence end, and nothing is lost.
+    for (const c of chunks.slice(1, -1)) expect(c).toMatch(/^A[^]*\.$/);
+    const words = (t: string) => t.split(/\s+/).filter(Boolean);
+    expect(chunks.flatMap(words)).toEqual(words(`Heading ${long} A short paragraph.`));
+  });
+
+  it('cuts a single sentence that is too long at a space', () => {
+    const endless = Array.from({ length: 300 }, (_, i) => `word${i}`).join(' ');
+    const chunks = paragraphs(endless);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((c) => c.length <= MAX_CHUNK)).toBe(true);
+    expect(chunks.join(' ')).toBe(endless);
+  });
+
+  it('leaves a paragraph of ordinary length whole', () => {
+    expect(paragraphs(SAMPLE_NOTE)).toHaveLength(5);
   });
 });
 

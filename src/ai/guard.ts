@@ -45,12 +45,55 @@ interface GuardAnswer {
   private?: { quote?: string; category?: string; about?: string }[];
 }
 
-/** Split a note into paragraphs. A small model is more exact on short inputs. */
+/** No single prompt to the small model carries more than about this many characters of the note. */
+export const MAX_CHUNK = 800;
+
+/** Pack pieces, in order, into chunks of at most MAX_CHUNK characters. A piece is never cut here. */
+function pack(pieces: string[], joiner: string): string[] {
+  const out: string[] = [];
+  for (const piece of pieces) {
+    const last = out[out.length - 1];
+    if (last !== undefined && last.length + joiner.length + piece.length <= MAX_CHUNK) out[out.length - 1] = last + joiner + piece;
+    else out.push(piece);
+  }
+  return out;
+}
+
+/** Cut one over-long piece: at sentence ends, and at a space only if a single sentence is still too long. */
+function cutLong(piece: string): string[] {
+  if (piece.length <= MAX_CHUNK) return [piece];
+  const sentences = piece.split(/(?<=[.!?])\s+/).flatMap((sentence) => {
+    const parts: string[] = [];
+    let rest = sentence;
+    while (rest.length > MAX_CHUNK) {
+      const space = rest.lastIndexOf(' ', MAX_CHUNK);
+      const at = space > 0 ? space : MAX_CHUNK;
+      parts.push(rest.slice(0, at).trim());
+      rest = rest.slice(at).trim();
+    }
+    if (rest) parts.push(rest);
+    return parts;
+  });
+  return pack(sentences, ' ');
+}
+
+/**
+ * Split a note into the pieces the model reads one at a time. A small model
+ * is more exact on short inputs, so a paragraph (text between blank lines)
+ * longer than MAX_CHUNK is split again: on single line breaks, then on
+ * sentence ends. Every character of the note other than spacing is in
+ * exactly one piece.
+ */
 export function paragraphs(note: string): string[] {
   return note
     .split(/\n\s*\n/)
     .map((p) => p.trim())
-    .filter((p) => p.length > 0);
+    .filter((p) => p.length > 0)
+    .flatMap((p) => {
+      if (p.length <= MAX_CHUNK) return [p];
+      const lines = p.split(/\n/).map((l) => l.trim()).filter(Boolean);
+      return pack(lines.flatMap(cutLong), '\n');
+    });
 }
 
 /**
