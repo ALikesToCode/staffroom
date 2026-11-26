@@ -57,7 +57,7 @@ export interface RecordedRun {
 const WHERES: Where[] = ['ON_DEVICE', 'IN_CLOUD', 'RULES_ONLY', 'NOT_RUN', 'SKIPPED'];
 const VERDICTS: ItemCheck['verdict'][] = ['fits', 'conflict', 'unsure', 'nothing withheld', 'not checked'];
 const SOURCES = ['class list', 'rule', 'on-device model', 'teacher'];
-const TASK_IDS: TaskId[] = ['plan', 'parents', 'handover'];
+const TASK_IDS: TaskId[] = ['lesson', 'plan', 'parents', 'handover'];
 
 const str = (v: unknown): v is string => typeof v === 'string';
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);

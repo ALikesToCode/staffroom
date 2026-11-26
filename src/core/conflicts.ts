@@ -328,10 +328,12 @@ export function ruleCheckItem(
   note: string,
   /** The need lines that were sent, by constraint id. The step is compared with every confirmed constraint, told or not. */
   told: ReadonlyMap<string, string> = new Map(),
+  /** True for a step of a lesson: it is for the whole class, whoever it names, so every confirmed constraint is compared. */
+  wholeClass = false,
 ): RuleCheck {
   const named = studentsNamed(item, entities).map((e) => e.id);
   // An item that names a student is about that student, though it speaks of classmates or peers.
-  const everyone = named.length === 0;
+  const everyone = wholeClass || named.length === 0;
   const applies = constraints.filter((c) => c.confirmed && (!c.about || everyone || named.includes(c.about)));
   if (applies.length === 0) return { compared: 0 };
   const afterBell = afterBellActivities(note);
@@ -353,6 +355,46 @@ export function ruleCheckItem(
     }
   }
   return found ? { hit: found, compared: applies.length } : { compared: applies.length };
+}
+
+/** One step of an item that a rule found against one confirmed constraint. */
+export interface StepHit {
+  /** Which step of the item, counted from 0 among its steps as the teacher reads them. -1: the heading. */
+  stepIndex: number;
+  /** The step, names put back. */
+  step: string;
+  constraint: Constraint;
+  hit: RuleHit;
+}
+
+/**
+ * Every rule hit in one item of a draft: each step against each confirmed
+ * constraint, not only the first found. For a lesson, where a step is for
+ * the whole class and may be wrong for several children at once. Every
+ * confirmed constraint is compared, whoever the item names.
+ */
+export function ruleHitsForItem(
+  item: DraftItem,
+  constraints: Constraint[],
+  entities: Entity[],
+  allowed: readonly string[],
+  note: string,
+  told: ReadonlyMap<string, string> = new Map(),
+): StepHit[] {
+  const applies = constraints.filter((c) => c.confirmed);
+  if (applies.length === 0) return [];
+  const afterBell = afterBellActivities(note);
+  const parts = [restore(item.heading, entities, allowed), ...steps(restore(item.text, entities, allowed).trim())];
+  const out: StepHit[] = [];
+  parts.forEach((step, i) => {
+    for (const c of applies) {
+      const student = entities.find((e) => e.id === c.about);
+      const line = told.get(c.id);
+      const said = ruleConflicts(step, c, { name: student ? nameInNote(note, student) : undefined, afterBell, told: line !== undefined });
+      if (said) out.push({ stepIndex: i - 1, step, constraint: c, hit: line === undefined ? said : { ...said, told: line } });
+    }
+  });
+  return out;
 }
 
 /** The student's name as the teacher first wrote it in the note: "Meenal", though the class list says "Meenal Joshi". */

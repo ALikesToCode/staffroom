@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Constraint, ConstraintKind, ItemCheck } from './types';
-import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from './samples';
+import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redactRange, redactWithTokens } from './vault';
 import { confirmConstraint, proposeConstraints } from './constraints';
 import { afterBellActivities, cloudSawAround, combineChecks, layerCounts, negated, ruleCheckItem, ruleConflicts, ruleOnlyReason, verdictLabel } from './conflicts';

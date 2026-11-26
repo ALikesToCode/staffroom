@@ -1,6 +1,6 @@
 import type { Constraint, DraftItem, Entity } from '../core/types';
 import { confirmConstraint, lockConstraints, proposeConstraints } from '../core/constraints';
-import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from '../core/samples';
+import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE } from '../core/samples';
 import { buildVault, redactWithTokens, type Candidate } from '../core/vault';
 
 /**

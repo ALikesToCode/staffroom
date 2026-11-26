@@ -31,7 +31,7 @@ export interface Entity {
   category?: string;
 }
 
-export type TaskId = 'plan' | 'parents' | 'handover';
+export type TaskId = 'lesson' | 'plan' | 'parents' | 'handover';
 
 export interface Task {
   id: TaskId;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { askForConstraints, mergeProposals, readConstraintAnswer, studentParagraphs } from '../ai/constraints';
 import type { Constraint, Entity } from './types';
-import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from './samples';
+import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redact } from './vault';
 import { checkOutgoing } from './gate';
 import {

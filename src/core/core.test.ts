@@ -19,7 +19,7 @@ import {
   PRIVATE_TOKEN,
 } from './vault';
 import { checkOutgoing, checkReply, safeTitle } from './gate';
-import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './samples';
+import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE, TASKS } from './samples';
 import { DRAFT_FORMAT, DRAFT_NOTES_HEADING, draftPrompt, LABEL_CHARS, labelPrompt } from '../ai/draft';
 import { NOTE_MAX, plainText } from './text';
 

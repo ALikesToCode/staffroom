@@ -21,7 +21,7 @@ export function storeReceipts(receipts: Receipt[]): boolean {
   }
 }
 
-const SHORT_TASK: Record<TaskId, string> = { plan: 'Support plan', parents: 'Notes to parents', handover: 'Hand-over' };
+const SHORT_TASK: Record<TaskId, string> = { lesson: 'Lesson', plan: 'Support plan', parents: 'Notes to parents', handover: 'Hand-over' };
 const SHORT_MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**
