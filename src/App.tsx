@@ -2262,7 +2262,7 @@ export function App() {
                           ['topic', 'Topic', 'Writing a short description of a place'],
                         ] as const
                       ).map(([key, label, example]) => (
-                        <label key={key} className={`field f-${key}`}>
+                        <label key={key} className={`lesson-field f-${key}`}>
                           {label}
                           <input
                             type="text"
@@ -2274,7 +2274,7 @@ export function App() {
                           />
                         </label>
                       ))}
-                      <label className="field f-minutes">
+                      <label className="lesson-field f-minutes">
                         Minutes
                         <input
                           type="number"
@@ -2286,7 +2286,7 @@ export function App() {
                           onBlur={() => setLesson((l) => ({ ...l, minutes: lessonMinutes(l.minutes) }))}
                         />
                       </label>
-                      <label className="field f-last">
+                      <label className="lesson-field f-last">
                         What we did last time <small>optional</small>
                         <textarea
                           rows={2}

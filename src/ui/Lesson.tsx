@@ -63,7 +63,7 @@ function HitRow({ hit, adj, live, canModel, busy, said, recorded, actions }: { h
   };
 
   return (
-    <li className={`hit ${adj?.state ?? 'open'}`}>
+    <li className={`child-hit ${adj?.state ?? 'open'}`}>
       <p className="hit-why">{hit.line}</p>
       {adj && adj.state !== 'left' && typing === null && (
         <div className="adjustment" ref={offer}>
@@ -235,7 +235,7 @@ function LessonCard({ lesson, onAfter, onNext, onDelete }: { lesson: SavedLesson
             </li>
           ))}
         </ul>
-        <label className="field">
+        <label className="lesson-field">
           One line about the lesson <small>optional, no names</small>
           <input type="text" value={line} maxLength={240} onChange={(e) => setLine(e.target.value)} />
         </label>
