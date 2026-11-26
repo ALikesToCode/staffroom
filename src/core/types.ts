@@ -59,12 +59,17 @@ export interface ItemCheck {
 /** SKIPPED: the step had nothing to do, so no model was asked. NOT_RUN: it had work and no model to do it. */
 export type Where = 'ON_DEVICE' | 'IN_CLOUD' | 'RULES_ONLY' | 'NOT_RUN' | 'SKIPPED';
 
+/** Where the call that names the receipt ran. FALLBACK: no model answered, so the task name is used. */
+export type LabelWhere = 'ON_DEVICE' | 'IN_CLOUD' | 'FALLBACK';
+
 /** The audit record of one run. It holds no vault contents. */
 export interface Receipt {
   id: string;
   createdAt: string;
   task: TaskId;
   label: string;
+  /** Where the label was written. Receipts made before this was recorded do not have it. */
+  labelWhere?: LabelWhere;
   guard: {
     where: Where;
     found: Record<Kind, number>;

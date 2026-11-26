@@ -1,4 +1,4 @@
-import type { Entity, ItemCheck, Kind, Receipt, Source, TaskId, Where } from './types';
+import type { Entity, ItemCheck, Kind, LabelWhere, Receipt, Source, TaskId, Where } from './types';
 
 const KEY = 'staffroom.receipts.v1';
 
@@ -17,6 +17,7 @@ export function storeReceipts(receipts: Receipt[]): void {
 interface Run {
   task: TaskId;
   label: string;
+  labelWhere: LabelWhere;
   entities: Entity[];
   guardWhere: Where;
   unreadParagraphs: number;
@@ -48,6 +49,7 @@ export function makeReceipt(run: Run): Receipt {
     createdAt: now,
     task: run.task,
     label: run.label,
+    labelWhere: run.labelWhere,
     guard: {
       where: run.guardWhere,
       found,

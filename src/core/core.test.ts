@@ -284,6 +284,7 @@ describe('check and receipt', () => {
     const receipt = makeReceipt({
       task: 'plan',
       label: 'Support plan',
+      labelWhere: 'ON_DEVICE',
       entities: vault,
       guardWhere: 'ON_DEVICE',
       unreadParagraphs: 1,
@@ -303,6 +304,7 @@ describe('check and receipt', () => {
     expect(json).not.toContain('epilepsy');
     expect(receipt.guard.found.student).toBe(2);
     expect(receipt.guard.unreadParagraphs).toBe(1);
+    expect(receipt.labelWhere).toBe('ON_DEVICE');
     expect(receipt.check.conflict).toBe(1);
   });
 });

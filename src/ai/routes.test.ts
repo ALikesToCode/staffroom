@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildVault } from '../core/vault';
 import { checkOnDevice } from './check';
+import { labelReceipt } from './draft';
 import { guardOnDevice } from './guard';
 import { modelFor, onDeviceModelPresent, prepareDevice } from './routes';
 
@@ -59,5 +60,20 @@ describe('ONLY_ON_DEVICE routes with no on-device model', () => {
     expect(() => modelFor('draft', { system: 'x' })).not.toThrow();
     expect(() => modelFor('label', { system: 'x' })).not.toThrow();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('naming the receipt', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('records a fallback when neither model answers', async () => {
+    delete (globalThis as { LanguageModel?: unknown }).LanguageModel;
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('offline'))));
+    expect(await labelReceipt('[Student 1] reads well.', 'Support plan for next week')).toEqual({
+      title: 'Support plan for next week',
+      where: 'FALLBACK',
+    });
   });
 });

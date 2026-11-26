@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Entity, ItemCheck, Kind, Receipt, TaskId, Where } from './core/types';
+import type { Entity, ItemCheck, Kind, LabelWhere, Receipt, TaskId, Where } from './core/types';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './core/samples';
 import { addByTeacher, appearsIn, applyLocks, buildVault, deterministicCandidates, redact, restore, segment } from './core/vault';
 import { checkOutgoing, checkReply, type Violation } from './core/gate';
@@ -85,7 +85,7 @@ export function App() {
   const [checks, setChecks] = useState<ItemCheck[]>([]);
   const [checkWhere, setCheckWhere] = useState<Where>('NOT_RUN');
   const [kept, setKept] = useState<boolean[]>([]);
-  const [label, setLabel] = useState('');
+  const [label, setLabel] = useState<{ title: string; where: LabelWhere } | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>(loadReceipts);
   const [copyState, setCopyState] = useState<'idle' | 'saved' | 'failed'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -278,7 +278,8 @@ export function App() {
     if (!result || !sent || replyBlocked) return;
     const receipt = makeReceipt({
       task,
-      label: label || currentTask.label,
+      label: label?.title || currentTask.label,
+      labelWhere: label?.where ?? 'FALLBACK',
       entities,
       guardWhere,
       unreadParagraphs: guardGaps.unread.length,
@@ -336,7 +337,7 @@ export function App() {
     setReplyIssues([]);
     setReplyRead(false);
     setKept([]);
-    setLabel('');
+    setLabel(null);
     setProgress('');
     setCopyState('idle');
     setError(null);
@@ -852,6 +853,13 @@ const VERDICT_LABEL: Record<ItemCheck['verdict'], string> = {
   'not checked': 'Not checked',
 };
 
+const LABEL_WHERE: Record<LabelWhere | 'UNKNOWN', string> = {
+  ON_DEVICE: 'Written on the device from the approved text',
+  IN_CLOUD: 'Written in the cloud from the approved text',
+  FALLBACK: 'The task name: no model answered',
+  UNKNOWN: 'Not recorded for this receipt',
+};
+
 // ------------------------------------------------------------------ small views
 
 function DevicePill({ device, download, onTurnOn }: { device: DeviceStatus; download: number | null; onTurnOn: () => void }) {
@@ -998,6 +1006,8 @@ function Receipts({
                       <span>{r.signOff.kept} signed off</span>
                     </summary>
                     <dl className="facts">
+                      <dt>Name</dt>
+                      <dd>{LABEL_WHERE[r.labelWhere ?? 'UNKNOWN']}</dd>
                       <dt>Guard</dt>
                       <dd>
                         {r.guard.where === 'ON_DEVICE' ? 'On-device model and rules' : 'Rules only'}:{' '}

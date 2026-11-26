@@ -1,4 +1,4 @@
-import type { Draft, Task, Where } from '../core/types';
+import type { Draft, LabelWhere, Task, Where } from '../core/types';
 import { plainText } from '../core/text';
 import { modelFor } from './routes';
 
@@ -55,19 +55,29 @@ export async function writeDraft(redacted: string, task: Task, cloudModel: strin
   };
 }
 
+export interface LabelResult {
+  title: string;
+  /** Where the naming call ran, or FALLBACK when neither model answered and the task name is used. */
+  where: LabelWhere;
+}
+
 /**
  * A short name for the receipt, from the redacted text only. The route is
  * PREFER_ON_DEVICE. Falls back to the task name if neither model answers.
+ * Where the call ran is read from the response and returned, like every
+ * other call.
  */
-export async function labelReceipt(redacted: string, fallback: string): Promise<string> {
+export async function labelReceipt(redacted: string, fallback: string): Promise<LabelResult> {
   try {
     const model = modelFor('label', {
       system: 'You write a short plain title, six words at most, for a teacher\'s note. Reply with the title only, no quotes, no full stop. Never include a name.',
     });
     const result = await model.generateContent(`Note:\n${redacted.slice(0, 1200)}`);
+    const where: LabelWhere = result.response.inferenceSource === 'on_device' ? 'ON_DEVICE' : 'IN_CLOUD';
     const title = result.response.text().trim().split('\n')[0].replace(/^["'\s]+|["'.\s]+$/g, '');
-    return title && title.length <= 80 ? title : fallback;
+    // An unusable title is replaced by the task name. The call still ran, so where it ran is still recorded.
+    return { title: title && title.length <= 80 ? title : fallback, where };
   } catch {
-    return fallback;
+    return { title: fallback, where: 'FALLBACK' };
   }
 }
