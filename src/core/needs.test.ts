@@ -198,6 +198,15 @@ describe('a lesson request', () => {
     expect(classSentences('The theme is the harvest.', vault)).toEqual({ text: 'The theme is the harvest.', notSent: 0 });
   });
 
+  it('still asks for the as-written tick when nothing is withheld, though a sentence about one pupil is left out', () => {
+    const out = outgoingOf('priya walks home alone. she is quiet.', [], [], true);
+    expect(out.notSent).toBe(1);
+    expect(out.tokens).toEqual([]);
+    // "priya" was not found, so it is sent as written: the teacher must say that is what they mean.
+    expect(out.text.startsWith('priya walks home alone.')).toBe(true);
+    expect(out.noteAsWritten).toBe(true);
+  });
+
   it('with nothing about the class, sends the needs alone', () => {
     const out = outgoingOf('Asha reads well.', vault, [learning('l', vault[0].id)], true);
     expect(out.text.startsWith(LESSON_NEEDS_HEADING)).toBe(true);

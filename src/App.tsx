@@ -474,6 +474,8 @@ export function App() {
   const outgoing = replay ? replay.outgoing : going.text;
   /** True when not one stand-in was written: the outgoing text is the note as the teacher wrote it. */
   const nothingWithheld = replay ? false : going.noteAsWritten;
+  /** For a lesson: sentences about one pupil that are left out, so what is sent is part of the note, not all of it. */
+  const partOfNote = !replay && (going.notSent ?? 0) > 0;
   const violations = replay ? [] : going.violations;
   const approval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel);
   const asWrittenApproval = approvalKey(outgoing, policy.lockedKinds, policy.cloudModel, true);
@@ -3041,8 +3043,9 @@ export function App() {
                   {/* What the guard did not cover is said here, beside the gate: before the text, and above the tick. */}
                   {nothingWithheld && (
                     <p className="caution strong" role="alert">
-                      Nothing is withheld. The text below is your note exactly as you wrote it: every name and every detail in it will be
-                      sent to the cloud model.
+                      {partOfNote
+                        ? 'Nothing is withheld. The sentences of your note below are exactly as you wrote them: every name and every detail in them will be sent to the cloud model.'
+                        : 'Nothing is withheld. The text below is your note exactly as you wrote it: every name and every detail in it will be sent to the cloud model.'}
                     </p>
                   )}
                   {guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0 && (
@@ -3082,7 +3085,11 @@ export function App() {
                     </ul>
                   )}
                   {nothingWithheld && (
-                    <p className="hint">A receipt holds the text you approved. Here that is your whole note, as written.</p>
+                    <p className="hint">
+                      {partOfNote
+                        ? 'A receipt holds the text you approved. Here that is the sentences of your note that are sent, as written.'
+                        : 'A receipt holds the text you approved. Here that is your whole note, as written.'}
+                    </p>
                   )}
                 </article>
               )}
@@ -3213,7 +3220,9 @@ export function App() {
                     {nothingWithheld && (
                       <label className="read-it as-written">
                         <input type="checkbox" checked={asWritten} onChange={(e) => setAsWrittenKey(e.target.checked ? asWrittenApproval : null)} />
-                        Nothing has been withheld. I am sending my note as written.
+                        {partOfNote
+                          ? 'Nothing has been withheld. I am sending these sentences of my note as written.'
+                          : 'Nothing has been withheld. I am sending my note as written.'}
                       </label>
                     )}
                   </div>

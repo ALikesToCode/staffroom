@@ -175,7 +175,7 @@ export interface Outgoing {
   text: string;
   /** Every stand-in written into it, in the note or in a need line. Only these may come back and be restored. */
   tokens: string[];
-  /** True when the note part is the note as written: no stand-in in it, and no sentence left out. */
+  /** True when not one stand-in was written into the note part: what is sent of the note is as written. For a lesson, sentences may still be left out (notSent). */
   noteAsWritten: boolean;
   /** For a lesson: how many sentences of the note were left out because they are about one pupil. Absent for the other tasks. */
   notSent?: number;
@@ -202,7 +202,8 @@ export function outgoingOf(note: string, entities: Entity[], constraints: Constr
       text: withLessonNeeds(kept.text, byLetter),
       // Only the stand-ins that are still in the text may come back.
       tokens: redaction.tokens.filter((t) => kept.text.includes(t)),
-      noteAsWritten: redaction.tokens.length === 0 && kept.notSent === 0,
+      // Leaving a sentence out withholds nothing from the sentences that are sent, so they still need the as-written tick.
+      noteAsWritten: redaction.tokens.length === 0,
       notSent: kept.notSent,
       // One entry for each constraint behind a need, so that a rule hit can say the cloud was told it.
       needs: byLetter.flatMap((n) => n.constraintIds.map((id) => ({ id, line: needLabel(n), issues: n.issues }))),
