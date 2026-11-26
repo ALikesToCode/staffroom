@@ -117,8 +117,9 @@ export const GUARD_CASES: GuardCase[] = [
       { text: 'Siddharth', kind: 'name', easy: true },
       { text: 'family shares one old phone, and her brother takes it to work all day', kind: 'private', easy: false },
       { text: 'She can only do online homework on Sundays, when he is at home', kind: 'private', easy: false },
+      { text: 'Lucknow', kind: 'place', easy: true },
     ],
-    harmless: ['won the inter-school quiz in Lucknow last week'],
+    harmless: ['won the inter-school quiz'],
     constraints: ['no-phone-internet'],
   },
   {
