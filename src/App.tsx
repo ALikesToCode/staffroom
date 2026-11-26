@@ -16,14 +16,39 @@ type View = 'desk' | 'receipts' | 'how';
 
 const STEP: Record<Stage, number> = { write: 0, guarding: 1, review: 2, drafting: 3, checking: 4, result: 5, signed: 6 };
 
-const stored = <T,>(key: string, fallback: T): T => {
+const read = <T,>(storage: () => Storage, key: string, fallback: T): T => {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = storage().getItem(key);
     return raw === null ? fallback : (JSON.parse(raw) as T);
   } catch {
     return fallback;
   }
 };
+
+/** Write a value, or remove the key when the value is empty. Storage can be switched off: that is not an error. */
+const write = (storage: () => Storage, key: string, value: unknown, empty: boolean) => {
+  try {
+    if (empty) storage().removeItem(key);
+    else storage().setItem(key, JSON.stringify(value));
+  } catch {
+    // Nothing to do: the value stays in memory for this page only.
+  }
+};
+
+// The raw note and the class list are kept for this tab only, and are gone when it closes.
+// Settings and receipts (which hold only approved text) stay in local storage.
+const session = () => sessionStorage;
+const local = () => localStorage;
+const NOTE_KEY = 'staffroom.note';
+const CLASS_LIST_KEY = 'staffroom.classList';
+
+// Earlier versions kept the raw note and the class list in local storage. Remove what they left.
+try {
+  localStorage.removeItem(NOTE_KEY);
+  localStorage.removeItem(CLASS_LIST_KEY);
+} catch {
+  // Storage is switched off, so there is nothing to remove.
+}
 
 const NO_GAPS: { unread: number[]; dropped: number } = { unread: [], dropped: 0 };
 
@@ -33,8 +58,8 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function App() {
   const [view, setView] = useState<View>('desk');
   const [stage, setStage] = useState<Stage>('write');
-  const [note, setNote] = useState(() => stored('staffroom.note', ''));
-  const [classList, setClassList] = useState<string[]>(() => stored('staffroom.classList', []));
+  const [note, setNote] = useState(() => read(session, NOTE_KEY, ''));
+  const [classList, setClassList] = useState<string[]>(() => read(session, CLASS_LIST_KEY, []));
   const [task, setTask] = useState<TaskId>('plan');
 
   const [device, setDevice] = useState<DeviceStatus>('checking');
@@ -42,7 +67,7 @@ export function App() {
   const [online, setOnline] = useState(navigator.onLine);
   const [policy, setPolicy] = useState<Policy>(DEFAULT_POLICY);
   const [uid, setUid] = useState<string | null>(null);
-  const [keepCopies, setKeepCopies] = useState(() => stored('staffroom.keepCopies', false));
+  const [keepCopies, setKeepCopies] = useState(() => read(local, 'staffroom.keepCopies', false));
 
   /** The vault as the guard and the teacher left it. Read `entities` below, which has the school's locks applied. */
   const [rawEntities, setEntities] = useState<Entity[]>([]);
@@ -89,9 +114,9 @@ export function App() {
     };
   }, []);
 
-  useEffect(() => localStorage.setItem('staffroom.note', JSON.stringify(note)), [note]);
-  useEffect(() => localStorage.setItem('staffroom.classList', JSON.stringify(classList)), [classList]);
-  useEffect(() => localStorage.setItem('staffroom.keepCopies', JSON.stringify(keepCopies)), [keepCopies]);
+  useEffect(() => write(session, NOTE_KEY, note, note === ''), [note]);
+  useEffect(() => write(session, CLASS_LIST_KEY, classList, classList.length === 0), [classList]);
+  useEffect(() => write(local, 'staffroom.keepCopies', keepCopies, false), [keepCopies]);
 
   const currentTask = TASKS.find((t) => t.id === task)!;
   // The school's locks are part of how the outgoing text is computed, not only a disabled switch:
@@ -296,14 +321,43 @@ export function App() {
     setTimeout(() => setCopied(false), 1800);
   };
 
-  const startOver = () => {
+  /** Clear everything a run produced. The note and the class list stay. */
+  const clearRun = () => {
     setStage('write');
     setEntities([]);
+    setGuardWhere('NOT_RUN');
+    setGuardGaps(NO_GAPS);
+    setSelection('');
+    setReadText(null);
     setSent(null);
     setResult(null);
     setChecks([]);
+    setCheckWhere('NOT_RUN');
     setReplyIssues([]);
+    setReplyRead(false);
+    setKept([]);
+    setLabel('');
+    setProgress('');
+    setCopyState('idle');
     setError(null);
+  };
+
+  const startOver = clearRun;
+
+  /** Forget the raw note, the class list, the vault and the results: from memory and from storage. */
+  const forgetNote = () => {
+    clearRun();
+    setNote('');
+    setClassList([]);
+    try {
+      sessionStorage.removeItem(NOTE_KEY);
+      sessionStorage.removeItem(CLASS_LIST_KEY);
+      localStorage.removeItem(NOTE_KEY);
+      localStorage.removeItem(CLASS_LIST_KEY);
+    } catch {
+      // Storage is switched off, so nothing was kept there.
+    }
+    window.getSelection()?.removeAllRanges();
   };
 
   const loadSample = () => {
@@ -383,17 +437,28 @@ export function App() {
               <article className="card">
                 <div className="card-head">
                   <h3>Your note</h3>
-                  {editing ? (
-                    <button className="link" onClick={loadSample}>
-                      Use the sample class
-                    </button>
-                  ) : (
-                    !busy && stage !== 'signed' && (
-                      <button className="link" onClick={startOver}>
-                        Edit note
+                  <span className="head-links">
+                    {editing ? (
+                      <button className="link" onClick={loadSample}>
+                        Use the sample class
                       </button>
-                    )
-                  )}
+                    ) : (
+                      !busy && stage !== 'signed' && (
+                        <button className="link" onClick={startOver}>
+                          Edit note
+                        </button>
+                      )
+                    )}
+                    {!busy && (note !== '' || classList.length > 0) && (
+                      <button
+                        className="link forget"
+                        onClick={forgetNote}
+                        title="Clears the note, the class list, the vault and the results from this page and from this browser. Receipts are kept."
+                      >
+                        Forget this note
+                      </button>
+                    )}
+                  </span>
                 </div>
 
                 {editing ? (
@@ -411,7 +476,7 @@ export function App() {
                     />
                     <details className="class-list" open={classList.length === 0 ? undefined : false}>
                       <summary>
-                        Class list <small>{classList.length > 0 ? `${classList.length} names, kept in this browser` : 'optional, kept in this browser'}</small>
+                        Class list <small>{classList.length > 0 ? `${classList.length} names, kept in this tab until you close it` : 'optional, kept in this tab until you close it'}</small>
                       </summary>
                       <p>
                         One name per line. A name on this list is{' '}

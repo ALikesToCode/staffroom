@@ -611,6 +611,13 @@ mark.released {
   align-self: flex-start;
 }
 
+.head-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 16px;
+}
+
 .link:hover {
   color: var(--ink);
 }
