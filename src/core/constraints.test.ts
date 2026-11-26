@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { askForConstraints, mergeProposals, readConstraintAnswer, studentParagraphs } from '../ai/constraints';
 import type { Constraint, Entity } from './types';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redact } from './vault';
@@ -228,5 +229,97 @@ describe('constraints kept while the guard runs again', () => {
     ]);
     expect(back.constraints.filter((c) => c.confirmed).every((c) => c.about === meenalNow.id)).toBe(true);
     expect(redact(SAMPLE_NOTE, back.entities)).not.toContain('last bell to reach home');
+  });
+});
+
+describe('constraints proposed by the on-device model', () => {
+  const note = 'Class notes.\n\nAsha reads well. She minds the shop until seven each evening. Her aunt must not be rung.\n\nBina is ahead in maths.';
+  const entities = rulesVault(note, ['Asha', 'Bina']);
+  const para = studentParagraphs(note, entities)[0];
+  const answer = (list: unknown[]) => JSON.stringify({ constraints: list });
+
+  it('asks only about paragraphs that name a student', () => {
+    expect(studentParagraphs(note, entities)).toEqual([para, 'Bina is ahead in maths.']);
+    expect(para.startsWith('Asha reads well')).toBe(true);
+  });
+
+  it('keeps a proposal only when its quote stands in the paragraph, word for word', () => {
+    const reading = readConstraintAnswer(
+      note,
+      para,
+      answer([
+        { student: 'Asha', kind: 'time-after', quote: 'minds the shop until seven each evening' },
+        { student: 'Asha', kind: 'time-after', quote: 'minds the shop until 7 pm' },
+        { student: 'Asha', kind: 'curfew', quote: 'Asha reads well' },
+        { student: 'Bina', kind: 'money', quote: 'Bina is ahead in maths' },
+        { student: 'Asha', kind: 'contact', quote: 'Her aunt must not be rung' },
+      ]),
+      entities,
+    )!;
+    expect(reading.dropped).toBe(3);
+    expect(reading.constraints.map((c) => [c.kind, c.text, c.source, c.confirmed])).toEqual([
+      ['time-after', 'minds the shop until seven each evening', 'on-device model', false],
+      ['contact', 'Her aunt must not be rung', 'on-device model', false],
+    ]);
+    const asha = entities.find((e) => e.surfaces.includes('Asha'))!;
+    expect(reading.constraints.every((c) => c.about === asha.id && note.slice(c.at!, c.at! + c.text.length) === c.text)).toBe(true);
+    expect(reading.constraints[1].who).toBe('aunt');
+  });
+
+  it('does not take the model at its word about whose a fact is', () => {
+    const reading = readConstraintAnswer(note, para, answer([{ student: 'Bina', kind: 'time-after', quote: 'minds the shop until seven each evening' }]), entities)!;
+    expect(reading.constraints[0].about).toBeUndefined();
+  });
+
+  it('cannot read an answer that is not in the form asked for', () => {
+    expect(readConstraintAnswer(note, para, 'not json', entities)).toBeUndefined();
+    expect(readConstraintAnswer(note, para, '{"constraints":"none"}', entities)).toBeUndefined();
+    expect(readConstraintAnswer(note, para, '{"constraints":[]}', entities)).toEqual({ constraints: [], dropped: 0 });
+  });
+
+  it('is merged with the rules: the same words are kept once, as found by rule and model', () => {
+    const sample = rulesVault(SAMPLE_NOTE, SAMPLE_CLASS_LIST);
+    const byRule = proposeConstraints(SAMPLE_NOTE, sample);
+    const meenal = SAMPLE_NOTE.slice(SAMPLE_NOTE.indexOf('Meenal reads'), SAMPLE_NOTE.indexOf('\n\nKabir'));
+    const byModel = readConstraintAnswer(
+      SAMPLE_NOTE,
+      meenal,
+      answer([
+        { student: 'Meenal', kind: 'time-after', quote: 'has to leave school at the last bell' },
+        { student: 'Meenal', kind: 'other', quote: 'freezes in written tests' },
+      ]),
+      sample,
+    )!.constraints;
+    const merged = mergeProposals(byRule, byModel);
+    expect(merged.map((c) => [c.kind, c.source, c.alsoModel ?? false, c.text])).toEqual([
+      ['time-before', 'rule', false, 'now helps at the family tea stall before school'],
+      ['other', 'on-device model', false, 'freezes in written tests'],
+      ['health', 'rule', false, 'has epilepsy'],
+      ['time-after', 'rule', true, 'has to leave school at the last bell to reach home before dark'],
+      ['contact', 'rule', false, 'staying with his grandmother'],
+    ]);
+    // The rules' own list is not changed.
+    expect(byRule.some((c) => c.alsoModel)).toBe(false);
+  });
+
+  it('goes on when a request fails, and reports it', async () => {
+    let n = 0;
+    const report = await askForConstraints(note, entities, async () => {
+      if (n++ === 0) throw new Error('model busy');
+      return { text: 'broken', onDevice: true };
+    });
+    expect(report).toEqual({ constraints: [], asked: 2, unread: 2, dropped: 0 });
+  });
+
+  it('stops at an answer that did not come from the device, and uses nothing of it', async () => {
+    const asked: string[] = [];
+    const report = await askForConstraints(note, entities, async (p) => {
+      asked.push(p);
+      return { text: answer([{ student: 'Asha', kind: 'other', quote: 'Asha reads well' }]), onDevice: false };
+    });
+    expect(asked).toHaveLength(1);
+    expect(report.constraints).toEqual([]);
+    expect(report.stopped).toMatch(/did not run on the device/);
+    expect(report.unread).toBe(2);
   });
 });

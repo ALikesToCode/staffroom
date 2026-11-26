@@ -35,6 +35,7 @@ import { familyFor } from './core/family';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
+import { constraintsOnDevice, mergeProposals, type ConstraintReport } from './ai/constraints';
 import { NOTE_MAX } from './core/text';
 import {
   DRAFT_FORMAT,
@@ -132,6 +133,8 @@ export function App() {
   );
   /** The note the constraints were made for. They are kept across a new guard run only while the note is the same. */
   const constraintsNote = useRef(read(session, CONSTRAINTS_KEY, { note: '', constraints: [] as Constraint[] }).note);
+  /** Where the on-device model's search for constraints fell short. Null when it did not, or did not run. */
+  const [constraintGaps, setConstraintGaps] = useState<Pick<ConstraintReport, 'asked' | 'unread' | 'dropped' | 'stopped'> | null>(null);
   /** The vault item whose release was asked for while a confirmed constraint holds it. */
   const [unconfirmAsk, setUnconfirmAsk] = useState<string | null>(null);
   const [guardWhere, setGuardWhere] = useState<Where>('NOT_RUN');
@@ -354,7 +357,24 @@ export function App() {
     else if (gaps.unread.length > 0) candidates.push(...possibleNameCandidates(unreadText(note, gaps.unread), classList));
     const vault = buildVault(note, candidates);
     // Constraints the teacher confirmed or added for this same note are kept; the rest are proposed afresh.
-    const held = restoreConstraints(note, vault, constraintsNote.current === note ? constraints : [], proposeConstraints(note, vault));
+    let proposed = proposeConstraints(note, vault);
+    let fellShort: typeof constraintGaps = null;
+    if (where === 'ON_DEVICE') {
+      // The on-device model looks for constraints too. A failure here blocks nothing: what the rules found stands.
+      try {
+        const report = await constraintsOnDevice(note, vault, (done, total) => {
+          if (!gone()) setProgress(`The on-device model is looking for constraints in part ${Math.min(done + 1, total)} of ${total}`);
+        });
+        if (gone()) return;
+        proposed = mergeProposals(proposed, report.constraints);
+        if (report.unread > 0 || report.dropped > 0 || report.stopped) fellShort = report;
+      } catch (e) {
+        if (gone()) return;
+        fellShort = { asked: 0, unread: 0, dropped: 0, stopped: `The search for constraints stopped: ${message(e)}` };
+      }
+    }
+    setConstraintGaps(fellShort);
+    const held = restoreConstraints(note, vault, constraintsNote.current === note ? constraints : [], proposed);
     constraintsNote.current = note;
     setEntities(held.entities);
     setConstraints(held.constraints);
@@ -689,6 +709,7 @@ export function App() {
     setEntities([]);
     setGuardWhere('NOT_RUN');
     setGuardGaps(NO_GAPS);
+    setConstraintGaps(null);
     setSelection('');
     setSelectionNote('');
     setReleaseAsk(null);
@@ -1186,6 +1207,23 @@ export function App() {
                       Constraints <small>{constraints.filter((c) => c.confirmed).length} confirmed</small>
                     </h3>
                   </div>
+                  {guardWhere === 'RULES_ONLY' && (
+                    <p className="hint">No on-device model looked for constraints. These were found by rule: add any that are missing.</p>
+                  )}
+                  {constraintGaps?.stopped && <p className="caution">{constraintGaps.stopped} The constraints found by rule still stand.</p>}
+                  {constraintGaps && !constraintGaps.stopped && constraintGaps.unread > 0 && (
+                    <p className="caution">
+                      The on-device model could not look for constraints in {constraintGaps.unread} of the {constraintGaps.asked}{' '}
+                      {constraintGaps.asked === 1 ? 'part' : 'parts'} of your note it was asked about. The constraints found by rule
+                      still stand. Add any that are missing.
+                    </p>
+                  )}
+                  {constraintGaps && constraintGaps.dropped > 0 && (
+                    <p className="hint">
+                      The on-device model proposed {constraintGaps.dropped} {constraintGaps.dropped === 1 ? 'constraint' : 'constraints'}{' '}
+                      whose words could not be found in your note, so {constraintGaps.dropped === 1 ? 'it is' : 'they are'} not listed.
+                    </p>
+                  )}
                   <ConstraintsPanel
                     constraints={constraints}
                     students={entities.filter((e) => e.kind === 'student')}
