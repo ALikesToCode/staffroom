@@ -20,6 +20,35 @@ const c = (kind: ConstraintKind, extra: Partial<Constraint> = {}): Constraint =>
 const verdict = (step: string, constraint: Constraint, afterBell: string[] = []) => ruleConflicts(step, constraint, { name: 'Meenal', afterBell })?.verdict ?? 'none';
 
 describe('the rule layer, kind by kind', () => {
+  it('contact: writing to, e-mailing, texting, informing or notifying the named adult is contact', () => {
+    const k = c('contact', { who: 'father' });
+    for (const step of [
+      "Email Rohan's father about the trip.",
+      'E-mail his father the worksheet.',
+      "Text Rohan's father when he arrives.",
+      'Send a note to his father.',
+      'Send a message to her father about the test.',
+      'Send a letter to the father.',
+      'Inform his father of the result.',
+      'Notify the father by Friday.',
+      'Speak to his father at the gate.',
+      'Talk to her father first.',
+    ]) expect(verdict(step, k), step).toBe('conflict');
+    for (const step of [
+      'Read the text about a father and his son.',
+      'Email the class teacher about the trip.',
+      'Pupils notify the monitor when they finish.',
+      'Speak to his mother, and do not contact his father.',
+    ]) expect(verdict(step, k), step).toBe('none');
+  });
+
+  it('no-phone-internet: e-mail and a messaging app at home count', () => {
+    const k = c('no-phone-internet');
+    for (const step of ['For homework, email your paragraph to the teacher.', 'Send the answer at home through a messaging app.', 'Homework: e-mail three sentences.'])
+      expect(ruleConflicts(step, k, { name: 'Tanvi', afterBell: [], stage: 'homework' })?.verdict ?? 'none', step).toBe('conflict');
+    expect(ruleConflicts('Write the answer in your notebook at home.', k, { name: 'Tanvi', afterBell: [], stage: 'homework' })?.verdict ?? 'none').toBe('none');
+  });
+
   it('time-after: a step after school or after the last bell', () => {
     const k = c('time-after');
     for (const step of [

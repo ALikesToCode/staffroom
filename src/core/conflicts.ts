@@ -253,7 +253,8 @@ const PHONE_INTERNET = [
   'call(?:s|ing)? home',
   'sms',
   'text messages?',
-  'e-?mails?',
+  'e-?mail(?:s|ed|ing)?',
+  'messaging apps?',
   'download(?:s|ed|ing)?',
 ];
 
@@ -289,7 +290,7 @@ const SCHOOL_DEVICE = words([
 const TO_THE_FAMILY = /^(?:whatsapp|call(?:s|ing)? home)$/iu;
 
 const CONTACT_VERBS =
-  '(?:phone|phones|phoning|call|calls|calling|telephone|telephones|ring|rings|meet|meets|meeting|invite|invites|inviting|message|messages|contact|contacts|write to|writes to|writing to|speak to|speak with|talk to|talk with|send|sends|ask|asks|tell|tells|inform|informs|visit|visits|note to|note for|letter to|letter for)';
+  '(?:phone|phones|phoning|call|calls|calling|telephone|telephones|ring|rings|meet|meets|meeting|invite|invites|inviting|message|messages|contact|contacts|write to|writes to|writing to|speak to|speak with|talk to|talk with|send|sends|ask|asks|tell|tells|inform|informs|informing|notify|notifies|notifying|e-?mail|e-?mails|e-?mailing|text(?:s|ing)?(?=\\s+(?:his|her|their|[\\p{L}]+[\u2019\u0027]s)\\s)|visit|visits|note to|note for|letter to|letter for)';
 
 const ROLE_FORMS: Record<string, string[]> = {
   father: ['father', 'dad', 'daddy', 'papa'],
