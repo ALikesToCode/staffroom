@@ -18,6 +18,7 @@ import {
 import { checkOutgoing, checkReply, type Violation } from './core/gate';
 import { digestPrefix, loadReceipts, makeReceipt, sha256Hex, storeReceipts, type ReceiptRecord } from './core/receipts';
 import { approvalKey } from './core/policy';
+import { familyFor } from './core/family';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, paragraphs } from './ai/guard';
@@ -403,7 +404,7 @@ export function App() {
     const items = bracketDraft(drafted.draft, tokens).items;
     setKept(items.map(() => null));
     const replyText = [drafted.draft.title, ...drafted.draft.items.flatMap((i) => [i.heading, i.text])].join('\n');
-    setReplyIssues(checkReply(replyText, entities, tokens));
+    setReplyIssues(checkReply(replyText, entities, tokens, text));
     setReplyRead(false);
 
     setStage('checking');
@@ -963,9 +964,17 @@ export function App() {
                   </div>
                   {replyIssues.length > 0 && (
                     <p className="caution">
-                      The reply was flagged at the return gate:{' '}
-                      {replyIssues.map((v) => `“${v.what}” (${v.why})`).join('; ')}. Read the reply with care. You cannot sign
-                      off or copy it until you tick the box below.
+                      The reply was flagged at the return gate.{' '}
+                      {replyIssues.some((v) => !v.say) &&
+                        `${replyIssues
+                          .filter((v) => !v.say)
+                          .map((v) => `“${v.what}” (${v.why})`)
+                          .join('; ')}. `}
+                      {replyIssues
+                        .filter((v) => v.say)
+                        .map((v) => `${v.say} `)
+                        .join('')}
+                      Read the reply with care. You cannot sign off or copy it until you tick the box below.
                     </p>
                   )}
                   {checkWhere === 'SKIPPED' && (
@@ -992,6 +1001,8 @@ export function App() {
                     {draft.items.map((item, i) => {
                       const c = checks[i];
                       const facts = detailsFor(item, entities);
+                      // A message home is for one family: the copy button is offered only when the app can tell which.
+                      const family = task === 'parents' ? familyFor(item, note, entities, sent?.tokens ?? []) : null;
                       return (
                         <li key={i} className={kept[i] === null ? 'undecided' : kept[i] ? '' : 'struck'}>
                           <h4>
@@ -1018,14 +1029,23 @@ export function App() {
                             </p>
                           )}
                           {/* A message home is copied one at a time, so one family's message never travels with another's. */}
-                          {stage === 'signed' && task === 'parents' && kept[i] === true && (
-                            <button
-                              className="link copy-one"
-                              disabled={replyBlocked}
-                              onClick={() => copy(i, restore(item.text, entities, sent?.tokens).trim())}
-                            >
-                              {copyLabel(i, 'Copy this message')}
-                            </button>
+                          {stage === 'signed' && task === 'parents' && kept[i] === true && family && (
+                            <div className="copy-one">
+                              {family.student ? (
+                                <>
+                                  <span className="for-family">For the family of {family.student.surfaces[0]}</span>
+                                  <button
+                                    className="link"
+                                    disabled={replyBlocked}
+                                    onClick={() => copy(i, restore(item.text, entities, sent?.tokens).trim())}
+                                  >
+                                    {copyLabel(i, 'Copy this message')}
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="caution copy-off">{family.why}</span>
+                              )}
+                            </div>
                           )}
                           {stage === 'result' && kept[i] === null && (
                             <div className="decide">
@@ -1084,7 +1104,7 @@ export function App() {
                       <span className="stamp">Signed off by teacher</span>
                       <div className="actions">
                         {task === 'parents' ? (
-                          <span className="hint">Each message is copied on its own, with the button under it.</span>
+                          <span className="hint">Each message is copied on its own, with the button under it, for one family at a time.</span>
                         ) : (
                           <button className="primary" onClick={() => copy('all', finalText)} disabled={replyBlocked}>
                             {copyLabel('all', 'Copy the text')}

@@ -555,24 +555,24 @@ describe('vault', () => {
 
   describe('return gate', () => {
     it('passes a reply that uses stand-ins from the approved text', () => {
-      expect(checkReply('Pair [Student 1] with [Student 4].', vault, sentTokens)).toEqual([]);
+      expect(checkReply('Pair [Student 1] with [Student 4].', vault, sentTokens, '')).toEqual([]);
     });
 
     it('flags a stand-in that is not in the vault', () => {
-      expect(checkReply('Pair [Student 1] with [Student 9].', vault, sentTokens)).toHaveLength(1);
+      expect(checkReply('Pair [Student 1] with [Student 9].', vault, sentTokens, '')).toHaveLength(1);
     });
 
     it('flags a stand-in the vault holds but the approved text did not contain', () => {
       const approved = ['[Student 1]'];
       expect(vault.some((e) => e.token === '[Student 4]')).toBe(true);
-      const issues = checkReply('Pair [Student 1] with [Student 4]. Thank [Student 4].', vault, approved);
+      const issues = checkReply('Pair [Student 1] with [Student 4]. Thank [Student 4].', vault, approved, '');
       expect(issues).toEqual([{ what: '[Student 4]', why: 'a stand-in that was not in the text you approved' }]);
-      expect(checkReply('Seat [Student 1] at the front.', vault, approved)).toEqual([]);
+      expect(checkReply('Seat [Student 1] at the front.', vault, approved, '')).toEqual([]);
     });
 
     it('flags a malformed look-alike of a stand-in', () => {
       const approved = ['[Student 1]', '[withheld]'];
-      expect(checkReply('Ask [student 1], [Student1], [ Student 1 ] and [Student 99]. [withheld] stays.', vault, approved).map((v) => v.what)).toEqual([
+      expect(checkReply('Ask [student 1], [Student1], [ Student 1 ] and [Student 99]. [withheld] stays.', vault, approved, '').map((v) => v.what)).toEqual([
         '[student 1]',
         '[Student1]',
         '[ Student 1 ]',
@@ -581,7 +581,7 @@ describe('vault', () => {
     });
 
     it('flags a real name coming back', () => {
-      expect(checkReply('Ask Meenal to read.', vault, sentTokens)).toHaveLength(1);
+      expect(checkReply('Ask Meenal to read.', vault, sentTokens, '')).toHaveLength(1);
     });
   });
 });
@@ -590,6 +590,7 @@ import { anchor, anchorQuote, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer
 import { anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, NOT_ANSWERED, readVerdict, startsKept, studentsNamed, UNCLEAR, worse } from '../ai/check';
 import { asReceiptRecord, digestPrefix, makeReceipt, receiptRecord, recordModelName, sha256Hex } from './receipts';
 import { approvalKey, withTimeout } from './policy';
+import { familyFor, ownersOf } from './family';
 
 describe('guard helpers', () => {
   const para = "Kabir's parents are separating and he is staying with his grandmother.";
@@ -1309,8 +1310,8 @@ describe('a stand-in written without its brackets', () => {
   });
 
   it('is flagged by the return gate when its bracketed form was not sent', () => {
-    expect(checkReply('Student 1\nPair Student 2 with [Student 1].', v, sentTokens)).toEqual([]);
-    expect(checkReply('Student 3\nPair Student 3 with Adult 1.', v, sentTokens)).toEqual([
+    expect(checkReply('Student 1\nPair Student 2 with [Student 1].', v, sentTokens, '')).toEqual([]);
+    expect(checkReply('Student 3\nPair Student 3 with Adult 1.', v, sentTokens, '')).toEqual([
       { what: 'Student 3', why: 'a stand-in that was not in the text you approved' },
       { what: 'Adult 1', why: 'a stand-in that was not in the text you approved' },
     ]);
@@ -1321,5 +1322,71 @@ describe('a stand-in written without its brackets', () => {
     const tv = buildVault(typed, deterministicCandidates(typed, ['Aarav', 'Meenal']));
     expect(redact(typed, tv)).toBe('[withheld] in my register is [Student 1]. [Student 2] is shy.');
     expect(checkOutgoing(redact(typed, tv), tv, typed)).toEqual([]);
+  });
+});
+
+describe('return gate: sensitive words', () => {
+  const note = 'Meenal reads well. She has epilepsy.';
+  const v = buildVault(note, deterministicCandidates(note, ['Meenal']));
+  const { text: approved, tokens } = redactWithTokens(note, v);
+
+  it('flags a sensitive word in the reply that was not in the approved text', () => {
+    expect(approved).toBe('[Student 1] reads well. [withheld].');
+    expect(checkReply('Watch [Student 1] for seizures, and ask about her medication.', v, tokens, approved)).toEqual([
+      { what: 'seizures', why: 'a sensitive word that was not in the text you approved', say: 'The reply mentions seizures, which was not in the text you approved.' },
+      { what: 'medication', why: 'a sensitive word that was not in the text you approved', say: 'The reply mentions medication, which was not in the text you approved.' },
+    ]);
+  });
+
+  it('passes a sensitive word the teacher approved, in the singular or the plural', () => {
+    const released = v.map((e) => (e.kind === 'private' ? { ...e, withheld: false } : e));
+    const sent = redactWithTokens('Meenal reads well. She has had a seizure.', released);
+    expect(checkReply('Know what to do if [Student 1] has seizures.', released, sent.tokens, sent.text)).toEqual([]);
+    expect(checkReply('Give [Student 1] extra reading time.', v, tokens, approved)).toEqual([]);
+  });
+});
+
+describe('a message home is for one family', () => {
+  const note = 'Aarav reads well. His mother can be reached on 98765 43210.\n\nMeenal is shy. Ring 91234 56789.\n\nThe office number is 022 2345 6789.';
+  const v = buildVault(note, deterministicCandidates(note, ['Aarav', 'Meenal']));
+  const { tokens } = redactWithTokens(note, v);
+  const family = (heading: string, text: string, sent = tokens, vault = v) => familyFor({ heading, text }, note, vault, sent);
+
+  it('names the one student a message is for', () => {
+    expect(tokens).toEqual(['[Student 1]', '[Contact 1]', '[Student 2]', '[Contact 2]', '[Contact 3]']);
+    expect(family('[Student 1]', '[Student 1] reads well.')).toEqual({ student: v[0] });
+    expect(family('A note home', 'Dear family, [Student 2] is settling in.').student?.surfaces[0]).toBe('Meenal');
+  });
+
+  it('refuses a message that names no student or several', () => {
+    expect(family('A note home', 'Dear family, your child reads well.').why).toBe(
+      'Copy is off: this message names no student, so the app cannot tell whose family it is for.',
+    );
+    expect(family('[Student 1]', '[Student 1] and [Student 2] sit together.').why).toBe(
+      'Copy is off: this message names more than one student (Aarav and Meenal). A message home goes to one family.',
+    );
+  });
+
+  it('counts a released name, as a whole word', () => {
+    const released = v.map((e) => (e.surfaces[0] === 'Meenal' ? { ...e, withheld: false } : e));
+    expect(family('[Student 1]', 'Aarav sits beside Meenal.', tokens, released).why).toMatch(/more than one student/);
+    expect(family('[Student 1]', 'Aarav sits beside Meenalben.', tokens, released).student?.surfaces[0]).toBe('Aarav');
+  });
+
+  it("refuses a message that carries another child's contact detail, or one tied to nobody", () => {
+    expect(ownersOf(note, v, v.find((e) => e.token === '[Contact 1]')!).map((e) => e?.surfaces[0])).toEqual(['Aarav']);
+    expect(ownersOf(note, v, v.find((e) => e.token === '[Contact 3]')!)).toEqual([undefined]);
+    expect(family('[Student 1]', 'Ring us on [Contact 1].')).toEqual({ student: v[0] });
+    expect(family('[Student 1]', 'Ring us on [Contact 2].').why).toBe(
+      'Copy is off: this message includes a contact detail or an identity number that your note does not tie to Aarav.',
+    );
+    expect(family('[Student 1]', 'Ring the office on [Contact 3].').why).toMatch(/does not tie to Aarav/);
+  });
+
+  it('refuses a message with a stand-in that was never sent', () => {
+    expect(family('[Student 1]', 'Pair with [Student 9].').why).toBe('Copy is off: this message has a stand-in that was not in the text you approved.');
+    expect(family('[Student 1]', 'Pair with Student 9.').why).toMatch(/stand-in that was not in the text/);
+    // A stand-in the vault holds but the cloud was never sent does not count as a name.
+    expect(family('[Student 2]', 'A note.', ['[Student 1]']).why).toMatch(/names no student|stand-in that was not/);
   });
 });

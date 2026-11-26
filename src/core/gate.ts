@@ -1,10 +1,12 @@
 import type { Entity } from './types';
-import { findByRule, sameForm, wholeWordMatcher } from './rules';
+import { findByRule, sameForm, sensitiveWords, wholeWordMatcher } from './rules';
 import { bareNotSent, covered, LOOKALIKE_RE, RESERVED } from './vault';
 
 export interface Violation {
   what: string;
   why: string;
+  /** A whole sentence to show in place of `what` and `why`, when there is one. */
+  say?: string;
 }
 
 const flat = sameForm;
@@ -67,6 +69,9 @@ export function checkOutgoing(text: string, entities: Entity[], note?: string): 
  * wrote into the text the teacher approved; or when it contains anything
  * the exit gate would have stopped.
  *
+ * It is also flagged when it uses a word from the sensitive list that
+ * `approvedText`, the text the teacher approved, did not have.
+ *
  * A stand-in written without its brackets ("Student 9") is treated the
  * same way.
  *
@@ -75,7 +80,7 @@ export function checkOutgoing(text: string, entities: Entity[], note?: string): 
  * holds but the cloud was never sent, and a malformed one such as
  * "[student 99]" or "[Student99]", are both flagged.
  */
-export function checkReply(text: string, entities: Entity[], sentTokens: readonly string[]): Violation[] {
+export function checkReply(text: string, entities: Entity[], sentTokens: readonly string[], approvedText: string): Violation[] {
   const violations = checkOutgoing(text, entities);
   const seen = new Set<string>();
   for (const m of text.matchAll(LOOKALIKE_RE)) {
@@ -87,6 +92,18 @@ export function checkReply(text: string, entities: Entity[], sentTokens: readonl
   // stand-in (see bracketBare); if not, it is flagged like any other the cloud was never given.
   for (const bare of bareNotSent(text, sentTokens)) {
     violations.push({ what: bare, why: 'a stand-in that was not in the text you approved' });
+  }
+  // The sensitive-word list is run over the reply as well. A word from it that the approved text did not
+  // have is something the cloud model brought in itself, so the teacher is asked to read it.
+  const stem = (w: string) => w.replace(/s$/, '');
+  const approved = new Set(sensitiveWords(approvedText).map(stem));
+  for (const word of sensitiveWords(text)) {
+    if (approved.has(stem(word))) continue;
+    violations.push({
+      what: word,
+      why: 'a sensitive word that was not in the text you approved',
+      say: `The reply mentions ${word}, which was not in the text you approved.`,
+    });
   }
   return violations;
 }
