@@ -24,7 +24,8 @@ All data in the sample is invented.
 
 - Three waits are sped up and say so on screen: the guard reading the note (2 times), the cloud draft and the on-device check (2.5 times), and the offline run (5 times). The rest runs 1.12 times faster than it was recorded, to fit three minutes.
 - The take shown is one where the on-device check caught the conflict. It does not catch it every time: see the limits in the README.
-- In the struck item the cloud model repeated the marker `[withheld]` in its text. The fixed instructions now tell it not to; the take was recorded just before that change.
+- In the struck item the cloud model repeated the marker `[withheld]` in its text. The fixed instructions now tell it not to, and the app now flags a reply that repeats it; the take was recorded just before that change.
+- The take was recorded before three later changes to the app. Shots 9 and 10: no item is kept by default now, so each item is kept or struck before signing off. Shot 11: a record and its receipt are now paired by a "record id" where the take shows a "matching value". Shot 5: the card now says the reply format is described, not quoted. A new take is needed for the video to show these.
 
 ## Notes for the voice
 
