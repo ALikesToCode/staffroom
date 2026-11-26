@@ -21,16 +21,19 @@ import { approvalKey } from './core/policy';
 import {
   addConstraint,
   confirmConstraint,
+  constraintCounts,
+  withConstraintFacts,
   heldByConstraints,
   lockConstraints,
   proposeConstraints,
   removeConstraint,
   restoreConstraints,
+  CONSTRAINT_LABEL,
   setConstraintKind,
   setTriggers,
   unconfirmConstraint,
 } from './core/constraints';
-import { ConstraintsPanel } from './ui/Constraints';
+import { Caught, ConstraintsPanel } from './ui/Constraints';
 import { familyFor } from './core/family';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
@@ -47,7 +50,8 @@ import {
   writeDraft,
   type DraftResult,
 } from './ai/draft';
-import { anythingToCheck, checkDidNotRun, checkOnDevice, detailsFor, keepNoConflict, NOTHING_WITHHELD, startsKept } from './ai/check';
+import { anythingToCheck, checkDidNotRun, checkOnDevice, detailsFor, keepNoConflict, noConflictFound, NOTHING_WITHHELD, startsKept } from './ai/check';
+import { combineChecks, ruleCheckItem, verdictLabel } from './core/conflicts';
 import { CloudText, DeviceText, KIND_LABEL, RouteChip, Spinner, Stepper } from './ui/parts';
 
 type Stage = 'write' | 'guarding' | 'review' | 'drafting' | 'checking' | 'result' | 'signed';
@@ -565,37 +569,49 @@ export function App() {
     let itemChecks: ItemCheck[];
     let where: Where = 'NOT_RUN';
     let requests: { asked: number; failed: number } | null = null;
-    const unchecked = (reason: string): ItemCheck[] =>
-      items.map((item) => (detailsFor(item, entities).length > 0 ? { verdict: 'not checked', reason } : NOTHING_WITHHELD));
-    if (!anythingToCheck(items, entities)) {
-      // No private detail was withheld: there is nothing to check, so no model is asked.
+    // What the check reads: the vault, and what the teacher typed as a constraint that is not in the note.
+    const facts = withConstraintFacts(entities, constraints);
+    if (!anythingToCheck(items, facts)) {
+      // No private detail was withheld and no constraint confirmed: there is nothing to check, so no model is asked.
       itemChecks = items.map(() => NOTHING_WITHHELD);
       where = 'SKIPPED';
     } else {
+      // Layer A: each step against each confirmed constraint, by rule. No model, so it runs in every browser.
+      const byRule = items.map((item) => ruleCheckItem(item, constraints, entities, tokens, note));
+      const ruleRan = byRule.some((r) => r.compared > 0);
+      const unchecked = (reason: string): ItemCheck => ({ verdict: 'not checked', reason });
+      // Layer B: the on-device model, against every withheld private detail. Its "no" is a doubt, never a conflict.
+      let byModel: ItemCheck[] | null = null;
+      let why = 'The on-device check did not run. Read this item against the private details yourself.';
       try {
         if ((await deviceStatus()) !== 'available') throw new Error('no on-device model was available.');
         if (gone()) return;
-        const checked = await checkOnDevice(note, items, entities, tokens, (done, total) => {
+        const checked = await checkOnDevice(note, items, facts, tokens, (done, total) => {
           if (!gone()) setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`);
         });
         if (gone()) return;
         requests = { asked: checked.asked, failed: checked.failed };
         if (checkDidNotRun(checked)) {
-          // Every request failed, so nothing was checked. It is recorded as a check that did not run.
+          // Every request failed, so the model checked nothing. It is recorded as a check that did not run.
           setError(
-            `The on-device check could not run: all ${checked.asked} of its requests to the on-device model failed. The items below are not checked.`,
+            `The on-device check could not run: all ${checked.asked} of its requests to the on-device model failed. ${
+              ruleRan ? 'The items below were checked by rule only.' : 'The items below are not checked.'
+            }`,
           );
-          itemChecks = unchecked('The on-device model did not answer. Read this item against the private details yourself.');
+          why = 'The on-device model did not answer. Read this item against the private details yourself.';
         } else {
-          itemChecks = checked.checks;
+          byModel = checked.checks;
           where = 'ON_DEVICE';
         }
       } catch (e) {
         if (gone()) return;
-        // Say what happened. The draft stays; every item that had something to be checked against is marked unchecked.
-        setError(`The on-device check stopped: ${message(e)} The items below are not checked.`);
-        itemChecks = unchecked('The on-device check did not run. Read this item against the private details yourself.');
+        // Say what happened. The draft stays; what the rules found stands, and the rest is marked unchecked.
+        setError(
+          `The on-device check stopped: ${message(e)} ${ruleRan ? 'The items below were checked by rule only.' : 'The items below are not checked.'}`,
+        );
       }
+      if (!byModel && ruleRan) where = 'RULES_ONLY';
+      itemChecks = items.map((_, i) => combineChecks(byRule[i], byModel?.[i], unchecked(why)));
     }
     setCheckRequests(requests);
     setChecks(itemChecks);
@@ -641,6 +657,7 @@ export function App() {
       checkRequests: checkRequests ?? undefined,
       replyFlagged: replyIssues.length > 0,
       checks,
+      constraints: constraintCounts(sent.constraints),
       kept: signed.filter((k) => k === true).length,
       struck: signed.filter((k) => k === false).length,
     });
@@ -1263,7 +1280,12 @@ export function App() {
                       Draft: {result.model} {result.where === 'IN_CLOUD' ? 'in the cloud' : 'on this device'}
                     </span>
                     <span className="chip-line">
-                      <span className="chip-label">Check against withheld details:</span>
+                      <span className="chip-label">
+                        Check by rule against the constraints you confirmed: on this device, no model.
+                      </span>
+                    </span>
+                    <span className="chip-line">
+                      <span className="chip-label">Check by the on-device model against withheld details:</span>
                       <RouteChip route="check" where={checkWhere} />
                     </span>
                   </div>
@@ -1296,6 +1318,12 @@ export function App() {
                       then choose to keep it or strike it.
                     </p>
                   )}
+                  {checkWhere === 'RULES_ONLY' && (
+                    <p className="caution">
+                      The on-device model was not available, so this draft was checked by rule only: each step against the
+                      constraints you confirmed, and against nothing else. Read each item against the other private details yourself.
+                    </p>
+                  )}
                   {checkWhere === 'ON_DEVICE' && checkRequests && checkRequests.failed > 0 && (
                     <p className="caution">
                       The on-device check ran only in part: {checkRequests.failed} of its {checkRequests.asked} requests to the
@@ -1305,7 +1333,7 @@ export function App() {
                   <ol className="items">
                     {draft.items.map((item, i) => {
                       const c = checks[i];
-                      const facts = detailsFor(item, entities);
+                      const facts = detailsFor(item, withConstraintFacts(entities, sent?.constraints ?? []));
                       // A message home is for one family: the copy button is offered only when the app can tell which.
                       const family = task === 'parents' ? familyFor(item, note, entities, sent?.tokens ?? [], classList) : null;
                       return (
@@ -1318,11 +1346,17 @@ export function App() {
                           </p>
                           {c && (
                             <div className={`verdict v-${c.verdict.replace(' ', '-')}`}>
-                              <b>{VERDICT_LABEL[c.verdict]}</b>
+                              <b>{verdictLabel(c)}</b>
                               <span>{c.reason}</span>
+                              {c.also && <span>The on-device model also doubts this: {c.also}</span>}
+                              <Caught check={c} constraint={sent?.constraints.find((x) => x.id === c.constraintId)} />
                               {facts.length > 0 && (
                                 <small>
-                                  {c.verdict === 'not checked' ? 'Not checked against:' : 'Checked against, on this device only:'}{' '}
+                                  {c.verdict !== 'not checked'
+                                    ? 'Checked against, on this device only:'
+                                    : (c.rules ?? 0) > 0
+                                      ? 'Not checked by a model against:'
+                                      : 'Not checked against:'}{' '}
                                   {facts.flatMap((f) => f.details.map((d) => `“${d.surfaces[0]}”`)).join(', ')}
                                 </small>
                               )}
@@ -1330,7 +1364,8 @@ export function App() {
                           )}
                           {stage === 'result' && c?.verdict === 'conflict' && kept[i] === false && (
                             <p className="hint struck-why">
-                              Struck to begin with, because it conflicts with what you know. Keep it only if you still want it.
+                              Struck to begin with, because it goes against a constraint you confirmed. Keep it only if you still want
+                              it.
                             </p>
                           )}
                           {/* A message home is copied one at a time, so one family's message never travels with another's. */}
@@ -1356,9 +1391,13 @@ export function App() {
                             <div className="decide">
                               <p className="hint struck-why">
                                 {c?.verdict === 'not checked'
-                                  ? 'This item was not checked. '
+                                  ? (c.rules ?? 0) > 0
+                                    ? 'This item was checked by rule only. '
+                                    : 'This item was not checked. '
                                   : c?.verdict === 'unsure'
-                                    ? 'The check was not sure about this item. '
+                                    ? c.by === 'model'
+                                      ? 'The on-device model doubts this item. It is not struck: the choice is yours. '
+                                      : 'The check was not sure about this item. '
                                     : ''}
                                 Choose to keep it or strike it before you sign off.
                               </p>
@@ -1392,7 +1431,7 @@ export function App() {
                   )}
                   {stage === 'result' ? (
                     <div className="actions">
-                      {kept.some((k, i) => k === null && checks[i]?.verdict === 'fits') && (
+                      {kept.some((k, i) => k === null && noConflictFound(checks[i])) && (
                         <button className="secondary" disabled={signing} onClick={() => !signingRef.current && setKept((k) => keepNoConflict(k, checks))}>
                           Keep every item with no conflict found
                         </button>
@@ -1665,14 +1704,6 @@ export function App() {
   );
 }
 
-const VERDICT_LABEL: Record<ItemCheck['verdict'], string> = {
-  fits: 'No conflict found',
-  conflict: 'Conflicts with what you know',
-  unsure: 'Think before using',
-  'nothing withheld': 'Nothing to check',
-  'not checked': 'Not checked',
-};
-
 const RECORD_WHERE: Record<Where, string> = {
   ON_DEVICE: 'on the device',
   IN_CLOUD: 'in the cloud',
@@ -1849,7 +1880,8 @@ function Receipts({
                     <span>
                       Guard {RECORD_WHERE[r.guardWhere]} · draft {RECORD_WHERE[r.draftWhere]} ({r.draftModel}) · check{' '}
                       {RECORD_WHERE[r.checkWhere]}
-                      {r.flags.replyFlagged ? ' · reply flagged' : ''} · record id {recordIdTail(r.id)}
+                      {r.flags.replyFlagged ? ' · reply flagged' : ''} · {r.constraintsConfirmed} constraints confirmed,{' '}
+                      {r.conflictsByRule} in conflict by rule, {r.doubtsByModel} doubted by the model · record id {recordIdTail(r.id)}
                     </span>
                   </li>
                 );
@@ -1909,12 +1941,26 @@ function Receipts({
                             }`
                           : r.check.where === 'SKIPPED'
                             ? `Skipped, nothing to check: ${r.check.nothingWithheld} with nothing withheld`
+                            : r.check.where === 'RULES_ONLY'
+                              ? `By rule only, no model: ${r.check.conflict} in conflict, ${r.check.unsure} to think about, ${r.check.notChecked} checked by rule only or not checked, ${r.check.nothingWithheld} with nothing to check`
                             : `${
                                 (r.check.failedRequests ?? 0) > 0
                                   ? `Could not run, all ${r.check.requests} of its requests to the on-device model failed`
                                   : 'Did not run'
                               }: ${r.check.notChecked} not checked, ${r.check.nothingWithheld} with nothing to check`}
                         . Return gate {r.check.replyGate}.
+                      </dd>
+                      <dt>Constraints</dt>
+                      <dd>
+                        {r.constraints
+                          ? `${r.constraints.confirmed} confirmed by the teacher${
+                              r.constraints.confirmed > 0
+                                ? ` (${Object.entries(r.constraints.byKind)
+                                    .map(([k, n]) => `${n} ${CONSTRAINT_LABEL[k as ConstraintKind].toLowerCase()}`)
+                                    .join(', ')})`
+                                : ''
+                            }. ${r.check.conflictsByRule ?? 0} ${(r.check.conflictsByRule ?? 0) === 1 ? 'item' : 'items'} found in conflict by rule, ${r.check.doubtsByModel ?? 0} doubted by the on-device model only. The words of a constraint are not kept here.`
+                          : 'Not recorded for this receipt'}
                       </dd>
                       <dt>Sign-off</dt>
                       <dd>

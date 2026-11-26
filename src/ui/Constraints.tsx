@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { Constraint, ConstraintKind, Entity } from '../core/types';
+import type { Constraint, ConstraintKind, Entity, ItemCheck } from '../core/types';
+import { CloudText } from './parts';
 import { CONSTRAINT_KINDS, CONSTRAINT_LABEL } from '../core/constraints';
 
 export interface ConstraintActions {
@@ -172,5 +173,24 @@ export function ConstraintsPanel({
         </fieldset>
       )}
     </div>
+  );
+}
+
+/**
+ * Under an item a rule caught: what the cloud was shown of the constraint,
+ * and what this device knows. The first is outgoing text, stand-ins and
+ * all; the second never left the device.
+ */
+export function Caught({ check, constraint }: { check: ItemCheck; constraint?: Constraint }) {
+  if (!check.constraintId || !constraint) return null;
+  return (
+    <dl className="caught">
+      <dt>The cloud was shown</dt>
+      <dd>{check.cloudSaw ? <CloudText text={check.cloudSaw} /> : 'Nothing of this: the words are not in the text that was sent.'}</dd>
+      <dt>Your device knows</dt>
+      <dd>
+        <q>{constraint.text}</q>
+      </dd>
+    </dl>
   );
 }

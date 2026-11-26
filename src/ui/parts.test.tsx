@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildVault } from '../core/vault';
 import { CloudText, DeviceText } from './parts';
-import { ConstraintsPanel } from './Constraints';
+import { Caught, ConstraintsPanel } from './Constraints';
 import type { Constraint } from '../core/types';
 
 describe('CloudText', () => {
@@ -57,5 +57,23 @@ describe('ConstraintsPanel', () => {
     );
     expect(html).not.toContain('<button');
     expect(html).not.toContain('Add a constraint');
+  });
+});
+
+describe('Caught', () => {
+  const constraint: Constraint = { id: 'a', kind: 'time-after', text: 'has to leave at the last bell', source: 'rule', confirmed: true };
+
+  it('sets what the cloud was shown beside what the device knows', () => {
+    const html = renderToStaticMarkup(
+      <Caught check={{ verdict: 'conflict', reason: 'r', by: 'rule', constraintId: 'a', cloudSaw: 'She walks home and [withheld]' }} constraint={constraint} />,
+    );
+    expect(html).toContain('<span class="bar">[withheld]</span>');
+    expect(html.replace(/<[^>]+>/g, ' ')).toMatch(/The cloud was shown\s+She walks home and\s+\[withheld\]\s+Your device knows\s+has to leave at the last bell/);
+  });
+
+  it('says so when the words were in no text that was sent, and shows nothing for an item no rule caught', () => {
+    const typed = renderToStaticMarkup(<Caught check={{ verdict: 'conflict', reason: 'r', by: 'rule', constraintId: 'a' }} constraint={constraint} />);
+    expect(typed).toContain('Nothing of this: the words are not in the text that was sent.');
+    expect(renderToStaticMarkup(<Caught check={{ verdict: 'fits', reason: 'r' }} constraint={constraint} />)).toBe('');
   });
 });

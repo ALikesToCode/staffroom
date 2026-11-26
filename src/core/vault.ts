@@ -470,6 +470,31 @@ export function redactWithTokens(note: string, entities: Entity[]): Redaction {
   return { text: out.join(''), tokens: [...tokens] };
 }
 
+/**
+ * A part of the outgoing text: what the cloud saw of the note between
+ * `start` and `end`. Written the way redactWithTokens writes the whole.
+ */
+export function redactRange(note: string, entities: Entity[], start: number, end: number): string {
+  const out: string[] = [];
+  let at = 0;
+  let lastWasPrivate = false;
+  for (const s of segment(note, entities)) {
+    const stop = at + s.text.length;
+    if (stop > start && at < end) {
+      if (!s.entity || !held(s.entity)) {
+        out.push(s.text.slice(Math.max(0, start - at), end - at));
+        lastWasPrivate = false;
+      } else {
+        const isPrivate = s.entity.token === PRIVATE_TOKEN;
+        if (!(isPrivate && lastWasPrivate)) out.push(s.entity.token);
+        lastWasPrivate = isPrivate;
+      }
+    }
+    at = stop;
+  }
+  return out.join('');
+}
+
 /** The text that may leave the device: every withheld item replaced by its stand-in. */
 export function redact(note: string, entities: Entity[]): string {
   return redactWithTokens(note, entities).text;

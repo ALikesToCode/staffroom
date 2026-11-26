@@ -62,6 +62,22 @@ export type Verdict = 'fits' | 'conflict' | 'unsure' | 'nothing withheld' | 'not
 export interface ItemCheck {
   verdict: Verdict;
   reason: string;
+  /**
+   * Which layer of the check spoke: a rule, the on-device model, both, or neither. A conflict is only
+   * ever a rule's. The model alone gives a doubt ('unsure' by 'model'), never a conflict.
+   */
+  by?: 'rule' | 'model' | 'both' | 'none';
+  /** For a rule hit: the constraint, and the words of the step the rule matched. */
+  constraintId?: string;
+  matched?: string;
+  /** For a rule conflict: the sentences around that constraint as the cloud saw them, stand-ins and all. */
+  cloudSaw?: string;
+  /** When a rule and the model both spoke: the model's reason. The rule's is `reason`. */
+  also?: string;
+  /** How many confirmed constraints the rules compared this item's steps with. */
+  rules?: number;
+  /** What the on-device model itself answered, before its "no" was turned into a doubt. Used to measure it. */
+  modelSaid?: 'conflict' | 'unsure';
 }
 
 /** SKIPPED: the step had nothing to do, so no model was asked. NOT_RUN: it had work and no model to do it. */
@@ -122,7 +138,12 @@ export interface Receipt {
     /** Requests made to the on-device model, and how many of them failed. Receipts made before this was recorded do not have them. */
     requests?: number;
     failedRequests?: number;
+    /** Items a rule found in conflict with a confirmed constraint, and items only the on-device model doubted. */
+    conflictsByRule?: number;
+    doubtsByModel?: number;
   };
+  /** Counts of the constraints the teacher confirmed. Counts only: no words of any constraint. */
+  constraints?: { confirmed: number; byKind: Partial<Record<ConstraintKind, number>> };
   signOff: { kept: number; struck: number; at: string };
 }
 

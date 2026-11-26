@@ -169,8 +169,8 @@ function capped(paras: string[]): string {
  * split, so no fact is left out. With `perFact`, a group about one student
  * with two to four facts is asked about one fact at a time.
  */
-export function factSets(group: CheckGroup, perFact = false): Entity[][] {
-  if (perFact && group.student && group.details.length >= 2 && group.details.length <= 4) return group.details.map((d) => [d]);
+export function factSets(group: CheckGroup, perFact = true): Entity[][] {
+  if (askedPerFact(group, perFact)) return group.details.map((d) => [d]);
   const sets: Entity[][] = [];
   let size = 0;
   for (const d of group.details) {
@@ -183,6 +183,11 @@ export function factSets(group: CheckGroup, perFact = false): Entity[][] {
     size += length;
   }
   return sets;
+}
+
+/** True when this group is asked about one fact at a time. */
+export function askedPerFact(group: CheckGroup, perFact = true): boolean {
+  return perFact && !!group.student && group.details.length >= 2 && group.details.length <= 4;
 }
 
 /** The paragraphs that mention any of these names, as whole words. */
@@ -201,7 +206,14 @@ export function contextParagraphs(paras: string[], surfaces: string[]): string[]
  * in the approved text: only those are turned back into names, as everywhere
  * else, so a stand-in the reply invented is never read as a real child.
  */
-export function checkPrompt(group: CheckGroup, item: DraftItem, paras: string[], entities: Entity[], allowed: readonly string[]): string {
+export function checkPrompt(
+  group: CheckGroup,
+  item: DraftItem,
+  paras: string[],
+  entities: Entity[],
+  allowed: readonly string[],
+  withContext = true,
+): string {
   const advice = restore(`${item.heading}. ${item.text}`, entities, allowed);
   if (group.student) {
     const name = group.student.surfaces[0];
@@ -209,9 +221,8 @@ export function checkPrompt(group: CheckGroup, item: DraftItem, paras: string[],
       `Private facts about ${name}:`,
       ...group.details.map((d) => `- ${d.surfaces[0]}`),
       '',
-      `What the teacher wrote about ${name}:`,
-      capped(contextParagraphs(paras, group.student.surfaces)),
-      '',
+      // Asked about one fact at a time, the prompt is that fact and the step, and nothing else of the note.
+      ...(withContext ? [`What the teacher wrote about ${name}:`, capped(contextParagraphs(paras, group.student.surfaces)), ''] : []),
       'Advice to check:',
       advice,
     ].join('\n');
@@ -255,7 +266,8 @@ export async function checkOnDevice(
 export interface CheckOptions {
   /**
    * Ask about one fact at a time, for a group about one student with two to four facts: one request per
-   * step and per fact, where the default is one per step. More requests; the worst answer still wins.
+   * step and per fact. This is the default. Set it to false to ask about all of a student's facts in one
+   * request per step.
    */
   perFact?: boolean;
 }
@@ -321,13 +333,15 @@ export async function checkItems(
     // One request per step and per group: asked about several steps at once, the on-device model
     // judged the first and passed the rest.
     const itemSteps = steps(items[i].text);
+    const perFact = options.perFact ?? true;
     for (const group of groups) {
+      const oneAtATime = askedPerFact(group, perFact);
       for (const step of itemSteps) {
-        for (const details of factSets(group, options.perFact)) {
+        for (const details of factSets(group, perFact)) {
           let answer: { text: string; onDevice: boolean } | undefined;
           run.asked++;
           try {
-            answer = await ask(checkPrompt({ ...group, details }, { ...items[i], text: step }, paras, entities, allowed));
+            answer = await ask(checkPrompt({ ...group, details }, { ...items[i], text: step }, paras, entities, allowed, !oneAtATime));
           } catch {
             answer = undefined;
           }
@@ -338,18 +352,33 @@ export async function checkItems(
             continue;
           }
           run.answered++;
-          worst = worse(worst, readVerdict(answer.text));
+          worst = worse(worst, asDoubt(readVerdict(answer.text)));
         }
       }
     }
     if (!worst) run.checks.push(NOT_ANSWERED);
     else if (failedHere > 0) run.checks.push(worse(worst, { verdict: 'unsure', reason: PART_ANSWER }));
     // Every step passed. The reason for the first step alone would read as if it were the reason for all of them.
-    else if (worst.verdict === 'fits' && itemSteps.length > 1) run.checks.push({ verdict: 'fits', reason: allStepsFit(itemSteps.length) });
+    else if (worst.verdict === 'fits' && itemSteps.length > 1) run.checks.push({ verdict: 'fits', reason: allStepsFit(itemSteps.length), by: 'none' });
     else run.checks.push(worst);
   }
   onProgress(items.length, items.length);
   return run;
+}
+
+/**
+ * What the model's answer counts for. The model alone never makes a
+ * conflict: its "no" is a doubt, shown as "The on-device model doubts
+ * this", which the teacher has to decide on. Its "not sure" is a doubt
+ * too. An answer that could not be read is not the model's doubt: it stays
+ * as it is. `modelSaid` keeps what the model itself answered.
+ */
+export function asDoubt(read: ItemCheck): ItemCheck {
+  if (read.verdict === 'conflict') return { verdict: 'unsure', reason: read.reason, by: 'model', modelSaid: 'conflict' };
+  if (read.verdict === 'unsure' && read.reason !== NO_CLEAR_ANSWER && read.reason !== FITS_NO_REASON) {
+    return { ...read, by: 'model', modelSaid: 'unsure' };
+  }
+  return { ...read, by: 'none' };
 }
 
 /** The reason shown when an item of several steps was checked step by step and none conflicted. */
@@ -357,7 +386,8 @@ export function allStepsFit(n: number): string {
   return `Checked ${n} steps against these details. No conflict found.`;
 }
 
-const rank = (c: ItemCheck) => (c.verdict === 'conflict' ? 2 : c.verdict === 'unsure' ? 1 : 0);
+// The model's "no" ranks above its "not sure" and above an answer that could not be read.
+const rank = (c: ItemCheck) => (c.verdict === 'conflict' ? 3 : c.verdict === 'unsure' ? (c.modelSaid === 'conflict' ? 2 : 1) : 0);
 
 /**
  * Keep the more serious of two verdicts. The verdict only ever moves up:
@@ -381,7 +411,16 @@ export function startsKept(checks: ItemCheck[]): (boolean | null)[] {
   return checks.map((c) => (c.verdict === 'conflict' ? false : null));
 }
 
-/** The items the one button "Keep every item with no conflict found" keeps: those still undecided whose verdict is "fits". */
+/** True for an item with no conflict found: both layers ran and found nothing, or the rules alone ran and had no hit. */
+export function noConflictFound(c: ItemCheck | undefined): boolean {
+  return c?.verdict === 'fits' || (c?.verdict === 'not checked' && (c.rules ?? 0) > 0);
+}
+
+/**
+ * The items the one button "Keep every item with no conflict found" keeps:
+ * those still undecided whose verdict is "fits", and those the rules alone
+ * checked ("Checked by rule only") without a hit. A doubt is never kept by it.
+ */
 export function keepNoConflict(kept: (boolean | null)[], checks: ItemCheck[]): (boolean | null)[] {
-  return kept.map((k, i) => (k === null && checks[i]?.verdict === 'fits' ? true : k));
+  return kept.map((k, i) => (k === null && noConflictFound(checks[i]) ? true : k));
 }

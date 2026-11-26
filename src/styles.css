@@ -1539,3 +1539,18 @@ footer {
   gap: 8px;
   margin-top: 12px;
 }
+
+.caught {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+}
+
+.caught dt {
+  font-weight: 600;
+}
+
+.caught dd {
+  margin: 0;
+}

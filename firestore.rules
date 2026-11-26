@@ -2,7 +2,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // The teacher's own record of each receipt, written by the teacher's browser. It holds counts, times,
-    // where each step ran and the length of the approved text: no text. A user can add and read their own;
+    // where each step ran, the length of the approved text, and how many constraints the teacher confirmed
+    // (a count, with no kind and no words): no text. A user can add and read their own;
     // nobody can edit or delete one. These rules fix the form of a record. They cannot tell whether what a
     // record says is true: whoever is signed in to the account can write one.
     // The id has the form the app generates: the time in base 36, a hyphen, six characters. It is the same
@@ -63,10 +64,10 @@ service cloud.firestore {
     function validRecord(d, receiptId) {
       return d.keys().hasOnly(['id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars',
           'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
-          'kept', 'struck', 'flags'])
+          'kept', 'struck', 'flags', 'conflictsByRule', 'doubtsByModel', 'constraintsConfirmed'])
         && d.keys().hasAll(['id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars',
           'guardWhere', 'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts',
-          'kept', 'struck', 'flags'])
+          'kept', 'struck', 'flags', 'conflictsByRule', 'doubtsByModel', 'constraintsConfirmed'])
         && d.id is string && d.id == receiptId
         && isTime(d.createdAt) && isTime(d.approvedAt)
         && d.task in ['plan', 'parents', 'handover']
@@ -76,11 +77,12 @@ service cloud.firestore {
         && d.guardWhere in ['ON_DEVICE', 'RULES_ONLY']
         && d.draftWhere in ['ON_DEVICE', 'IN_CLOUD']
         && isModel(d.draftModel)
-        && d.checkWhere in ['ON_DEVICE', 'NOT_RUN', 'SKIPPED']
+        && d.checkWhere in ['ON_DEVICE', 'RULES_ONLY', 'NOT_RUN', 'SKIPPED']
         && d.labelWhere in ['ON_DEVICE', 'IN_CLOUD', 'FALLBACK']
         && validVerdicts(d.verdicts)
         && isCount(d.kept) && isCount(d.struck)
-        && validFlags(d.flags);
+        && validFlags(d.flags)
+        && isCount(d.conflictsByRule) && isCount(d.doubtsByModel) && isCount(d.constraintsConfirmed);
     }
   }
 }

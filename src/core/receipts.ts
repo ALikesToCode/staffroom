@@ -1,4 +1,5 @@
-import type { Entity, ItemCheck, Kind, LabelWhere, Receipt, Source, TaskId, Where } from './types';
+import type { ConstraintKind, Entity, ItemCheck, Kind, LabelWhere, Receipt, Source, TaskId, Where } from './types';
+import { layerCounts } from './conflicts';
 
 const KEY = 'staffroom.receipts.v1';
 
@@ -79,6 +80,8 @@ interface Run {
   checkRequests?: { asked: number; failed: number };
   replyFlagged: boolean;
   checks: ItemCheck[];
+  /** Counts of the confirmed constraints. The constraints themselves are never given to a receipt. */
+  constraints?: { confirmed: number; byKind: Partial<Record<ConstraintKind, number>> };
   kept: number;
   struck: number;
 }
@@ -123,7 +126,9 @@ export function makeReceipt(run: Run): Receipt {
       nothingWithheld: count('nothing withheld'),
       notChecked: count('not checked'),
       ...(run.checkRequests ? { requests: run.checkRequests.asked, failedRequests: run.checkRequests.failed } : {}),
+      ...layerCounts(run.checks),
     },
+    constraints: run.constraints ?? { confirmed: 0, byKind: {} },
     signOff: { kept: run.kept, struck: run.struck, at: now },
   };
 }
@@ -163,6 +168,12 @@ export interface ReceiptRecord {
   kept: number;
   struck: number;
   flags: { replyFlagged: boolean; unreadParagraphs: number; droppedDetails: number };
+  /** Items a rule found in conflict with a confirmed constraint. */
+  conflictsByRule: number;
+  /** Items only the on-device model doubted. */
+  doubtsByModel: number;
+  /** How many constraints the teacher had confirmed. A count: no kind, no words. */
+  constraintsConfirmed: number;
 }
 
 /** Reduce a receipt to the record that may leave the device. Every field is listed here by hand, so nothing else can ride along. */
@@ -196,6 +207,9 @@ export function receiptRecord(r: Receipt): ReceiptRecord {
       unreadParagraphs: r.guard.unreadParagraphs ?? 0,
       droppedDetails: r.guard.droppedDetails ?? 0,
     },
+    conflictsByRule: r.check.conflictsByRule ?? 0,
+    doubtsByModel: r.check.doubtsByModel ?? 0,
+    constraintsConfirmed: r.constraints?.confirmed ?? 0,
   };
 }
 
@@ -225,6 +239,9 @@ export function asReceiptRecord(data: unknown): ReceiptRecord | undefined {
   const strings = [d.id, d.createdAt, d.task, d.approvedAt, d.guardWhere, d.draftWhere, d.draftModel, d.checkWhere, d.labelWhere];
   if (!withheld || !verdicts || !flags || typeof flags !== 'object' || !strings.every(str)) return undefined;
   if (![d.released, d.approvedChars, d.kept, d.struck, flags.unreadParagraphs, flags.droppedDetails].every(count)) return undefined;
+  // A record written before these three counts were kept does not have them: they read as 0.
+  const later = [d.conflictsByRule, d.doubtsByModel, d.constraintsConfirmed].map((v) => (v === undefined ? 0 : v));
+  if (!later.every(count)) return undefined;
   // The same forms the Firestore rules insist on.
   const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
   if (!iso.test(d.createdAt as string) || !iso.test(d.approvedAt as string)) return undefined;
@@ -252,5 +269,8 @@ export function asReceiptRecord(data: unknown): ReceiptRecord | undefined {
       unreadParagraphs: flags.unreadParagraphs as number,
       droppedDetails: flags.droppedDetails as number,
     },
+    conflictsByRule: later[0] as number,
+    doubtsByModel: later[1] as number,
+    constraintsConfirmed: later[2] as number,
   };
 }

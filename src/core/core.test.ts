@@ -817,7 +817,7 @@ describe('check and receipt', () => {
     expect(steps('A. B. C. D. E. F. G. H.'.replace(/([A-H])/g, '$1a go'))).toHaveLength(6);
   });
 
-  it('asks about each step, and one conflicting step makes the item a conflict', async () => {
+  it('asks about each step, and one step the model says no to makes the item a doubt, never a conflict', async () => {
     const note = 'Meenal reads well. She must leave before dark.';
     const entities = buildVault(note, [
       { kind: 'student', text: 'Meenal', source: 'class list' },
@@ -837,7 +837,8 @@ describe('check and receipt', () => {
     );
     expect(asked).toHaveLength(2);
     expect(asked[0]).not.toContain('club');
-    expect(run.checks[0].verdict).toBe('conflict');
+    // The model alone never makes a conflict. Its "no" is a doubt the teacher decides on.
+    expect(run.checks[0]).toEqual({ verdict: 'unsure', reason: 'r', by: 'model', modelSaid: 'conflict' });
   });
 
   it("reads the model's answer to \"can the child do this?\" as a verdict", () => {
@@ -896,7 +897,7 @@ describe('check and receipt', () => {
       if (asked === 2) return { text: 'not json', onDevice: true };
       return { text: '{"verdict":"fits","reason":"ok"}', onDevice: true };
     });
-    expect(run.checks).toEqual([NOT_ANSWERED, UNCLEAR, { verdict: 'fits', reason: 'ok' }]);
+    expect(run.checks).toEqual([NOT_ANSWERED, { ...UNCLEAR, by: 'none' }, { verdict: 'fits', reason: 'ok', by: 'none' }]);
     expect(NOT_ANSWERED.verdict).toBe('not checked');
     expect(asked).toBe(3);
     expect([run.asked, run.answered, run.failed]).toEqual([3, 2, 1]);
@@ -1096,6 +1097,7 @@ describe('check and receipt', () => {
       [
         'id', 'createdAt', 'task', 'withheld', 'released', 'approvedAt', 'approvedChars', 'guardWhere',
         'draftWhere', 'draftModel', 'checkWhere', 'labelWhere', 'verdicts', 'kept', 'struck', 'flags',
+        'conflictsByRule', 'doubtsByModel', 'constraintsConfirmed',
       ].sort(),
     );
     const json = JSON.stringify(record);
@@ -1151,7 +1153,11 @@ describe('check and receipt', () => {
     expect(firestoreRules).toContain('&& isModel(d.draftModel)');
     expect(['ON_DEVICE', 'RULES_ONLY']).toContain(record.guardWhere);
     expect(['ON_DEVICE', 'IN_CLOUD']).toContain(record.draftWhere);
-    expect(['ON_DEVICE', 'NOT_RUN', 'SKIPPED']).toContain(record.checkWhere);
+    expect(['ON_DEVICE', 'RULES_ONLY', 'NOT_RUN', 'SKIPPED']).toContain(record.checkWhere);
+    expect(firestoreRules).toContain("d.checkWhere in ['ON_DEVICE', 'RULES_ONLY', 'NOT_RUN', 'SKIPPED']");
+    // Every key of a record is in both key lists of the rules, and the three later counts are validated.
+    for (const key of Object.keys(record)) expect(firestoreRules.split(`'${key}'`).length, key).toBeGreaterThanOrEqual(3);
+    expect(firestoreRules).toContain('isCount(d.conflictsByRule) && isCount(d.doubtsByModel) && isCount(d.constraintsConfirmed)');
     expect(['ON_DEVICE', 'IN_CLOUD', 'FALLBACK']).toContain(record.labelWhere);
   });
 
@@ -1169,6 +1175,10 @@ describe('check and receipt', () => {
     expect(asReceiptRecord({ ...record, id: 'a-note-about-meenal' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, draftModel: 'gemini<script>' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, createdAt: 'yesterday' })).toBeUndefined();
+    // A record written before the three later counts were kept reads them as 0; a bad count is refused.
+    const { conflictsByRule: _c, doubtsByModel: _d, constraintsConfirmed: _n, ...earlier } = record;
+    expect(asReceiptRecord(earlier)).toEqual({ ...record, conflictsByRule: 0, doubtsByModel: 0, constraintsConfirmed: 0 });
+    expect(asReceiptRecord({ ...record, constraintsConfirmed: 'three' })).toBeUndefined();
     // A record written before the digest was dropped is still listed, without it.
     expect(asReceiptRecord({ ...record, approvedSha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' })).toEqual(record);
     expect(asReceiptRecord(null)).toBeUndefined();
@@ -1902,30 +1912,37 @@ describe('the on-device check, step by step', () => {
 
   it('gives a reason for all the steps when every one of several fits', async () => {
     const many = await checkItems([{ heading: '[Student 1]', text: 'First, greet her. Second, seat her near the door. Third, praise her.' }], vault, paragraphs(note), ['[Student 1]'], fits);
-    expect(many.checks).toEqual([{ verdict: 'fits', reason: 'Checked 3 steps against these details. No conflict found.' }]);
+    expect(many.checks).toEqual([{ verdict: 'fits', reason: 'Checked 3 steps against these details. No conflict found.', by: 'none' }]);
     expect(allStepsFit(3)).toBe('Checked 3 steps against these details. No conflict found.');
     const one = await checkItems([{ heading: '[Student 1]', text: 'Greet her' }], vault, paragraphs(note), ['[Student 1]'], fits);
-    expect(one.checks).toEqual([{ verdict: 'fits', reason: 'The first step is fine.' }]);
-    // A step that conflicts keeps its own reason.
+    expect(one.checks).toEqual([{ verdict: 'fits', reason: 'The first step is fine.', by: 'none' }]);
+    // A step the model says no to keeps its own reason, as a doubt.
     let n = 0;
     const mixed = await checkItems([{ heading: '[Student 1]', text: 'First, greet her. Second, keep her after the last bell.' }], vault, paragraphs(note), ['[Student 1]'], async () =>
       ++n === 2 ? { text: '{"can_do":"no","reason":"She must leave at the last bell."}', onDevice: true } : fits(),
+      () => {},
+      { perFact: false },
     );
-    expect(mixed.checks).toEqual([{ verdict: 'conflict', reason: 'She must leave at the last bell.' }]);
+    expect(mixed.checks).toEqual([{ verdict: 'unsure', reason: 'She must leave at the last bell.', by: 'model', modelSaid: 'conflict' }]);
   });
 
-  it('asks once per step by default, and once per step and per fact when told to', async () => {
+  it('asks once per step and per fact by default, and once per step when told to', async () => {
     const item = { heading: '[Student 1]', text: 'First, greet her. Second, seat her near the door.' };
     const prompts: string[] = [];
     const ask = async (prompt: string) => {
       prompts.push(prompt);
       return fits();
     };
-    const plain = await checkItems([item], vault, paragraphs(note), ['[Student 1]'], ask);
+    const plain = await checkItems([item], vault, paragraphs(note), ['[Student 1]'], ask, () => {}, { perFact: false });
     expect([plain.asked, plain.answered, plain.failed]).toEqual([2, 2, 0]);
     expect(prompts[0]).toContain('- She has epilepsy\n- She must leave at the last bell\n- Her father is unemployed');
+    // Asked about all the facts at once, the prompt carries what the teacher wrote about her.
+    expect(prompts[0]).toContain('What the teacher wrote about Meenal:');
     prompts.length = 0;
-    const perFact = await checkItems([item], vault, paragraphs(note), ['[Student 1]'], ask, () => {}, { perFact: true });
+    const perFact = await checkItems([item], vault, paragraphs(note), ['[Student 1]'], ask);
+    // Asked about one fact at a time, the prompt is the fact and the step: nothing else of the note.
+    expect(prompts.every((p) => !p.includes('What the teacher wrote'))).toBe(true);
+    expect(prompts[0]).toBe('Private facts about Meenal:\n- She has epilepsy\n\nAdvice to check:\nMeenal. First, greet her.');
     expect([perFact.asked, perFact.answered, perFact.failed]).toEqual([6, 6, 0]);
     expect(prompts.map((p) => p.split('\n').filter((l) => l.startsWith('- ')))).toEqual([
       ['- She has epilepsy'],
@@ -1943,15 +1960,16 @@ describe('the on-device check, step by step', () => {
       if (n === 3) throw new Error('stopped');
       if (n === 5) return { text: '{"can_do":"no","reason":"She must leave at the last bell."}', onDevice: true };
       return fits();
-    }, () => {}, { perFact: true });
+    });
     expect([worst.asked, worst.answered, worst.failed]).toEqual([6, 5, 1]);
-    expect(worst.checks[0].verdict).toBe('conflict');
+    expect(worst.checks[0]).toMatchObject({ verdict: 'unsure', by: 'model', modelSaid: 'conflict', reason: 'She must leave at the last bell.' });
   });
 
   it('asks about one fact at a time only for one student with two to four facts', () => {
     const [group] = detailsFor({ heading: '[Student 1]', text: 'x' }, vault);
     expect(factSets(group, true).map((s) => s.length)).toEqual([1, 1, 1]);
-    expect(factSets(group).map((s) => s.length)).toEqual([3]);
+    expect(factSets(group).map((s) => s.length)).toEqual([1, 1, 1]);
+    expect(factSets(group, false).map((s) => s.length)).toEqual([3]);
     expect(factSets({ ...group, details: group.details.slice(0, 1) }, true).map((s) => s.length)).toEqual([1]);
     expect(factSets({ ...group, details: [...group.details, ...group.details] }, true).map((s) => s.length)).toEqual([6]);
     expect(factSets({ details: group.details }, true).map((s) => s.length)).toEqual([3]);
@@ -2033,9 +2051,9 @@ describe('the full-note set for measuring the on-device check', () => {
       // A child with facts of their own is checked against those; a child with none, against every withheld fact.
       expect(groups[0].student?.surfaces.includes(c.student) ?? false, c.id).toBe(expectedFacts[c.student] < 5);
       expect(groups[0].details, c.id).toHaveLength(expectedFacts[c.student]);
-      const plain = await checkItems([c.item], set.entities, paras, set.tokens, fits);
+      const plain = await checkItems([c.item], set.entities, paras, set.tokens, fits, undefined, { perFact: false });
       expect(plain.asked, c.id).toBe(3);
-      const perFact = await checkItems([c.item], set.entities, paras, set.tokens, fits, undefined, { perFact: true });
+      const perFact = await checkItems([c.item], set.entities, paras, set.tokens, fits);
       expect(perFact.asked, c.id).toBe(c.student === 'Meenal' ? 9 : 3);
     }
   });
