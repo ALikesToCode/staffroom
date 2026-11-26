@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { findByRule, findSensitive, nameParts, sentences } from './rules';
 import { addByTeacher, applyLocks, buildVault, deterministicCandidates, redact, restore, segment, PRIVATE_TOKEN } from './vault';
 import { checkOutgoing, checkReply } from './gate';
-import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from './samples';
+import { SAMPLE_CLASS_LIST, SAMPLE_NOTE, TASKS } from './samples';
+import { DRAFT_FORMAT, DRAFT_NOTES_HEADING, draftPrompt, LABEL_CHARS, labelPrompt } from '../ai/draft';
 import { plainText } from './text';
 
 describe('pattern rules', () => {
@@ -552,6 +553,19 @@ describe('check and receipt', () => {
     // Every value is a number, a boolean, or one of a few short fixed strings.
     const strings = Object.values(record).filter((v): v is string => typeof v === 'string');
     expect(strings.every((v) => v.length <= 100)).toBe(true);
+  });
+});
+
+describe('draft prompt', () => {
+  it('is the task instruction, two fixed lines and the approved text, and nothing else', () => {
+    const task = TASKS[0];
+    expect(draftPrompt('[Student 1] reads well.', task)).toBe(
+      `${task.instruction}\n\n${DRAFT_FORMAT}\n\n${DRAFT_NOTES_HEADING}\n[Student 1] reads well.`,
+    );
+  });
+
+  it('gives the naming call only the start of the approved text', () => {
+    expect(labelPrompt('x'.repeat(5000))).toBe(`Note:\n${'x'.repeat(LABEL_CHARS)}`);
   });
 });
 

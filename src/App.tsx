@@ -7,7 +7,16 @@ import { loadReceipts, makeReceipt, storeReceipts } from './core/receipts';
 import { configured, DEFAULT_POLICY, loadPolicy, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, paragraphs } from './ai/guard';
-import { labelReceipt, writeDraft, type DraftResult } from './ai/draft';
+import {
+  DRAFT_FORMAT,
+  DRAFT_NOTES_HEADING,
+  DRAFT_SYSTEM,
+  LABEL_CHARS,
+  LABEL_SYSTEM,
+  labelReceipt,
+  writeDraft,
+  type DraftResult,
+} from './ai/draft';
 import { anythingToCheck, checkOnDevice, detailsFor, NOTHING_WITHHELD, startsKept } from './ai/check';
 import { CloudText, DeviceText, KIND_LABEL, RouteChip, Spinner, Stepper } from './ui/parts';
 
@@ -270,7 +279,7 @@ export function App() {
     setKept(startsKept(itemChecks));
     setCheckWhere(where);
     setProgress('Naming the receipt');
-    setLabel(await labelReceipt(text, currentTask.label));
+    setLabel(await labelReceipt(text, currentTask.label, cloudModel));
     setStage('result');
   };
 
@@ -732,7 +741,7 @@ export function App() {
             <section className="lane cloud" aria-label="The cloud">
               <h2 className="lane-title">
                 <span>The cloud</span>
-                <small>Everything a server is ever shown appears here, word for word.</small>
+                <small>Everything the cloud model is shown appears here, word for word.</small>
               </h2>
 
               {(editing || stage === 'guarding') && (
@@ -749,6 +758,23 @@ export function App() {
                       {violations.length === 0 ? 'Exit gate: clear' : `Exit gate: ${violations.length} stopped`}
                     </span>
                   </div>
+                  <p className="hint">The cloud model also receives the task instruction shown here:</p>
+                  <p className="instruction">{currentTask.instruction}</p>
+                  <details className="fixed-instructions">
+                    <summary>Fixed instructions sent with every draft</summary>
+                    <p className="hint">The system instruction:</p>
+                    <pre className="wire small">{DRAFT_SYSTEM}</pre>
+                    <p className="hint">Written after the task instruction:</p>
+                    <pre className="wire small">{DRAFT_FORMAT}</pre>
+                    <p className="hint">Written above your text:</p>
+                    <pre className="wire small">{DRAFT_NOTES_HEADING}</pre>
+                    <p className="hint">
+                      The shape of the answer is fixed too: a title and a list of items, each with a heading and a text. One more
+                      call names the receipt. It runs on this device when it can; when it cannot, the cloud model is sent the first{' '}
+                      {LABEL_CHARS.toLocaleString()} characters of the text below with this instruction:
+                    </p>
+                    <pre className="wire small">{LABEL_SYSTEM}</pre>
+                  </details>
                   <p className="hint">This is the exact text that will be sent, for: {currentTask.label.toLowerCase()}.</p>
                   <pre className="wire">
                     <CloudText text={outgoing} />

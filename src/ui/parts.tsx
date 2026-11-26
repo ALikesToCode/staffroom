@@ -14,7 +14,11 @@ export const KIND_LABEL: Record<Kind, string> = {
 
 const ANY_TOKEN = new RegExp(`${TOKEN_RE.source}|${PRIVATE_TOKEN.replace(/[[\]]/g, '\\$&')}`, 'g');
 
-/** Text as the cloud sees it: stand-ins drawn as redaction bars. */
+/**
+ * Text as the cloud sees it. Each stand-in is drawn as a bar that carries
+ * the literal stand-in, square brackets included, so the characters on
+ * screen are exactly the characters that are sent.
+ */
 export function CloudText({ text }: { text: string }) {
   const out: ReactNode[] = [];
   let at = 0;
@@ -22,7 +26,7 @@ export function CloudText({ text }: { text: string }) {
     if (m.index > at) out.push(text.slice(at, m.index));
     out.push(
       <span className="bar" key={m.index}>
-        {m[0].slice(1, -1)}
+        {m[0]}
       </span>,
     );
     at = m.index + m[0].length;

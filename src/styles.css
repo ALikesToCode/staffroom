@@ -825,6 +825,33 @@ mark.released {
   color: var(--slate-ink);
 }
 
+.wire.small {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  max-height: 220px;
+}
+
+.instruction {
+  font-size: 0.84rem;
+  line-height: 1.5;
+  padding-left: 10px;
+  border-left: 3px solid var(--slate-line);
+  color: var(--slate-ink);
+}
+
+.fixed-instructions {
+  font-size: 0.86rem;
+}
+
+.fixed-instructions summary {
+  cursor: pointer;
+  color: var(--slate-ink);
+}
+
+.fixed-instructions > * + * {
+  margin-top: 8px;
+}
+
 .wire.reply p {
   margin-top: 10px;
 }
