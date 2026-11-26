@@ -1,5 +1,5 @@
 /** The promise, said once: on the first screen, and beside the name after it. */
-export const PROMISE = 'Your device knows why. The cloud only knows what.';
+export const PROMISE = 'Your device knows the child. The cloud only knows the need.';
 
 /**
  * The first screen: one sentence, the ways in, and a small picture of the
@@ -23,7 +23,7 @@ export function Hero({
     <main className="hero">
       <div className="hero-say">
         <h2>
-          <span>Your device knows why.</span> <span>The cloud only knows what.</span>
+          <span>Your device knows the child.</span> <span>The cloud only knows the need.</span>
         </h2>
         <p className="hero-sub">
           Plan tomorrow's lesson for the whole class. The cloud writes for each need without knowing whose it is. Your device puts it beside

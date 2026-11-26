@@ -118,7 +118,7 @@ describe('Caught', () => {
 describe('the first screen', () => {
   it('is one sentence and the ways in: no form, and no recorded run until the file has been read and is in the right form', () => {
     const text = renderToStaticMarkup(<App />).replace(/<[^>]+>/g, ' ');
-    expect(text).toMatch(/Your device knows why\.\s+The cloud only knows what\./);
+    expect(text).toMatch(/Your device knows the child\.\s+The cloud only knows the need\./);
     expect(text).toContain('Try an invented class');
     expect(text).toContain('Write a note');
     expect(text).not.toContain('Run the guard');
@@ -153,7 +153,7 @@ describe('the lesson as the first job', () => {
     const { Hero } = await import('./Hero');
     const { LESSON_STEPS, STEPS, Stepper } = await import('./parts');
     const html = renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} noModel={false} />);
-    expect(html).toContain('Your device knows why.');
+    expect(html).toContain('Your device knows the child.');
     expect(html).toContain('Plan tomorrow&#x27;s lesson for the whole class. The cloud writes for each need without knowing whose it is. Your device puts it beside the right child.');
     expect(html).toContain('Need B: no phone or internet at home');
     // The name is on the device's side only, and the cloud's side has no sentence about one pupil.
