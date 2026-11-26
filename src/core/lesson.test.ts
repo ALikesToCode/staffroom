@@ -105,7 +105,7 @@ describe('a step for the class against every child', () => {
     ]);
     expect(hits[0].key).toBe(`2:1:${of('money').id}`);
     expect(hits[0].line).toBe(
-      'Aarav Sharma: This step asks the family of Aarav Sharma to pay for something (“buy”). You confirmed: “the family cannot pay for anything extra this term”. The cloud was not told this.',
+      'Aarav Sharma: This step asks the family of Aarav Sharma to pay for something (“buy”). You confirmed: “cannot pay for anything extra this term”. The cloud was not told this.',
     );
     // The single-hit check, as the other tasks use it, sees only the first.
     expect(ruleHitsForItem(plan[4], constraints, entities, going.tokens, SAMPLE_NOTE)).toHaveLength(2);

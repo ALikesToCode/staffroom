@@ -140,8 +140,8 @@ export function factWordsIn(text: string, constraint: Pick<Constraint, 'text'>):
 }
 
 /** The one way a fit prompt is put to a model: on the ONLY_ON_DEVICE route. Throws before any request when the browser has no on-device model. */
-export function onDeviceFit(): FitAsk {
-  const model = modelFor('fit', { system: FIT_SYSTEM, schema: FIT_SCHEMA });
+export function onDeviceFit(system: string = FIT_SYSTEM): FitAsk {
+  const model = modelFor('fit', { system, schema: FIT_SCHEMA });
   return async (prompt) => {
     const result = await model.generateContent(prompt);
     const onDevice = result.response.inferenceSource === 'on_device';
@@ -180,4 +180,55 @@ export async function fitStep(input: FitInput, ask?: FitAsk): Promise<FitResult>
     mustNot = [...new Set([...mustNot, ...hits.map((h) => h.matched.toLowerCase())])];
   }
   return { ok: false, say: FIT_FAILED, asked };
+}
+
+// ---------------------------------------------------------------- a lesson: what one child does instead
+
+/** Kept short, like FIT_SYSTEM. The step stays as it is for the class; the answer is for one child. */
+export const FIT_CHILD_SYSTEM =
+  'A class is doing one step of a lesson. One child cannot do it as written because of the fact given. Say in one or two sentences what this child does instead, for the same purpose. Do not state the fact.';
+export const FIT_CHILD_ASK = 'Say what this child does instead.';
+/** Said when the model gave nothing that can be offered for a child, after the second request. */
+export const FIT_CHILD_FAILED = 'The on-device model could not fit this step for this child. Write the adjustment yourself.';
+
+export interface ChildFitInput {
+  /** The step of the lesson, as the teacher reads it. */
+  step: string;
+  /** The constraint the step goes against. Its words are the fact given to the model. */
+  constraint: Constraint;
+  /** Every confirmed constraint about this child and about the class. The adjustment is compared with all of them by rule. Default: the one constraint. */
+  constraints?: Constraint[];
+  afterBell?: string[];
+}
+
+/** The prompt for one child and one step. `mustNot`: the words a rule matched in the answer before this one. */
+export function childFitPrompt(input: Pick<ChildFitInput, 'step' | 'constraint'>, mustNot: string[] = []): string {
+  const lines = [`${FIT_FACT}${input.constraint.text}`, `${FIT_STEP}${input.step}`, FIT_CHILD_ASK];
+  if (mustNot.length > 0) lines.push(`${FIT_MUST_NOT}${mustNot.join(', ')}`);
+  return lines.join('\n');
+}
+
+/**
+ * Ask the on-device model what one child does instead of a step of the
+ * lesson. The same route and the same rules as fitStep: refused with no
+ * on-device model, stopped by an answer from anywhere else, compared by
+ * rule with that child's confirmed constraints, and asked once more when a
+ * rule still fires. What comes back is an offer: the teacher accepts it,
+ * changes it or leaves the step as it is.
+ */
+export async function fitForChild(input: ChildFitInput, ask?: FitAsk): Promise<FitResult> {
+  const put = ask ?? onDeviceFit(FIT_CHILD_SYSTEM);
+  let mustNot: string[] = [];
+  let asked = 0;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    asked++;
+    const answer = await put(childFitPrompt(input, mustNot));
+    if (!answer.onDevice) throw new Error('The fit did not run on the device. Stopped.');
+    const suggestion = readFit(answer.text, input.step);
+    if (!suggestion) continue;
+    const hits = fitHits(suggestion, input);
+    if (hits.length === 0) return { ok: true, suggestion, asked };
+    mustNot = [...new Set([...mustNot, ...hits.map((h) => h.matched.toLowerCase())])];
+  }
+  return { ok: false, say: FIT_CHILD_FAILED, asked };
 }

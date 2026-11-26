@@ -4,7 +4,7 @@ import { checkOnDevice } from './check';
 import { constraintsOnDevice } from './constraints';
 import { labelReceipt } from './draft';
 import { guardOnDevice } from './guard';
-import { fitStep } from './fit';
+import { fitForChild, fitStep } from './fit';
 import { modelFor, onDeviceModelPresent, prepareDevice } from './routes';
 
 const note = 'Meenal reads well. She has epilepsy.';
@@ -55,6 +55,7 @@ describe('ONLY_ON_DEVICE routes with no on-device model', () => {
   it('rejects the fit of a step without a request', async () => {
     const constraint = { id: 'c', kind: 'time-after' as const, text: 'has to leave at the last bell', source: 'rule' as const, confirmed: true };
     await expect(fitStep({ step: 'Keep her after school.', itemText: 'Keep her after school.', constraint, task: 'plan' })).rejects.toThrow(/no on-device model/);
+    await expect(fitForChild({ step: 'Keep her after school.', constraint })).rejects.toThrow(/no on-device model/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

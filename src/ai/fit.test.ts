@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Constraint } from '../core/types';
-import { canFit, factWordsIn, FIT_FAILED, FIT_MAX, FIT_SCHEMA, FIT_SYSTEM, fitHits, fitInputFor, fitPrompt, fitStep, readFit, type FitAsk } from './fit';
+import { childFitPrompt, FIT_CHILD_FAILED, FIT_CHILD_SYSTEM, fitForChild, canFit, factWordsIn, FIT_FAILED, FIT_MAX, FIT_SCHEMA, FIT_SYSTEM, fitHits, fitInputFor, fitPrompt, fitStep, readFit, type FitAsk } from './fit';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE } from '../core/samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redactWithTokens } from '../core/vault';
 import { confirmConstraint, proposeConstraints } from '../core/constraints';
@@ -152,5 +152,27 @@ describe('the words of the private fact in a text', () => {
     expect(factWordsIn('Give Meenal the task at lunch, as she must leave to reach home before dark.', leave)).toEqual(['leave', 'reach', 'home', 'dark']);
     expect(factWordsIn('Give Meenal the task in the lunch break.', leave)).toEqual([]);
     expect(factWordsIn('Lend her the workbook.', money)).toEqual([]);
+  });
+});
+
+describe('what one child does instead of a step of the lesson', () => {
+  const lessonStep = 'Anyone still writing stays after school on Thursday to finish.';
+  const child = { step: lessonStep, constraint: leave, constraints: [leave, money] };
+
+  it('asks with the fact and the step, under a short instruction that forbids stating the fact', () => {
+    expect(FIT_CHILD_SYSTEM).toMatch(/what this child does instead, for the same purpose\. Do not state the fact\.$/);
+    expect(FIT_CHILD_SYSTEM.length).toBeLessThan(260);
+    expect(childFitPrompt(child)).toBe(`Fact about the child: ${leave.text}\nStep: ${lessonStep}\nSay what this child does instead.`);
+  });
+
+  it('offers an adjustment no rule fires on, and asks once more when one does', async () => {
+    const model = fake([says('She buys a notebook and finishes at home.'), says('She finishes in the lunch break on Thursday.')]);
+    expect(await fitForChild(child, model.ask)).toEqual({ ok: true, suggestion: 'She finishes in the lunch break on Thursday.', asked: 2 });
+    expect(model.prompts[1]).toMatch(/It must not involve: buys$/);
+  });
+
+  it('gives up after two requests, and stops when an answer is not from the device', async () => {
+    expect(await fitForChild(child, fake([says('Stays back on Friday.'), says('Stays late on Friday.')]).ask)).toEqual({ ok: false, say: FIT_CHILD_FAILED, asked: 2 });
+    await expect(fitForChild(child, fake([{ text: says('x y z'), onDevice: false }]).ask)).rejects.toThrow('The fit did not run on the device. Stopped.');
   });
 });
