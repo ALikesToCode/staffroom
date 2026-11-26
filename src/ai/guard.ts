@@ -7,7 +7,7 @@ people: every person named. role is "student" for a child in the class, "adult" 
 places: every named village, town, street, shop, school or workplace. A class name such as "Class 6B" is not a place.
 private: every phrase that reveals a child's or family's health or disability, family situation, money or work, religion or caste, or a fear or secret the child confided. quote is the shortest exact phrase from the paragraph that carries the detail. category is health, family, money or identity. about is the name of the child it concerns.
 
-Do not list schoolwork, marks, attendance, reading level or behaviour in class as private: the teacher needs help with those. A heading, a date or a remark about the notes themselves is never private.
+Do not list schoolwork, marks, attendance, reading level or behaviour in class as private: the teacher needs help with those. Shyness, boredom, finishing early, talking and fighting in class are classroom behaviour, not private details. A heading, a date or a remark about the notes themselves is never private.
 
 If there is nothing for a list, return an empty list.`;
 
