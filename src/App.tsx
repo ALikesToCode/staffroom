@@ -610,6 +610,19 @@ export function App() {
                         </label>
                       ))}
                     </fieldset>
+                    {(device === 'unsupported' || device === 'unavailable') && (
+                      <p className="notice">
+                        This browser has no built-in model. Staffroom will use your class list, the pattern rules and a short list of
+                        sensitive words only, and you must mark private details yourself. For the full guard and check, open this page
+                        in Chrome on a desktop computer.
+                      </p>
+                    )}
+                    {(device === 'downloadable' || device === 'downloading') && download === null && (
+                      <p className="notice">
+                        The first run downloads the on-device model (several GB) and can take a few minutes. After that it starts
+                        straight away.
+                      </p>
+                    )}
                     <div className="actions">
                       <button className="primary" disabled={note.trim().length < 20} onClick={runGuard}>
                         Run the guard

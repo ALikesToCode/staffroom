@@ -794,6 +794,15 @@ mark.released {
   color: var(--seal);
 }
 
+.notice {
+  background: rgb(29 27 22 / 0.05);
+  border-left: 3px solid var(--paper-line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
 .caution,
 .alert {
   background: var(--amber-soft);
