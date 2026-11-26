@@ -293,28 +293,49 @@ export async function checkItems(
     }
     let worst: ItemCheck | undefined;
     let failedHere = 0;
+    // One request per step and per group: asked about several steps at once, the on-device model
+    // judged the first and passed the rest.
     for (const group of groups) {
-      let answer: { text: string; onDevice: boolean } | undefined;
-      run.asked++;
-      try {
-        answer = await ask(checkPrompt(group, items[i], paras, entities, allowed));
-      } catch {
-        answer = undefined;
+      for (const step of steps(items[i].text)) {
+        let answer: { text: string; onDevice: boolean } | undefined;
+        run.asked++;
+        try {
+          answer = await ask(checkPrompt(group, { ...items[i], text: step }, paras, entities, allowed));
+        } catch {
+          answer = undefined;
+        }
+        if (answer && !answer.onDevice) throw new Error('The check did not run on the device. Stopped.');
+        if (!answer) {
+          run.failed++;
+          failedHere++;
+          continue;
+        }
+        run.answered++;
+        worst = worse(worst, readVerdict(answer.text));
       }
-      if (answer && !answer.onDevice) throw new Error('The check did not run on the device. Stopped.');
-      if (!answer) {
-        run.failed++;
-        failedHere++;
-        continue;
-      }
-      run.answered++;
-      worst = worse(worst, readVerdict(answer.text));
     }
     if (!worst) run.checks.push(NOT_ANSWERED);
     else run.checks.push(failedHere > 0 ? worse(worst, { verdict: 'unsure', reason: PART_ANSWER }) : worst);
   }
   onProgress(items.length, items.length);
   return run;
+}
+
+/** The most steps of one item that are checked one by one. Any beyond that are checked together, as the last. */
+const MAX_STEPS = 6;
+
+/**
+ * The steps of one item of advice: its sentences, or its numbered points.
+ * Each is checked on its own. Text with no sentence break is one step.
+ */
+export function steps(text: string): string[] {
+  const parts = text
+    .split(/(?<=[.!?])\s+(?=\p{Lu}|\d+[.)]\s)|\s+(?=\d+[.)]\s)/u)
+    .map((p) => p.trim())
+    .filter((p) => /\p{L}{2}/u.test(p));
+  if (parts.length <= 1) return [text.trim()];
+  if (parts.length <= MAX_STEPS) return parts;
+  return [...parts.slice(0, MAX_STEPS - 1), parts.slice(MAX_STEPS - 1).join(' ')];
 }
 
 const rank = (c: ItemCheck) => (c.verdict === 'conflict' ? 2 : c.verdict === 'unsure' ? 1 : 0);

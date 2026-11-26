@@ -589,7 +589,7 @@ describe('vault', () => {
 });
 
 import { anchor, anchorQuote, guardOutcome, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
-import { anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, NOT_ANSWERED, readVerdict, startsKept, studentsNamed, UNCLEAR, worse } from '../ai/check';
+import { anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, NOT_ANSWERED, readVerdict, startsKept, steps, studentsNamed, UNCLEAR, worse } from '../ai/check';
 import { asReceiptRecord, digestPrefix, draftLine, makeReceipt, newReceiptId, receiptRecord, RECEIPT_ID, recordModelName, sha256Hex } from './receipts';
 import { approvalKey, DEFAULT_POLICY, fallbackPolicy, readSaved, toSave, withTimeout } from './policy';
 import { familyFor, ownersOf } from './family';
@@ -801,6 +801,40 @@ describe('check and receipt', () => {
     let run: ReturnType<typeof worse> | undefined;
     for (const next of [fits, conflict, fits, unsure]) run = worse(run, next);
     expect(run).toBe(conflict);
+  });
+
+  it('splits advice into steps so each is checked on its own', () => {
+    expect(steps('First, greet her. Second, send her to the club after the last bell. Third, praise her.')).toEqual([
+      'First, greet her.',
+      'Second, send her to the club after the last bell.',
+      'Third, praise her.',
+    ]);
+    expect(steps('1. Greet her. 2. Pair her with a friend.')).toEqual(['Greet her.', 'Pair her with a friend.']);
+    expect(steps('Seat her near the door')).toEqual(['Seat her near the door']);
+    expect(steps('A. B. C. D. E. F. G. H.'.replace(/([A-H])/g, '$1a go'))).toHaveLength(6);
+  });
+
+  it('asks about each step, and one conflicting step makes the item a conflict', async () => {
+    const note = 'Meenal reads well. She must leave before dark.';
+    const entities = buildVault(note, [
+      { kind: 'student', text: 'Meenal', source: 'class list' },
+      { kind: 'private', text: 'She must leave before dark', source: 'teacher', aboutName: 'Meenal' },
+    ]);
+    const asked: string[] = [];
+    const run = await checkItems(
+      [{ heading: '[Student 1]', text: 'First, greet her. Second, send her to the club after the last bell.' }],
+      entities,
+      [note],
+      ['[Student 1]'],
+      async (prompt) => {
+        asked.push(prompt);
+        const no = prompt.includes('club');
+        return { text: JSON.stringify({ advice_requires: 'x', can_do: no ? 'no' : 'yes', reason: 'r' }), onDevice: true };
+      },
+    );
+    expect(asked).toHaveLength(2);
+    expect(asked[0]).not.toContain('club');
+    expect(run.checks[0].verdict).toBe('conflict');
   });
 
   it("reads the model's answer to \"can the child do this?\" as a verdict", () => {
