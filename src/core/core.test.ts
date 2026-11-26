@@ -589,7 +589,7 @@ describe('vault', () => {
 });
 
 import { anchor, anchorQuote, guardOutcome, MAX_CHUNK, paragraphs, readChunks, readGuardAnswer } from '../ai/guard';
-import { anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, NOT_ANSWERED, readVerdict, startsKept, steps, studentsNamed, UNCLEAR, worse } from '../ai/check';
+import { allStepsFit, anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagraphs, detailsFor, factSets, keepNoConflict, NOT_ANSWERED, readVerdict, startsKept, steps, studentsNamed, UNCLEAR, worse } from '../ai/check';
 import { asReceiptRecord, digestPrefix, draftLine, makeReceipt, newReceiptId, receiptRecord, RECEIPT_ID, recordModelName, sha256Hex } from './receipts';
 import { approvalKey, DEFAULT_POLICY, fallbackPolicy, readSaved, toSave, withTimeout } from './policy';
 import { familyFor, ownersOf } from './family';
@@ -948,7 +948,12 @@ describe('check and receipt', () => {
 
   it('starts a conflict struck, and leaves an unsure or unchecked item for the teacher to decide', () => {
     const verdicts = ['fits', 'conflict', 'unsure', 'not checked', 'nothing withheld'] as const;
-    expect(startsKept(verdicts.map((verdict) => ({ verdict, reason: '' })))).toEqual([true, false, null, null, true]);
+    const checks = verdicts.map((verdict) => ({ verdict, reason: '' }));
+    // Nothing is kept by default, not even an item with no conflict found.
+    expect(startsKept(checks)).toEqual([null, false, null, null, null]);
+    // The one button keeps the undecided items with no conflict found, and nothing else.
+    expect(keepNoConflict(startsKept(checks), checks)).toEqual([true, false, null, null, null]);
+    expect(keepNoConflict([false, true, null, null, null], checks)).toEqual([false, true, null, null, null]);
   });
 
   it('keeps two details about different children even when one is inside the other', () => {
@@ -1869,5 +1874,114 @@ describe('whose fact a private detail is', () => {
   it('attaches the facts of the sample note as before', () => {
     const v = buildVault(SAMPLE_NOTE, deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST));
     expect(v.filter((e) => e.kind === 'private').map((e) => v.find((s) => s.id === e.about)?.surfaces[0])).toEqual(['Aarav Sharma', 'Meenal Joshi', 'Kabir Qureshi']);
+  });
+});
+
+describe('the on-device check, step by step', () => {
+  const note = 'Meenal reads well. She has epilepsy. She must leave at the last bell. Her father is unemployed.\n\nTanvi is shy.';
+  const vault = buildVault(note, [
+    { kind: 'student', text: 'Meenal', source: 'class list' },
+    { kind: 'student', text: 'Tanvi', source: 'class list' },
+    { kind: 'private', text: 'She has epilepsy', source: 'teacher' },
+    { kind: 'private', text: 'She must leave at the last bell', source: 'teacher' },
+    { kind: 'private', text: 'Her father is unemployed', source: 'teacher' },
+  ]);
+  const fits = async () => ({ text: '{"advice_requires":"x","can_do":"yes","reason":"The first step is fine."}', onDevice: true });
+
+  it('splits a sentence that begins with a stand-in', () => {
+    expect(steps('Seat [Student 1] at the front. [Student 2] should sit beside her. Then swap.')).toEqual([
+      'Seat [Student 1] at the front.',
+      '[Student 2] should sit beside her.',
+      'Then swap.',
+    ]);
+    expect(steps('Ask [Student 1] to read.')).toEqual(['Ask [Student 1] to read.']);
+  });
+
+  it('gives a reason for all the steps when every one of several fits', async () => {
+    const many = await checkItems([{ heading: '[Student 1]', text: 'First, greet her. Second, seat her near the door. Third, praise her.' }], vault, paragraphs(note), ['[Student 1]'], fits);
+    expect(many.checks).toEqual([{ verdict: 'fits', reason: 'Checked 3 steps against these details. No conflict found.' }]);
+    expect(allStepsFit(3)).toBe('Checked 3 steps against these details. No conflict found.');
+    const one = await checkItems([{ heading: '[Student 1]', text: 'Greet her' }], vault, paragraphs(note), ['[Student 1]'], fits);
+    expect(one.checks).toEqual([{ verdict: 'fits', reason: 'The first step is fine.' }]);
+    // A step that conflicts keeps its own reason.
+    let n = 0;
+    const mixed = await checkItems([{ heading: '[Student 1]', text: 'First, greet her. Second, keep her after the last bell.' }], vault, paragraphs(note), ['[Student 1]'], async () =>
+      ++n === 2 ? { text: '{"can_do":"no","reason":"She must leave at the last bell."}', onDevice: true } : fits(),
+    );
+    expect(mixed.checks).toEqual([{ verdict: 'conflict', reason: 'She must leave at the last bell.' }]);
+  });
+
+  it('asks once per step by default, and once per step and per fact when told to', async () => {
+    const item = { heading: '[Student 1]', text: 'First, greet her. Second, seat her near the door.' };
+    const prompts: string[] = [];
+    const ask = async (prompt: string) => {
+      prompts.push(prompt);
+      return fits();
+    };
+    const plain = await checkItems([item], vault, paragraphs(note), ['[Student 1]'], ask);
+    expect([plain.asked, plain.answered, plain.failed]).toEqual([2, 2, 0]);
+    expect(prompts[0]).toContain('- She has epilepsy\n- She must leave at the last bell\n- Her father is unemployed');
+    prompts.length = 0;
+    const perFact = await checkItems([item], vault, paragraphs(note), ['[Student 1]'], ask, () => {}, { perFact: true });
+    expect([perFact.asked, perFact.answered, perFact.failed]).toEqual([6, 6, 0]);
+    expect(prompts.map((p) => p.split('\n').filter((l) => l.startsWith('- ')))).toEqual([
+      ['- She has epilepsy'],
+      ['- She must leave at the last bell'],
+      ['- Her father is unemployed'],
+      ['- She has epilepsy'],
+      ['- She must leave at the last bell'],
+      ['- Her father is unemployed'],
+    ]);
+    expect(perFact.checks[0].verdict).toBe('fits');
+    // The worst answer wins, and a failed request is counted.
+    let n = 0;
+    const worst = await checkItems([item], vault, paragraphs(note), ['[Student 1]'], async () => {
+      n++;
+      if (n === 3) throw new Error('stopped');
+      if (n === 5) return { text: '{"can_do":"no","reason":"She must leave at the last bell."}', onDevice: true };
+      return fits();
+    }, () => {}, { perFact: true });
+    expect([worst.asked, worst.answered, worst.failed]).toEqual([6, 5, 1]);
+    expect(worst.checks[0].verdict).toBe('conflict');
+  });
+
+  it('asks about one fact at a time only for one student with two to four facts', () => {
+    const [group] = detailsFor({ heading: '[Student 1]', text: 'x' }, vault);
+    expect(factSets(group, true).map((s) => s.length)).toEqual([1, 1, 1]);
+    expect(factSets(group).map((s) => s.length)).toEqual([3]);
+    expect(factSets({ ...group, details: group.details.slice(0, 1) }, true).map((s) => s.length)).toEqual([1]);
+    expect(factSets({ ...group, details: [...group.details, ...group.details] }, true).map((s) => s.length)).toEqual([6]);
+    expect(factSets({ details: group.details }, true).map((s) => s.length)).toEqual([3]);
+  });
+
+  it('keeps every prompt short for a note of 8,000 characters, and leaves no fact out', async () => {
+    const filler = 'He reads slowly but with care and likes to help at the back of the room. ';
+    const paras = Array.from({ length: 12 }, (_, i) => `Om is in group ${i + 1}. ${filler.repeat(8)}Om has asthma and cannot run in week ${i + 101}.`);
+    const long = paras.join('\n\n');
+    expect(long.length).toBeGreaterThan(7000);
+    expect(long.length).toBeLessThanOrEqual(NOTE_MAX);
+    const v = buildVault(long, deterministicCandidates(long, ['Om']));
+    expect(v.filter((e) => e.kind === 'private')).toHaveLength(12);
+    const prompts: string[] = [];
+    const ask = async (prompt: string) => {
+      prompts.push(prompt);
+      return fits();
+    };
+    await checkItems(
+      [
+        { heading: '[Student 1]', text: 'Let him keep score.' },
+        { heading: 'Whole class', text: 'Run a relay for everyone.' },
+      ],
+      v,
+      paragraphs(long),
+      ['[Student 1]'],
+      ask,
+    );
+    expect(prompts.length).toBeGreaterThanOrEqual(2);
+    for (const p of prompts) expect(p.length).toBeLessThan(2400);
+    for (const kind of ['Private facts about Om:', 'Private facts about children in this class:']) {
+      const facts = prompts.filter((p) => p.startsWith(kind)).flatMap((p) => p.split('\n').filter((l) => l.startsWith('- ')));
+      expect(facts, kind).toHaveLength(12);
+    }
   });
 });

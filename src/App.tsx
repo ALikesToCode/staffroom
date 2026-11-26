@@ -33,7 +33,7 @@ import {
   writeDraft,
   type DraftResult,
 } from './ai/draft';
-import { anythingToCheck, checkDidNotRun, checkOnDevice, detailsFor, NOTHING_WITHHELD, startsKept } from './ai/check';
+import { anythingToCheck, checkDidNotRun, checkOnDevice, detailsFor, keepNoConflict, NOTHING_WITHHELD, startsKept } from './ai/check';
 import { CloudText, DeviceText, KIND_LABEL, RouteChip, Spinner, Stepper } from './ui/parts';
 
 type Stage = 'write' | 'guarding' | 'review' | 'drafting' | 'checking' | 'result' | 'signed';
@@ -148,6 +148,8 @@ export function App() {
   /** True from the click on Sign off until the receipt is written: nothing can be kept or struck in between. */
   const [signing, setSigning] = useState(false);
   const signingRef = useRef(false);
+  /** True from the click on Approve and send until that run ends: a second click starts nothing. */
+  const sendingRef = useRef(false);
   /** Counts the runs on this page, so work that finishes after a run was cleared does not write into the next one. */
   const runRef = useRef(0);
   const [label, setLabel] = useState<{ title: string; where: LabelWhere } | null>(null);
@@ -268,6 +270,9 @@ export function App() {
   // ---------------------------------------------------------------- step 2: guard
 
   const runGuard = async () => {
+    // A run that is cleared or forgotten while it waits for the model must not write its findings afterwards.
+    const run = ++runRef.current;
+    const gone = () => runRef.current !== run;
     setError(null);
     setStage('guarding');
     setSelection('');
@@ -279,11 +284,14 @@ export function App() {
     let where: Where = 'RULES_ONLY';
     let gaps = NO_GAPS;
     setProgress('Checking the class list, the pattern rules and the sensitive words');
-    if (await turnOnDevice()) {
+    const ready = await turnOnDevice();
+    if (gone()) return;
+    if (ready) {
       try {
-        const report = await guardOnDevice(note, (done, total) =>
-          setProgress(`The on-device model is reading part ${Math.min(done + 1, total)} of ${total}`),
-        );
+        const report = await guardOnDevice(note, (done, total) => {
+          if (!gone()) setProgress(`The on-device model is reading part ${Math.min(done + 1, total)} of ${total}`);
+        });
+        if (gone()) return;
         candidates.push(...report.candidates);
         const outcome = guardOutcome(report);
         where = outcome.where;
@@ -298,6 +306,7 @@ export function App() {
           setError(`The on-device guard stopped early: ${report.stopped} Check the parts it did not read.`);
         }
       } catch (e) {
+        if (gone()) return;
         // The run broke before it could report. Every part counts as unread.
         gaps = { unread: paragraphs(note).map((_, i) => i), dropped: 0, partial: 0 };
         setError(`The on-device guard stopped: ${message(e)} Only the rules were applied. Read the outgoing text with care.`);
@@ -396,7 +405,7 @@ export function App() {
   const approveAndSend = async () => {
     // Everything is worked out again at the moment of sending: the current locks, the text they give,
     // and the gate on exactly that text. It is sent only if it is the text the teacher ticked as read.
-    if (!policyReadyRef.current) return;
+    if (!policyReadyRef.current || sendingRef.current) return;
     const sentPolicy = policyRef.current;
     const current = applyLocks(rawEntities, sentPolicy.lockedKinds);
     const { text, tokens } = redactWithTokens(note, current);
@@ -418,6 +427,10 @@ export function App() {
       );
       return;
     }
+    // Locked at once, before anything is awaited, so a second click cannot send the text twice.
+    sendingRef.current = true;
+    const run = runRef.current;
+    const gone = () => runRef.current !== run;
     const entities = current;
     const cloudModel = sentPolicy.cloudModel;
     const sentOnline = navigator.onLine;
@@ -429,6 +442,8 @@ export function App() {
     try {
       drafted = await writeDraft(text, currentTask, cloudModel);
     } catch (e) {
+      if (gone()) return;
+      sendingRef.current = false;
       setSent(null);
       setStage('review');
       setError(
@@ -438,6 +453,8 @@ export function App() {
       );
       return;
     }
+    // The note was forgotten, or the run cleared, while the draft was being written: nothing of it is kept.
+    if (gone()) return;
     setResult(drafted);
     // A stand-in the model wrote without its brackets is read as that stand-in, if it was one that was sent.
     const items = bracketDraft(drafted.draft, tokens).items;
@@ -446,6 +463,8 @@ export function App() {
     setReplyIssues(checkReply(replyText, entities, tokens, text));
     setReplyRead(false);
 
+    // Said before the first request, so the guard's last progress line is not shown under the check.
+    setProgress('The on-device model is checking the draft against what you withheld');
     setStage('checking');
     let itemChecks: ItemCheck[];
     let where: Where = 'NOT_RUN';
@@ -459,21 +478,24 @@ export function App() {
     } else {
       try {
         if ((await deviceStatus()) !== 'available') throw new Error('no on-device model was available.');
-        const run = await checkOnDevice(note, items, entities, tokens, (done, total) =>
-          setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`),
-        );
-        requests = { asked: run.asked, failed: run.failed };
-        if (checkDidNotRun(run)) {
+        if (gone()) return;
+        const checked = await checkOnDevice(note, items, entities, tokens, (done, total) => {
+          if (!gone()) setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`);
+        });
+        if (gone()) return;
+        requests = { asked: checked.asked, failed: checked.failed };
+        if (checkDidNotRun(checked)) {
           // Every request failed, so nothing was checked. It is recorded as a check that did not run.
           setError(
-            `The on-device check could not run: all ${run.asked} of its requests to the on-device model failed. The items below are not checked.`,
+            `The on-device check could not run: all ${checked.asked} of its requests to the on-device model failed. The items below are not checked.`,
           );
           itemChecks = unchecked('The on-device model did not answer. Read this item against the private details yourself.');
         } else {
-          itemChecks = run.checks;
+          itemChecks = checked.checks;
           where = 'ON_DEVICE';
         }
       } catch (e) {
+        if (gone()) return;
         // Say what happened. The draft stays; every item that had something to be checked against is marked unchecked.
         setError(`The on-device check stopped: ${message(e)} The items below are not checked.`);
         itemChecks = unchecked('The on-device check did not run. Read this item against the private details yourself.');
@@ -481,11 +503,14 @@ export function App() {
     }
     setCheckRequests(requests);
     setChecks(itemChecks);
-    // An item in conflict starts struck. An unsure or unchecked one starts undecided: the teacher has to choose.
+    // An item in conflict starts struck. Every other item starts undecided: nothing is kept until the teacher keeps it.
     setKept(startsKept(itemChecks));
     setCheckWhere(where);
     setProgress('Naming the receipt');
-    setLabel(await labelReceipt(text, currentTask.label, cloudModel));
+    const named = await labelReceipt(text, currentTask.label, cloudModel);
+    if (gone()) return;
+    setLabel(named);
+    sendingRef.current = false;
     setStage('result');
   };
 
@@ -495,7 +520,8 @@ export function App() {
     // Locked at once, before anything is awaited: a second click, or a keep or strike made while the
     // receipt is being written, changes nothing. What is recorded is what was on screen at the click.
     if (signingRef.current || stage !== 'result' || !result || !sent || replyBlocked) return;
-    if (kept.some((k) => k === null) || !kept.some((k) => k === true)) return;
+    // Signing off with nothing kept is allowed: it rejects the whole draft, and is recorded like any other sign-off.
+    if (kept.some((k) => k === null)) return;
     signingRef.current = true;
     setSigning(true);
     const run = runRef.current;
@@ -567,7 +593,8 @@ export function App() {
 
   /** Copy to the clipboard and say plainly whether it worked. The browser can refuse. */
   const copy = async (what: 'all' | number, text: string) => {
-    if (replyBlocked) return;
+    // Nothing is copied before sign-off, from a flagged reply that was not read, or when no item was kept.
+    if (replyBlocked || stage !== 'signed' || !kept.some((k) => k === true)) return;
     let ok = true;
     try {
       await navigator.clipboard.writeText(text);
@@ -585,6 +612,7 @@ export function App() {
   const clearRun = () => {
     runRef.current++;
     signingRef.current = false;
+    sendingRef.current = false;
     setSigning(false);
     setCheckRequests(null);
     setStage('write');
@@ -653,6 +681,7 @@ export function App() {
   const noteParts = useMemo(() => paragraphs(note), [note]);
   /** Items the teacher has not yet chosen to keep or strike. */
   const undecided = kept.filter((k) => k === null).length;
+  const keptCount = kept.filter((k) => k === true).length;
   const editing = stage === 'write';
   const busy = stage === 'guarding' || stage === 'drafting' || stage === 'checking';
 
@@ -892,16 +921,17 @@ export function App() {
                       {receipts.length === 1 ? 'it' : 'them'} too?
                     </p>
                     <div className="actions">
-                      <button className="secondary" onClick={() => forgetNote(true)}>
+                      <button className="secondary" disabled={busy} onClick={() => forgetNote(true)}>
                         Forget the note and delete receipts
                       </button>
-                      <button className="secondary" onClick={() => forgetNote(false)}>
+                      <button className="secondary" disabled={busy} onClick={() => forgetNote(false)}>
                         Forget the note, keep receipts
                       </button>
                       <button className="link" onClick={() => setForgetAsk(false)}>
                         Cancel
                       </button>
                     </div>
+                    {busy && <p className="hint">Wait for the step that is running to finish, then choose.</p>}
                   </div>
                 )}
 
@@ -1155,7 +1185,11 @@ export function App() {
                           {stage === 'result' && kept[i] === null && (
                             <div className="decide">
                               <p className="hint struck-why">
-                                {c?.verdict === 'not checked' ? 'This item was not checked.' : 'The check was not sure about this item.'}{' '}
+                                {c?.verdict === 'not checked'
+                                  ? 'This item was not checked. '
+                                  : c?.verdict === 'unsure'
+                                    ? 'The check was not sure about this item. '
+                                    : ''}
                                 Choose to keep it or strike it before you sign off.
                               </p>
                               <button className="link" disabled={signing} onClick={() => decide(i, true)}>
@@ -1188,27 +1222,34 @@ export function App() {
                   )}
                   {stage === 'result' ? (
                     <div className="actions">
-                      <button
-                        className="primary"
-                        onClick={signOff}
-                        disabled={signing || undecided > 0 || !kept.some((k) => k === true) || replyBlocked}
-                      >
-                        Sign off {kept.filter((k) => k === true).length} of {kept.length} items
+                      {kept.some((k, i) => k === null && checks[i]?.verdict === 'fits') && (
+                        <button className="secondary" disabled={signing} onClick={() => !signingRef.current && setKept((k) => keepNoConflict(k, checks))}>
+                          Keep every item with no conflict found
+                        </button>
+                      )}
+                      <button className="primary" onClick={signOff} disabled={signing || undecided > 0 || replyBlocked}>
+                        {undecided === 0 && keptCount === 0
+                          ? 'Reject the whole draft'
+                          : `Sign off ${keptCount} of ${kept.length} items`}
                       </button>
                       <span className="hint">
                         {undecided > 0
-                          ? `Choose keep or strike for ${undecided} ${undecided === 1 ? 'item' : 'items'} first. `
-                          : kept.some((k) => k === false)
-                            ? 'Struck items are left out. '
-                            : ''}
+                          ? `Nothing is kept until you keep it. Choose keep or strike for ${undecided} ${undecided === 1 ? 'item' : 'items'} first. `
+                          : keptCount === 0
+                            ? 'Every item is struck. Signing off now rejects the whole draft. '
+                            : kept.some((k) => k === false)
+                              ? 'Struck items are left out. '
+                              : ''}
                         The numbers of items kept and struck are recorded on the receipt.
                       </span>
                     </div>
                   ) : (
                     <div className="signed">
-                      <span className="stamp">Signed off by teacher</span>
+                      <span className="stamp">{keptCount === 0 ? 'Whole draft rejected by teacher' : 'Signed off by teacher'}</span>
                       <div className="actions">
-                        {task === 'parents' ? (
+                        {keptCount === 0 ? (
+                          <span className="hint">You kept no item, so there is nothing to copy.</span>
+                        ) : task === 'parents' ? (
                           <span className="hint">Each message is copied on its own, with the button under it, for one family at a time.</span>
                         ) : (
                           <button className="primary" onClick={() => copy('all', finalText)} disabled={replyBlocked}>

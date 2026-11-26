@@ -171,6 +171,47 @@ export function detailsFor(item: DraftItem, entities: Entity[]): CheckGroup[] {
   return groups;
 }
 
+/** The most of the teacher's own words that one check prompt carries as context. */
+export const CONTEXT_MAX = 800;
+
+/** The most characters of facts that one check prompt carries. More facts than that are asked about in further prompts. */
+export const FACTS_MAX = 1200;
+
+/** Paragraphs, in order, for as long as they fit in CONTEXT_MAX. A small model reads a short prompt more exactly. */
+function capped(paras: string[]): string {
+  const out: string[] = [];
+  let size = 0;
+  for (const p of paras) {
+    if (size + p.length + 1 > CONTEXT_MAX) continue;
+    out.push(p);
+    size += p.length + 1;
+  }
+  if (out.length === 0 && paras.length > 0) return paras[0].slice(0, CONTEXT_MAX);
+  return out.join('\n');
+}
+
+/**
+ * The sets of facts a group is asked about, one prompt each. Usually one
+ * set: all of them. When they would make the prompt too long they are
+ * split, so no fact is left out. With `perFact`, a group about one student
+ * with two to four facts is asked about one fact at a time.
+ */
+export function factSets(group: CheckGroup, perFact = false): Entity[][] {
+  if (perFact && group.student && group.details.length >= 2 && group.details.length <= 4) return group.details.map((d) => [d]);
+  const sets: Entity[][] = [];
+  let size = 0;
+  for (const d of group.details) {
+    const length = d.surfaces[0].length + 3;
+    if (sets.length === 0 || size + length > FACTS_MAX) {
+      sets.push([]);
+      size = 0;
+    }
+    sets[sets.length - 1].push(d);
+    size += length;
+  }
+  return sets;
+}
+
 /** The paragraphs that mention any of these names, as whole words. */
 export function contextParagraphs(paras: string[], surfaces: string[]): string[] {
   const matcher = wholeWordMatcher(surfaces);
@@ -196,7 +237,7 @@ export function checkPrompt(group: CheckGroup, item: DraftItem, paras: string[],
       ...group.details.map((d) => `- ${d.surfaces[0]}`),
       '',
       `What the teacher wrote about ${name}:`,
-      contextParagraphs(paras, group.student.surfaces).join('\n'),
+      capped(contextParagraphs(paras, group.student.surfaces)),
       '',
       'Advice to check:',
       advice,
@@ -209,7 +250,8 @@ export function checkPrompt(group: CheckGroup, item: DraftItem, paras: string[],
     ...group.details.map((d) => `- ${about(d) ? `(about ${about(d)}) ` : ''}${d.surfaces[0]}`),
     '',
     'What the teacher wrote:',
-    paras.filter((p) => group.details.some((d) => holds(p, d))).join('\n'),
+    // Only as much of the note as fits: the facts above already say what matters, each with whose it is.
+    capped(paras.filter((p) => group.details.some((d) => holds(p, d)))),
     '',
     'Advice to check:',
     advice,
@@ -231,9 +273,18 @@ export async function checkOnDevice(
   entities: Entity[],
   allowed: readonly string[],
   onProgress: (done: number, total: number) => void,
+  options: CheckOptions = {},
 ): Promise<CheckRun> {
   if (!anythingToCheck(items, entities)) return { checks: items.map(() => NOTHING_WITHHELD), asked: 0, answered: 0, failed: 0 };
-  return checkItems(items, entities, paragraphs(note), allowed, onDeviceAsk(), onProgress);
+  return checkItems(items, entities, paragraphs(note), allowed, onDeviceAsk(), onProgress, options);
+}
+
+export interface CheckOptions {
+  /**
+   * Ask about one fact at a time, for a group about one student with two to four facts: one request per
+   * step and per fact, where the default is one per step. More requests; the worst answer still wins.
+   */
+  perFact?: boolean;
 }
 
 /**
@@ -282,6 +333,7 @@ export async function checkItems(
   allowed: readonly string[],
   ask: (prompt: string) => Promise<{ text: string; onDevice: boolean }>,
   onProgress: (done: number, total: number) => void = () => {},
+  options: CheckOptions = {},
 ): Promise<CheckRun> {
   const run: CheckRun = { checks: [], asked: 0, answered: 0, failed: 0 };
   for (let i = 0; i < items.length; i++) {
@@ -295,30 +347,41 @@ export async function checkItems(
     let failedHere = 0;
     // One request per step and per group: asked about several steps at once, the on-device model
     // judged the first and passed the rest.
+    const itemSteps = steps(items[i].text);
     for (const group of groups) {
-      for (const step of steps(items[i].text)) {
-        let answer: { text: string; onDevice: boolean } | undefined;
-        run.asked++;
-        try {
-          answer = await ask(checkPrompt(group, { ...items[i], text: step }, paras, entities, allowed));
-        } catch {
-          answer = undefined;
+      for (const step of itemSteps) {
+        for (const details of factSets(group, options.perFact)) {
+          let answer: { text: string; onDevice: boolean } | undefined;
+          run.asked++;
+          try {
+            answer = await ask(checkPrompt({ ...group, details }, { ...items[i], text: step }, paras, entities, allowed));
+          } catch {
+            answer = undefined;
+          }
+          if (answer && !answer.onDevice) throw new Error('The check did not run on the device. Stopped.');
+          if (!answer) {
+            run.failed++;
+            failedHere++;
+            continue;
+          }
+          run.answered++;
+          worst = worse(worst, readVerdict(answer.text));
         }
-        if (answer && !answer.onDevice) throw new Error('The check did not run on the device. Stopped.');
-        if (!answer) {
-          run.failed++;
-          failedHere++;
-          continue;
-        }
-        run.answered++;
-        worst = worse(worst, readVerdict(answer.text));
       }
     }
     if (!worst) run.checks.push(NOT_ANSWERED);
-    else run.checks.push(failedHere > 0 ? worse(worst, { verdict: 'unsure', reason: PART_ANSWER }) : worst);
+    else if (failedHere > 0) run.checks.push(worse(worst, { verdict: 'unsure', reason: PART_ANSWER }));
+    // Every step passed. The reason for the first step alone would read as if it were the reason for all of them.
+    else if (worst.verdict === 'fits' && itemSteps.length > 1) run.checks.push({ verdict: 'fits', reason: allStepsFit(itemSteps.length) });
+    else run.checks.push(worst);
   }
   onProgress(items.length, items.length);
   return run;
+}
+
+/** The reason shown when an item of several steps was checked step by step and none conflicted. */
+export function allStepsFit(n: number): string {
+  return `Checked ${n} steps against these details. No conflict found.`;
 }
 
 /** The most steps of one item that are checked one by one. Any beyond that are checked together, as the last. */
@@ -330,7 +393,8 @@ const MAX_STEPS = 6;
  */
 export function steps(text: string): string[] {
   const parts = text
-    .split(/(?<=[.!?])\s+(?=\p{Lu}|\d+[.)]\s)|\s+(?=\d+[.)]\s)/u)
+    // A sentence may begin with a capital, with a stand-in ("[Student 2] should…") or with a number.
+    .split(/(?<=[.!?])\s+(?=\p{Lu}|\[|\d+[.)]\s)|\s+(?=\d+[.)]\s)/u)
     .map((p) => p.trim())
     .filter((p) => /\p{L}{2}/u.test(p));
   if (parts.length <= 1) return [text.trim()];
@@ -353,12 +417,16 @@ export function worse(current: ItemCheck | undefined, next: ItemCheck): ItemChec
 }
 
 /**
- * How each item starts. An item with no conflict found, or with nothing to
- * check, starts kept (true). An item in conflict starts struck (false). An
- * item the check was unsure about, or did not check, starts undecided
- * (null): the teacher has to choose to keep it or strike it before signing
- * off, so a warning is never carried through by default.
+ * How each item starts. Nothing is kept by default: every item starts
+ * undecided (null) and the teacher has to keep it or strike it before
+ * signing off, whatever the check said. Only an item in conflict has a
+ * start of its own: it starts struck (false), so keeping it is a choice.
  */
 export function startsKept(checks: ItemCheck[]): (boolean | null)[] {
-  return checks.map((c) => (c.verdict === 'conflict' ? false : c.verdict === 'unsure' || c.verdict === 'not checked' ? null : true));
+  return checks.map((c) => (c.verdict === 'conflict' ? false : null));
+}
+
+/** The items the one button "Keep every item with no conflict found" keeps: those still undecided whose verdict is "fits". */
+export function keepNoConflict(kept: (boolean | null)[], checks: ItemCheck[]): (boolean | null)[] {
+  return kept.map((k, i) => (k === null && checks[i]?.verdict === 'fits' ? true : k));
 }
