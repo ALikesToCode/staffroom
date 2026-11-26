@@ -218,7 +218,7 @@ export function App() {
   const [storeFailed, setStoreFailed] = useState(false);
   /** The inline question asked before forgetting, when receipts are kept. */
   const [forgetAsk, setForgetAsk] = useState(false);
-  const [listOpen, setListOpen] = useState(() => read(session, CLASS_LIST_KEY, [] as string[]).length === 0);
+  const [listOpen, setListOpen] = useState(false);
   /** False until the school's policy has loaded, or the app has given up waiting and taken the defaults. */
   const [policyReady, setPolicyReady] = useState(false);
   const policyReadyRef = useRef(false);
@@ -1773,7 +1773,7 @@ export function App() {
                     maxLength={NOTE_MAX}
                     onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
                     placeholder="Write what you noticed this week, as you would in your own notebook. Names, family matters, health: write it all."
-                    rows={11}
+                    rows={9}
                     spellCheck={false}
                     autoCorrect="off"
                     autoCapitalize="off"
