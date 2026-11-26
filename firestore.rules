@@ -70,7 +70,7 @@ service cloud.firestore {
           'kept', 'struck', 'flags', 'conflictsByRule', 'doubtsByModel', 'constraintsConfirmed', 'needsShared'])
         && d.id is string && d.id == receiptId
         && isTime(d.createdAt) && isTime(d.approvedAt)
-        && d.task in ['plan', 'parents', 'handover']
+        && d.task in ['lesson', 'plan', 'parents', 'handover']
         && validWithheld(d.withheld)
         && isCount(d.released)
         && isCount(d.approvedChars)

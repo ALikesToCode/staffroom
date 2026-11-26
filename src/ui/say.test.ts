@@ -21,7 +21,7 @@ describe('the lines of a receipt', () => {
 
   it('says what a lesson needed, in counts', () => {
     expect(lessonLine({ stepsNeedingFit: 1, adjustmentsAccepted: 3, adjustmentsByModel: 2 })).toBe(
-      '1 step needed fitting. 3 adjustments accepted, 2 of them written by the on-device model. Kept in this browser only.',
+      '1 step needed fitting. 3 adjustments accepted, 2 of them written by the on-device model. These counts are kept in this browser only.',
     );
   });
 

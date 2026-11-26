@@ -269,7 +269,7 @@ export function asReceiptRecord(data: unknown): ReceiptRecord | undefined {
   if (!iso.test(d.createdAt as string) || !iso.test(d.approvedAt as string)) return undefined;
   if (recordModelName(d.draftModel as string) !== d.draftModel) return undefined;
   if (!RECEIPT_ID.test(d.id as string)) return undefined;
-  if (typeof flags.replyFlagged !== 'boolean' || !['plan', 'parents', 'handover'].includes(d.task as string)) return undefined;
+  if (typeof flags.replyFlagged !== 'boolean' || !['lesson', 'plan', 'parents', 'handover'].includes(d.task as string)) return undefined;
   return {
     id: d.id as string,
     createdAt: d.createdAt as string,

@@ -60,7 +60,7 @@ export function signOffLine(signOff: Receipt['signOff']): string {
 /** What a receipt says about a lesson. Counts only. */
 export function lessonLine(l: NonNullable<Receipt['lesson']>): string {
   const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
-  return `${n(l.stepsNeedingFit, 'step', 'steps')} needed fitting. ${n(l.adjustmentsAccepted, 'adjustment', 'adjustments')} accepted, ${l.adjustmentsByModel} of them written by the on-device model. Kept in this browser only.`;
+  return `${n(l.stepsNeedingFit, 'step', 'steps')} needed fitting. ${n(l.adjustmentsAccepted, 'adjustment', 'adjustments')} accepted, ${l.adjustmentsByModel} of them written by the on-device model. These counts are kept in this browser only.`;
 }
 
 /** The order the items are shown in: conflicts first, then doubts, then the rest, each group in the draft's order. */

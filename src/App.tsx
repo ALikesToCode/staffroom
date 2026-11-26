@@ -870,8 +870,7 @@ export function App() {
     setStage('signed');
     setSigning(false);
     setCopyState('idle');
-    // The account's rules know three tasks. A lesson's record stays in this browser.
-    if (keepCopies && uid && task !== 'lesson') {
+    if (keepCopies && uid) {
       // Independent of the local store. With no network the write waits, and finishes when the network is back.
       setCopyState('pending');
       // The write can finish long after this run was cleared. Its outcome is shown only while this run is on screen.
@@ -2113,7 +2112,6 @@ export function App() {
                       {isLesson && keptCount > 0 && (
                         <p className="hint">
                           The class plan is copied and printed with no name and no adjustment. The adjustments print on a second page, for you.
-                          {keepCopies ? ' A lesson is not recorded in your account: its record stays in this browser.' : ''}
                         </p>
                       )}
                       {keptCount === 0 ? (

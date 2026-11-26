@@ -1151,6 +1151,8 @@ describe('check and receipt', () => {
     // The rules file states the same two forms.
     expect(firestoreRules).toContain("receiptId.matches('^[0-9a-z]{8,9}-[0-9a-z]{6}$')");
     expect(firestoreRules).toContain('&& isModel(d.draftModel)');
+    // The rules name the same tasks the app has.
+    expect(firestoreRules).toContain(`&& d.task in [${TASKS.map((t) => `'${t.id}'`).join(', ')}]`);
     expect(['ON_DEVICE', 'RULES_ONLY']).toContain(record.guardWhere);
     expect(['ON_DEVICE', 'IN_CLOUD']).toContain(record.draftWhere);
     expect(['ON_DEVICE', 'RULES_ONLY', 'NOT_RUN', 'SKIPPED']).toContain(record.checkWhere);
@@ -1169,6 +1171,8 @@ describe('check and receipt', () => {
     expect(asReceiptRecord({ ...record, sent: { text: 'approved text' }, label: 'A title' })).toEqual(record);
     // An entry written by an earlier version (a whole receipt) is not a record.
     expect(asReceiptRecord(receipt)).toBeUndefined();
+    // Every task the app has is a task a record may name, and no other.
+    for (const t of TASKS) expect(asReceiptRecord({ ...record, task: t.id }), t.id).toEqual({ ...record, task: t.id });
     expect(asReceiptRecord({ ...record, task: 'other' })).toBeUndefined();
     expect(asReceiptRecord({ ...record, kept: -1 })).toBeUndefined();
     expect(asReceiptRecord({ ...record, draftModel: 'x'.repeat(61) })).toBeUndefined();
