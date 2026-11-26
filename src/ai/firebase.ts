@@ -124,8 +124,16 @@ export function watchUser(onUser: (user: User | null) => void): () => void {
   }
   const auth = getAuth(app);
   const stop = onAuthStateChanged(auth, onUser);
-  signInAnonymously(auth).catch(() => onUser(null));
-  return stop;
+  const signIn = () => {
+    if (!auth.currentUser) signInAnonymously(auth).catch(() => onUser(null));
+  };
+  signIn();
+  // A sign-in that failed for want of a network is tried again when the network is back.
+  window.addEventListener('online', signIn);
+  return () => {
+    window.removeEventListener('online', signIn);
+    stop();
+  };
 }
 
 /**
