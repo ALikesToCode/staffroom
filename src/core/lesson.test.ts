@@ -25,6 +25,7 @@ import {
   lessonSummary,
   loadLessons,
   needsFitting,
+  continueTopic,
   nextLessonFields,
   stageName,
   starterFor,
@@ -216,7 +217,12 @@ describe('a signed lesson, kept on this device', () => {
     );
     expect(summary).not.toMatch(/Aarav|class set|Student/);
     const next = nextLessonFields({ ...taught, after: { ...taught.after, stages: [...taught.after.stages] } });
-    expect(next).toEqual({ klass: 'Class 6', subject: 'English', topic: '', minutes: 40, lastTime: summary });
+    expect(next).toEqual({ klass: 'Class 6', subject: 'English', topic: `Continue: ${taught.fields.topic}`, minutes: 40, lastTime: summary });
+    // Said once, however many lessons the topic runs to, and never longer than a lesson line.
+    expect(continueTopic('Continue: continue: Fractions')).toBe('Continue: Fractions');
+    expect(continueTopic('  ')).toBe('');
+    expect(continueTopic('x'.repeat(200))).toHaveLength(120);
+    expect(lessonReady(next)).toBe(true);
     // It is checked like every lesson line: a name typed into the teacher's line stops the send.
     const named = nextLessonFields({ ...lesson, after: { stages: [], line: 'Meenal left early.', at: 'x' } });
     expect(lessonIssues({ ...named, topic: 'More describing' }, entities, SAMPLE_CLASS_LIST).map((v) => v.what)).toEqual(['Meenal']);

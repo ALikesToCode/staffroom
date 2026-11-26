@@ -274,9 +274,24 @@ export function lastTimeSummary(lesson: SavedLesson): string {
   return one(parts.join(' '), LAST_TIME_MAX);
 }
 
-/** The fields the next lesson starts from: the same class and subject and length, no topic, and what was done last time. */
+export const CONTINUE = 'Continue: ';
+
+/** The topic the next lesson starts with: "Continue: " and the last topic, said once however many lessons it runs to. The teacher can change it. */
+export function continueTopic(topic: string): string {
+  let last = one(topic, FIELD_MAX);
+  while (last.toLowerCase().startsWith(CONTINUE.toLowerCase())) last = last.slice(CONTINUE.length).trim();
+  return last ? one(`${CONTINUE}${last}`, FIELD_MAX) : '';
+}
+
+/** The fields the next lesson starts from: the same class and subject and length, the last topic to continue, and what was done last time. */
 export function nextLessonFields(lesson: SavedLesson): LessonFields {
-  return { klass: lesson.fields.klass, subject: lesson.fields.subject, topic: '', minutes: lessonMinutes(lesson.fields.minutes), lastTime: lastTimeSummary(lesson) };
+  return {
+    klass: lesson.fields.klass,
+    subject: lesson.fields.subject,
+    topic: continueTopic(lesson.fields.topic),
+    minutes: lessonMinutes(lesson.fields.minutes),
+    lastTime: lastTimeSummary(lesson),
+  };
 }
 
 /** The class plan as text: the title and each stage, stand-ins as they came. No name and no adjustment is in it. */
