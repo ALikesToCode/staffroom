@@ -1,14 +1,33 @@
-import type { Draft, LabelWhere, Task, Where } from '../core/types';
+import type { Draft, LabelWhere, Task, TaskId, Where } from '../core/types';
 import { ON_DEVICE_MODEL } from '../core/receipts';
 import { plainText } from '../core/text';
 import { modelFor } from './routes';
 
-/** The system instruction sent with every draft. Shown to the teacher word for word before they approve. */
+const REDACTED = `The teacher's notes have been redacted before they reached you. Text in square brackets such as [Student 1], [Adult 1] or [Place 1] stands for a person or place whose identity is withheld. Always refer to them by exactly the same stand-in, brackets included. [withheld] marks a private detail you are not allowed to know. Do not guess what it is and do not ask for it.`;
+
+/** The system instruction sent with a support plan, messages to parents and a hand-over. Shown to the teacher word for word before they approve. */
 export const DRAFT_SYSTEM = `You help a school teacher in India with practical, kind, specific classroom advice.
 
-The teacher's notes have been redacted before they reached you. Text in square brackets such as [Student 1], [Adult 1] or [Place 1] stands for a person or place whose identity is withheld. Always refer to them by exactly the same stand-in, brackets included. [withheld] marks a private detail you are not allowed to know. Do not guess what it is and do not ask for it.
+${REDACTED}
 
 Write plainly, in plain text with no markdown: no asterisks, no # headings. No diagnosis, no labels for children, nothing that costs money.`;
+
+/**
+ * The system instruction sent with a lesson. It asks what a teacher would
+ * ask of any assistant, and says nothing of what a family can pay for, has
+ * at home or has time for: the cloud is not steered towards or away from
+ * what the device then checks.
+ */
+export const LESSON_SYSTEM = `You help a school teacher in India plan a practical lesson for the class, level and topic given: its stages, the minutes for each, the materials and the homework.
+
+${REDACTED}
+
+Write plainly, in plain text with no markdown: no asterisks, no # headings. No diagnosis, no labels for children. Do not use a child's stand-in or a [Place] stand-in as an example in a whole-class step.`;
+
+/** The system instruction for a task. */
+export function draftSystem(task: TaskId): string {
+  return task === 'lesson' ? LESSON_SYSTEM : DRAFT_SYSTEM;
+}
 
 /** The fixed sentence that follows the task instruction in every draft prompt. */
 export const DRAFT_FORMAT =
@@ -62,7 +81,7 @@ export interface DraftResult {
  * over when the cloud cannot be reached.
  */
 export async function writeDraft(redacted: string, task: Task, cloudModel: string): Promise<DraftResult> {
-  const model = modelFor('draft', { system: DRAFT_SYSTEM, schema: SCHEMA, cloudModel });
+  const model = modelFor('draft', { system: draftSystem(task.id), schema: SCHEMA, cloudModel });
   const result = await model.generateContent(draftPrompt(redacted, task));
   const draft = JSON.parse(result.response.text()) as Draft;
   if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) {

@@ -82,7 +82,7 @@ import { NOTE_MAX } from './core/text';
 import {
   DRAFT_FORMAT,
   DRAFT_NOTES_HEADING,
-  DRAFT_SYSTEM,
+  draftSystem,
   LABEL_CHARS,
   LABEL_SYSTEM,
   labelReceipt,
@@ -2743,7 +2743,7 @@ export function App() {
         <Inspect
           onClose={() => setInspecting(false)}
           taskInstruction={currentTask.instruction}
-          system={DRAFT_SYSTEM}
+          system={draftSystem(currentTask.id)}
           format={DRAFT_FORMAT}
           heading={DRAFT_NOTES_HEADING}
           labelSystem={LABEL_SYSTEM}

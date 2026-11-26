@@ -20,7 +20,7 @@ import {
 } from './vault';
 import { checkOutgoing, checkReply, safeTitle } from './gate';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE, TASKS } from './samples';
-import { DRAFT_FORMAT, DRAFT_NOTES_HEADING, draftPrompt, LABEL_CHARS, labelPrompt } from '../ai/draft';
+import { DRAFT_FORMAT, DRAFT_NOTES_HEADING, DRAFT_SYSTEM, draftPrompt, draftSystem, LABEL_CHARS, labelPrompt, LESSON_SYSTEM } from '../ai/draft';
 import { NOTE_MAX, plainText } from './text';
 
 /** The sample note as it goes out when no model read it: class list, patterns, sensitive words and capitalised words only. */
@@ -1187,6 +1187,25 @@ describe('check and receipt', () => {
     // A record written before the digest was dropped is still listed, without it.
     expect(asReceiptRecord({ ...record, approvedSha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' })).toEqual(record);
     expect(asReceiptRecord(null)).toBeUndefined();
+  });
+});
+
+describe('the instruction sent with a draft', () => {
+  it('asks for a lesson as a teacher would, with nothing that steers the cloud towards or away from what the device checks', () => {
+    expect(draftSystem('lesson')).toBe(LESSON_SYSTEM);
+    for (const said of [LESSON_SYSTEM, TASKS[0].instruction]) expect(said).not.toMatch(/money|cost|buy|pay|phone|internet|online|after school|bell|free\b/i);
+    expect(LESSON_SYSTEM).toContain('plain text with no markdown');
+    expect(LESSON_SYSTEM).toContain('No diagnosis, no labels for children.');
+    expect(LESSON_SYSTEM).toContain("Do not use a child's stand-in or a [Place] stand-in as an example in a whole-class step.");
+    expect(LESSON_SYSTEM).toContain('[withheld] marks a private detail you are not allowed to know.');
+  });
+
+  it('keeps "nothing that costs money" for the other tasks', () => {
+    for (const id of ['plan', 'parents', 'handover'] as const) {
+      expect(draftSystem(id)).toBe(DRAFT_SYSTEM);
+      expect(draftSystem(id)).toContain('No diagnosis, no labels for children, nothing that costs money.');
+    }
+    expect(DRAFT_SYSTEM).not.toContain('whole-class step');
   });
 });
 

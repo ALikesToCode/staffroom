@@ -36,7 +36,7 @@ export const TASKS: Task[] = [
     label: "Tomorrow's lesson",
     blurb: 'A lesson for the whole class, fitted to each child on this device.',
     instruction:
-      'Plan one lesson for the whole class, from the lines under "Lesson" at the end of the notes: the class, the subject, the topic and the length. Give four to six items, one for each stage of the lesson in order: Starter, Teach, Practise, Check, Homework. The heading of each item is the stage and its minutes, as in "Starter (5 minutes)"; the minutes add up to the length of the lesson, and homework takes none of them. The text of each item says what the teacher does, what the pupils do and the materials needed, in two to four sentences. Write for the whole class. Name a student by their stand-in only where the notes say that student needs something. If the lines say what was done last time, build on what was done and return to what was not.',
+      'Plan one practical lesson for the whole class, from the lines under "Lesson" at the end of the notes: the class, the subject, the topic and the length. Give four to six items, one for each stage of the lesson in order: Starter, Teach, Practise, Check, Homework. The heading of each item is the stage and its minutes, as in "Starter (5 minutes)"; the minutes add up to the length of the lesson, and homework takes none of them. The text of each item says what the teacher does, what the pupils do and the materials needed, in two to four sentences; the Homework item sets the homework. Write for the whole class. Name a student by their stand-in only where the notes say that student needs something. If the lines say what was done last time, build on what was done and return to what was not.',
   },
   {
     id: 'plan',
