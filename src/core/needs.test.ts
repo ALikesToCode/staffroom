@@ -153,7 +153,7 @@ describe('the check against a need the cloud was told', () => {
   });
 
   it('counts the needs that were told', () => {
-    expect(constraintCounts(on)).toMatchObject({ confirmed: 4 });
+    expect(constraintCounts(on)).toMatchObject({ confirmed: 5 });
     expect(sharedNeeds(on, entities)).toHaveLength(1);
   });
 });

@@ -18,6 +18,7 @@ import {
   unconfirmConstraint,
   withConstraintFacts,
 } from './constraints';
+import { outgoingOf, sharedNeeds } from './needs';
 
 /** The vault a note gets with no model: class list, patterns, sensitive words, capitalised words. */
 export function rulesVault(note: string, classList: string[]): Entity[] {
@@ -96,11 +97,30 @@ describe('constraints proposed by rule', () => {
     const entities = rulesVault(SAMPLE_NOTE, SAMPLE_CLASS_LIST);
     const found = proposeConstraints(SAMPLE_NOTE, entities);
     expect(found.map((c) => brief(c, entities))).toEqual([
+      ['money', 'Aarav Sharma', 'cannot pay for anything extra this term'],
       ['time-before', 'Aarav Sharma', 'now helps at the family tea stall before school'],
       ['health', 'Meenal Joshi', 'has epilepsy'],
       ['time-after', 'Meenal Joshi', 'has to leave school at the last bell to reach home before dark'],
       ['contact', 'Kabir Qureshi', 'staying with his grandmother'],
     ]);
+    expect(found.find((c) => c.kind === 'contact')).toMatchObject({ who: 'parents', guardian: 'grandmother', away: true });
+    // After "Use the sample class" and the guard: proposed, and nothing confirmed or told until the teacher does it.
+    expect(found.every((c) => !c.confirmed && !c.share)).toBe(true);
+    expect(sharedNeeds(found, entities)).toEqual([]);
+    expect(outgoingOf(SAMPLE_NOTE, entities, found).text).toBe(redact(SAMPLE_NOTE, entities));
+  });
+
+  it('withholds the walk home once the sample constraints are confirmed, and leaves the club in the text', () => {
+    const entities = rulesVault(SAMPLE_NOTE, SAMPLE_CLASS_LIST);
+    // With rules only and nothing confirmed, the cloud is shown the sentence and can plan around it.
+    expect(redact(SAMPLE_NOTE, entities)).toContain('last bell to reach home');
+    let held = { entities, constraints: proposeConstraints(SAMPLE_NOTE, entities) };
+    for (const c of held.constraints) held = confirmConstraint(SAMPLE_NOTE, held.entities, held.constraints, c.id);
+    const out = outgoingOf(SAMPLE_NOTE, lockConstraints(held.entities, held.constraints), held.constraints);
+    expect(out.violations).toEqual([]);
+    expect(out.text).not.toContain('last bell to reach home');
+    expect(out.text).toContain('the remedial writing club meets after the last bell');
+    for (const c of held.constraints) expect(out.text, c.kind).not.toContain(c.text);
   });
 });
 
@@ -221,6 +241,7 @@ describe('constraints kept while the guard runs again', () => {
     const meenalNow = again.find((e) => e.surfaces.includes('Meenal'))!;
     expect(meenalNow.id).not.toBe(meenal.id);
     expect(back.constraints.map((c) => [c.kind, c.confirmed, c.source])).toEqual([
+      ['money', false, 'rule'],
       ['time-before', false, 'rule'],
       ['health', false, 'rule'],
       ['time-after', true, 'rule'],
@@ -292,6 +313,7 @@ describe('constraints proposed by the on-device model', () => {
     )!.constraints;
     const merged = mergeProposals(byRule, byModel);
     expect(merged.map((c) => [c.kind, c.source, c.alsoModel ?? false, c.text])).toEqual([
+      ['money', 'rule', false, 'cannot pay for anything extra this term'],
       ['time-before', 'rule', false, 'now helps at the family tea stall before school'],
       ['other', 'on-device model', false, 'freezes in written tests'],
       ['health', 'rule', false, 'has epilepsy'],

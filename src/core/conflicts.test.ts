@@ -201,10 +201,10 @@ describe('the rule layer on an item of a draft', () => {
 
   it('compares an item for the whole class, or one that names nobody, with every confirmed constraint', () => {
     const all = check('Whole class', 'Everyone stays for a spelling club after the last bell on Thursday.');
-    expect(all.compared).toBe(4);
+    expect(all.compared).toBe(5);
     expect(all.hit).toMatchObject({ verdict: 'conflict', matched: 'after the last bell' });
     expect(all.hit!.reason).toContain('keeps Meenal after the last bell');
-    expect(check('Routines', 'Start each day with five minutes of silent reading.')).toEqual({ compared: 4 });
+    expect(check('Routines', 'Start each day with five minutes of silent reading.')).toEqual({ compared: 5 });
   });
 
   it('compares with nothing that is not confirmed', () => {

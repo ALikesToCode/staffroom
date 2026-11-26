@@ -132,7 +132,7 @@ describe('sensitive words', () => {
     expect(findSensitive(SAMPLE_NOTE).map((h) => [h.category, h.text])).toEqual([
       [
         'family',
-        'His mother Sunita told me on the phone (98765 43210) that his father lost his job at the mill and Aarav now helps at the family tea stall before school',
+        'His mother Sunita told me on the phone (98765 43210) that his father lost his job at the mill and the family cannot pay for anything extra this term; Aarav now helps at the family tea stall before school',
       ],
       ['health', 'She told me she has epilepsy and is afraid of having a seizure in the exam hall'],
       ['family', "Kabir's parents are separating and he is staying with his grandmother"],

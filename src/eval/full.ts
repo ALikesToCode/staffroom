@@ -16,7 +16,7 @@ export const FULL_FACTS: { text: string; about: string }[] = [
   { text: 'walks six kilometres home', about: 'Meenal' },
   { text: 'has to leave school at the last bell to reach home before dark', about: 'Meenal' },
   {
-    text: 'His mother Sunita told me on the phone (98765 43210) that his father lost his job at the mill and Aarav now helps at the family tea stall before school',
+    text: 'His mother Sunita told me on the phone (98765 43210) that his father lost his job at the mill and the family cannot pay for anything extra this term; Aarav now helps at the family tea stall before school',
     about: 'Aarav',
   },
   { text: "Kabir's parents are separating and he is staying with his grandmother", about: 'Kabir' },
