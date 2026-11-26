@@ -81,6 +81,10 @@ pnpm test        # rules, vault, redaction, both gates, receipts, on-device rout
 pnpm typecheck
 ```
 
+## Measuring the on-device check
+
+[`eval.html`](eval.html) is a developer page that measures the check on the real on-device model. With `pnpm dev` running, open http://127.0.0.1:5173/eval.html in Chrome on a desktop. It puts 24 fixed, invented cases ([`src/eval/cases.ts`](src/eval/cases.ts)) through the same code the app uses, on the same `ONLY_ON_DEVICE` route: 12 where the advice conflicts with a withheld fact (time, place, health, money, family, travel) and 12 where the same fact is there and the advice is fine. Each case runs once; add `?runs=3` to run each three times. The page shows a table and the same results as JSON in `<pre id="eval-json">`: for each case what was expected, what the check said, its reason and the time taken, and totals for conflicts caught, compatible cases wrongly flagged as a conflict, unsure answers and failures.
+
 ## Limits, stated plainly
 
 - The on-device model is Gemini Nano in Chrome on desktop, and English only. In any other browser the app says so and runs the rules-only guard: the class list, the patterns and the short list of sensitive words. That list is no substitute for a model or for reading the text.

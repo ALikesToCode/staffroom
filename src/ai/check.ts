@@ -214,20 +214,21 @@ export async function checkOnDevice(
   onProgress: (done: number, total: number) => void,
 ): Promise<CheckRun> {
   if (!anythingToCheck(items, entities)) return { checks: items.map(() => NOTHING_WITHHELD), asked: 0, answered: 0, failed: 0 };
+  return checkItems(items, entities, paragraphs(note), allowed, onDeviceAsk(), onProgress);
+}
+
+/**
+ * The one way a check prompt is put to a model: on the ONLY_ON_DEVICE
+ * route. Throws before any request when the browser has no on-device model.
+ */
+export function onDeviceAsk(): (prompt: string) => Promise<{ text: string; onDevice: boolean }> {
   const model = modelFor('check', { system: SYSTEM, schema: SCHEMA });
-  return checkItems(
-    items,
-    entities,
-    paragraphs(note),
-    allowed,
-    async (prompt) => {
-      const result = await model.generateContent(prompt);
-      const onDevice = result.response.inferenceSource === 'on_device';
-      // The text is read only when the answer came from the device.
-      return { text: onDevice ? result.response.text() : '', onDevice };
-    },
-    onProgress,
-  );
+  return async (prompt) => {
+    const result = await model.generateContent(prompt);
+    const onDevice = result.response.inferenceSource === 'on_device';
+    // The text is read only when the answer came from the device.
+    return { text: onDevice ? result.response.text() : '', onDevice };
+  };
 }
 
 /** What a check run did: a verdict for each item, and how many requests were made, answered and failed. */

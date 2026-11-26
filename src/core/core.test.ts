@@ -593,6 +593,7 @@ import { anythingToCheck, checkDidNotRun, checkItems, checkPrompt, contextParagr
 import { asReceiptRecord, digestPrefix, draftLine, makeReceipt, newReceiptId, receiptRecord, RECEIPT_ID, recordModelName, sha256Hex } from './receipts';
 import { approvalKey, DEFAULT_POLICY, fallbackPolicy, readSaved, toSave, withTimeout } from './policy';
 import { familyFor, ownersOf } from './family';
+import { CASES, prepare, totals } from '../eval/cases';
 
 describe('guard helpers', () => {
   const para = "Kabir's parents are separating and he is staying with his grandmother.";
@@ -1548,5 +1549,63 @@ describe('a private detail inside another', () => {
     const twice = 'He is unwell. Later: he is unwell again.';
     const tv = buildVault(twice, [{ kind: 'private', text: 'he is unwell', source: 'teacher' }]);
     expect(insidePrivate(twice, tv).size).toBe(0);
+  });
+});
+
+describe('the cases for measuring the on-device check', () => {
+  it('has twelve conflicts and twelve compatible cases over six topics', () => {
+    expect(CASES).toHaveLength(24);
+    expect(CASES.filter((c) => c.expected === 'conflict')).toHaveLength(12);
+    expect(CASES.filter((c) => c.expected === 'compatible')).toHaveLength(12);
+    expect([...new Set(CASES.map((c) => c.topic))].sort()).toEqual(['family', 'health', 'money', 'place', 'time', 'travel']);
+    expect(new Set(CASES.map((c) => c.id)).size).toBe(24);
+  });
+
+  it('puts each case to the check as the app would: one child, one withheld fact, one prompt', async () => {
+    for (const c of CASES) {
+      const p = prepare(c);
+      expect(p.tokens, c.id).toEqual(['[Student 1]', '[withheld]']);
+      const groups = detailsFor(p.item, p.entities);
+      expect(groups.map((g) => [g.student?.surfaces[0], g.details.map((d) => d.surfaces[0])]), c.id).toEqual([[c.student, [c.fact]]]);
+      const prompts: string[] = [];
+      const run = await checkItems([p.item], p.entities, paragraphs(p.note), p.tokens, async (prompt) => {
+        prompts.push(prompt);
+        return { text: '{"verdict":"fits","reason":"ok"}', onDevice: true };
+      });
+      expect(run.asked, c.id).toBe(1);
+      expect(prompts[0], c.id).toContain(`Private facts about ${c.student}:\n- ${c.fact}`);
+      expect(prompts[0], c.id).toContain(c.advice.replaceAll('[Student 1]', c.student));
+    }
+  });
+
+  it('adds up the rows without estimating anything', () => {
+    const row = (expected: 'conflict' | 'compatible', got: 'fits' | 'conflict' | 'unsure' | 'failed' | 'not checked', ms: number) => ({
+      id: 'x', run: 1, topic: 'time' as const, expected, got, reason: '', ms,
+    });
+    expect(
+      totals([
+        row('conflict', 'conflict', 900),
+        row('conflict', 'unsure', 1100),
+        row('conflict', 'fits', 1000),
+        row('conflict', 'failed', 10),
+        row('compatible', 'fits', 800),
+        row('compatible', 'conflict', 1200),
+        row('compatible', 'unsure', 700),
+        row('compatible', 'not checked', 5),
+      ]),
+    ).toEqual({
+      runs: 8,
+      conflictCases: 4,
+      conflictsCaught: 1,
+      conflictsUnsure: 1,
+      conflictsMissed: 1,
+      compatibleCases: 4,
+      compatiblePassed: 1,
+      compatibleFlaggedAsConflict: 1,
+      compatibleUnsure: 1,
+      failures: 2,
+      medianMs: 800,
+    });
+    expect(totals([]).medianMs).toBe(0);
   });
 });
