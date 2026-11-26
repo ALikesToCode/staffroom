@@ -74,9 +74,14 @@ describe('the rule layer, kind by kind', () => {
     for (const step of ['Ask the family to buy a workbook.', 'Collect the trip fee by Monday.', 'Each child brings ₹50.', 'It costs 20 rupees.', 'Ask them to bring money for the fair.', 'Order a set of readers for her.']) {
       expect(verdict(step, k), step).toBe('conflict');
     }
-    for (const step of ['Ask her to pay attention to the margins.', 'Put the cards in order.', 'Lend her a workbook from the cupboard.', 'Check the word order in each sentence.']) {
-      expect(verdict(step, k), step).toBe(step.includes('word order') ? 'conflict' : 'none');
+    for (const step of ['Each child needs the practice workbook.', 'She should come in full uniform.', 'Bring ₹ 30 for the craft kit.', 'Suggest extra tuition in maths.', 'Send the art kit list home.']) {
+      expect(verdict(step, k), step).toBe('conflict');
     }
+    for (const step of ['Ask her to pay attention to the margins.', 'Put the cards in order.', 'Give her a printed sheet from the cupboard.', 'There is no need to buy a workbook.']) {
+      expect(verdict(step, k), step).toBe('none');
+    }
+    // Known false alarms: the rule knows the word, not what the step does with it.
+    for (const step of ['Lend her a workbook from the cupboard.', 'Check the word order in each sentence.']) expect(verdict(step, k), step).toBe('conflict');
   });
 
   it('no phone or internet: a step that needs one', () => {
@@ -112,6 +117,15 @@ describe('the rule layer, kind by kind', () => {
     expect(verdict('Ask both parents to come in.', father)).toBe('conflict');
     expect(verdict('Ask her mother to sign the diary.', father)).toBe('none');
     expect(verdict('Ask her grandparents to sign the diary.', father)).toBe('none');
+    // Parents who are not together, with no guardian named.
+    const apart = c('contact', { who: 'parents', away: true });
+    expect(verdict('Invite both parents to the meeting.', apart)).toBe('conflict');
+    expect(verdict('Send the report to her mother and father.', apart)).toBe('conflict');
+    expect(verdict('Do not ask both parents to come in together.', apart)).toBe('none');
+    expect(verdict('Meet whoever collects her, instead of her parents.', apart)).toBe('none');
+    expect(ruleConflicts('Ask both parents to come in.', k, { name: 'Kabir' })!.reason).toBe(
+      'This step speaks to “both parents”, and Kabir\'s parents are not there to ask. You confirmed: “the words the teacher confirmed”.',
+    );
   });
 
   it('health: a step with one of the trigger words', () => {

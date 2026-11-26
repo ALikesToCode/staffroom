@@ -119,6 +119,11 @@ const MONEY = [
   'bring(?:s|ing)? (?:in )?(?:some |the )?money',
   'donat(?:e|es|ed|ing|ion|ions)',
   '(?<!in )order(?:s|ed|ing)?(?! of)',
+  // Things a family is usually asked to pay for. A step that lends one is flagged too: the rule cannot tell.
+  'workbooks?',
+  'uniforms?',
+  'kits?',
+  'tuitions?',
 ];
 
 const PHONE_INTERNET = [
@@ -236,7 +241,8 @@ export function ruleConflicts(step: string, c: Constraint, context: RuleContext 
         // The adult is not there. A step addressed to that adult, or to the parents together, cannot be followed.
         const excluded = c.who === 'parents' ? [...PARENTS, ...ROLE_FORMS.father, ...ROLE_FORMS.mother] : [...PARENTS, ...formsOf(c.who)];
         const m = firstMatch(step, excluded);
-        return m ? hit(m[0], `This step is addressed to the ${m[0].toLowerCase()} of ${name}.`) : undefined;
+        const notThere = `${name}'s ${c.who} ${c.who === 'parents' ? 'are' : 'is'} not there to ask`;
+        return m ? hit(m[0], `This step speaks to ${quote(m[0])}, and ${notThere}.`) : undefined;
       }
       const reach = (roles: string[]) => firstMatch(step, [`${CONTACT_VERBS}${AFTER}[^.;!?]{0,60}?${BEFORE}(?:${roles.join('|')})`]);
       const named = c.who === 'parents' ? [...PARENTS, ...ROLE_FORMS.father, ...ROLE_FORMS.mother] : c.who ? formsOf(c.who) : [];
