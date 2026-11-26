@@ -8,7 +8,7 @@ import { configured, DEFAULT_POLICY, loadPolicy, saveReceiptCopy, watchUser, typ
 import { deviceStatus, prepareDevice, ROUTES, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, paragraphs } from './ai/guard';
 import { labelReceipt, writeDraft, type DraftResult } from './ai/draft';
-import { anythingToCheck, checkOnDevice, detailsFor, NOTHING_WITHHELD } from './ai/check';
+import { anythingToCheck, checkOnDevice, detailsFor, NOTHING_WITHHELD, startsKept } from './ai/check';
 import { CloudText, DeviceText, KIND_LABEL, RouteChip, Spinner, Stepper } from './ui/parts';
 
 type Stage = 'write' | 'guarding' | 'review' | 'drafting' | 'checking' | 'result' | 'signed';
@@ -266,6 +266,8 @@ export function App() {
       }
     }
     setChecks(itemChecks);
+    // An item in conflict starts struck: the teacher has to choose to keep it.
+    setKept(startsKept(itemChecks));
     setCheckWhere(where);
     setProgress('Naming the receipt');
     setLabel(await labelReceipt(text, currentTask.label));
@@ -663,6 +665,11 @@ export function App() {
                               )}
                             </div>
                           )}
+                          {stage === 'result' && c?.verdict === 'conflict' && !kept[i] && (
+                            <p className="hint struck-why">
+                              Struck to begin with, because it conflicts with what you know. Keep it only if you still want it.
+                            </p>
+                          )}
                           {stage === 'result' && (
                             <button className="link" onClick={() => setKept((k) => k.map((v, j) => (j === i ? !v : v)))}>
                               {kept[i] ? 'Strike this item' : 'Keep this item'}
@@ -688,7 +695,9 @@ export function App() {
                       <button className="primary" onClick={signOff} disabled={!kept.some(Boolean) || replyBlocked}>
                         Sign off {kept.filter(Boolean).length} of {kept.length} items
                       </button>
-                      <span className="hint">Your sign-off is recorded on the receipt.</span>
+                      <span className="hint">
+                        {kept.some((k) => !k) ? 'Struck items are left out. ' : ''}Your sign-off is recorded on the receipt.
+                      </span>
                     </div>
                   ) : (
                     <div className="signed">

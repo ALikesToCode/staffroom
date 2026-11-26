@@ -327,7 +327,7 @@ describe('vault', () => {
 });
 
 import { anchorQuote, MAX_CHUNK, paragraphs, readGuardAnswer } from '../ai/guard';
-import { anythingToCheck, checkPrompt, contextParagraphs, detailsFor, readVerdict, studentsNamed } from '../ai/check';
+import { anythingToCheck, checkPrompt, contextParagraphs, detailsFor, readVerdict, startsKept, studentsNamed } from '../ai/check';
 import { makeReceipt, receiptRecord, sha256Hex } from './receipts';
 
 describe('guard helpers', () => {
@@ -470,6 +470,11 @@ describe('check and receipt', () => {
     expect(detailsFor({ heading: 'Whole class', text: 'x' }, none)).toEqual([]);
     expect(anythingToCheck([{ heading: '[Student 1]', text: 'quiz' }], none)).toBe(false);
     expect(anythingToCheck([{ heading: 'Whole class', text: 'x' }], vault)).toBe(true);
+  });
+
+  it('starts an item in conflict as struck and the rest as kept', () => {
+    const verdicts = ['fits', 'conflict', 'unsure', 'not checked', 'nothing withheld'] as const;
+    expect(startsKept(verdicts.map((verdict) => ({ verdict, reason: '' })))).toEqual([true, false, true, true, true]);
   });
 
   it('collects context paragraphs by whole word', () => {

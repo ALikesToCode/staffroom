@@ -183,3 +183,12 @@ export async function checkOnDevice(
 }
 
 const rank = (c: ItemCheck) => (c.verdict === 'conflict' ? 2 : c.verdict === 'unsure' ? 1 : 0);
+
+/**
+ * Which items start as kept. An item the check found in conflict starts
+ * struck, so the teacher has to choose to keep it. The others start kept;
+ * an unsure or unchecked one carries its warning with it.
+ */
+export function startsKept(checks: ItemCheck[]): boolean[] {
+  return checks.map((c) => c.verdict !== 'conflict');
+}
