@@ -1,0 +1,1758 @@
+{
+ "done": true,
+ "at": "2026-11-26T06:08:12.482Z",
+ "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36",
+ "set": "fit",
+ "runsPerCase": 1,
+ "totals": {
+  "cases": 22,
+  "produced": 22,
+  "rulePasses": 15,
+  "saysFact": 9,
+  "offered": 21,
+  "offeredSaysFact": 8,
+  "errors": 0
+ },
+ "rows": [
+  {
+   "id": "after-1",
+   "kind": "time-after",
+   "constraint": "has to catch the 3.40 bus, the last one to her village",
+   "step": "Ask Ritika to stay back for fifteen minutes on Monday to finish her map.",
+   "first": {
+    "produced": true,
+    "rewrite": "Please stay back for fifteen minutes on Monday to finish your map so you can get everything organized for your trip.",
+    "rulePasses": false,
+    "matched": [
+     "stay back"
+    ],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Help Ritika complete her map during a designated break time on Monday so she can ensure it's finished before catching her bus.",
+    "requests": 2,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 5560
+  },
+  {
+   "id": "after-2",
+   "kind": "time-after",
+   "constraint": "minds his younger sisters from the last bell until his mother is back",
+   "step": "Put Dev down for the after-school chess practice.",
+   "first": {
+    "produced": true,
+    "rewrite": "Allow Dev to independently supervise his younger sisters until his mother returns, then put him down for chess practice.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": [
+     "younger",
+     "sisters",
+     "mother"
+    ]
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Allow Dev to independently supervise his younger sisters until his mother returns, then put him down for chess practice.",
+    "requests": 1,
+    "factWords": [
+     "younger",
+     "sisters",
+     "mother"
+    ]
+   },
+   "run": 1,
+   "ms": 636
+  },
+  {
+   "id": "before-1",
+   "kind": "time-before",
+   "constraint": "cannot be at school before the first bell: her bus gets in at ten to nine",
+   "step": "Ask Sana to come in early on Friday to set up the science table.",
+   "first": {
+    "produced": true,
+    "rewrite": "Ask Sana to come in after the first bell on Friday to set up the science table.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": [
+     "first",
+     "bell"
+    ]
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Ask Sana to come in after the first bell on Friday to set up the science table.",
+    "requests": 1,
+    "factWords": [
+     "first",
+     "bell"
+    ]
+   },
+   "run": 1,
+   "ms": 521
+  },
+  {
+   "id": "before-2",
+   "kind": "time-before",
+   "constraint": "delivers milk with his uncle until just before the first bell",
+   "step": "Meet Imran before school to hear him read.",
+   "first": {
+    "produced": true,
+    "rewrite": "Meet Imran at the classroom door just as the first bell rings so he can join the group for reading.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": [
+     "first",
+     "bell"
+    ]
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Meet Imran at the classroom door just as the first bell rings so he can join the group for reading.",
+    "requests": 1,
+    "factWords": [
+     "first",
+     "bell"
+    ]
+   },
+   "run": 1,
+   "ms": 604
+  },
+  {
+   "id": "days-1",
+   "kind": "days-away",
+   "constraint": "is away on Thursdays, when he takes his grandfather to the clinic",
+   "step": "Give Naveen his spelling test on Thursday morning.",
+   "first": {
+    "produced": true,
+    "rewrite": "Give Naveen his spelling test on another morning of the week.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Give Naveen his spelling test on another morning of the week.",
+    "requests": 1,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 473
+  },
+  {
+   "id": "days-2",
+   "kind": "days-away",
+   "constraint": "does not come on Saturdays: she works at the market stall",
+   "step": "Ask Pooja to join the Saturday revision class.",
+   "first": {
+    "produced": true,
+    "rewrite": "Ask Pooja to join the Sunday revision class instead.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Ask Pooja to join the Sunday revision class instead.",
+    "requests": 1,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 444
+  },
+  {
+   "id": "money-1",
+   "kind": "money",
+   "constraint": "the family cannot afford anything beyond the school fees this year",
+   "step": "Ask Farhan to buy a geometry box for next week.",
+   "first": {
+    "produced": true,
+    "rewrite": "Ask Farhan to participate in a classroom geometry activity next week. We will provide the materials needed for the activity.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Ask Farhan to participate in a classroom geometry activity next week. We will provide the materials needed for the activity.",
+    "requests": 1,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 741
+  },
+  {
+   "id": "money-2",
+   "kind": "money",
+   "constraint": "her mother is out of work and there is no money for extras",
+   "step": "Ask Lata to bring money for the class trip to the museum.",
+   "first": {
+    "produced": true,
+    "rewrite": "Please help us gather items for the class trip. We need things like art supplies or small snacks to make the trip more enjoyable for everyone.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Please help us gather items for the class trip. We need things like art supplies or small snacks to make the trip more enjoyable for everyone.",
+    "requests": 1,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 720
+  },
+  {
+   "id": "offline-1",
+   "kind": "no-phone-internet",
+   "constraint": "there is no phone and no internet in the house",
+   "step": "Ask Gopal to watch the fractions video online at home.",
+   "first": {
+    "produced": true,
+    "rewrite": "Ask Gopal to look at the printed fractions worksheet I've given him today. Please have him complete the exercises on it.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Ask Gopal to look at the printed fractions worksheet I've given him today. Please have him complete the exercises on it.",
+    "requests": 1,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 654
+  },
+  {
+   "id": "offline-2",
+   "kind": "no-phone-internet",
+   "constraint": "the only phone in the family goes to work with her father",
+   "step": "Send Mini her weekly spellings by WhatsApp.",
+   "first": {
+    "produced": true,
+    "rewrite": "Email Mini her weekly spellings using the school's email system. Ensure the email is sent to her designated school email address.",
+    "rulePasses": false,
+    "matched": [
+     "Email"
+    ],
+    "factWords": []
+   },
+   "offered": {
+    "ok": false,
+    "suggestion": "",
+    "requests": 2,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 1178
+  },
+  {
+   "id": "contact-1",
+   "kind": "contact",
+   "constraint": "his father must not be contacted",
+   "step": "Telephone Rohan's father about the missing homework.",
+   "first": {
+    "produced": true,
+    "rewrite": "Email Rohan's father about the missing homework.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": [
+     "father"
+    ]
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Email Rohan's father about the missing homework.",
+    "requests": 1,
+    "factWords": [
+     "father"
+    ]
+   },
+   "run": 1,
+   "ms": 428
+  },
+  {
+   "id": "contact-2",
+   "kind": "contact",
+   "constraint": "lives with her aunt while her parents work abroad",
+   "step": "Ask Kiran's parents to sign her reading record each night.",
+   "first": {
+    "produced": true,
+    "rewrite": "Ask Kiran's aunt to sign her reading record each night. Please ensure she notes the date.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": [
+     "aunt"
+    ]
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Ask Kiran's aunt to sign her reading record each night. Please ensure she notes the date.",
+    "requests": 1,
+    "factWords": [
+     "aunt"
+    ]
+   },
+   "run": 1,
+   "ms": 562
+  },
+  {
+   "id": "health-1",
+   "kind": "health",
+   "constraint": "has asthma",
+   "step": "Have Tara run two laps of the field as a warm-up.",
+   "first": {
+    "produced": true,
+    "rewrite": "Have Tara walk two laps of the field as a warm-up, gradually increasing her pace if she feels able. This will help her get her body ready for activity without overexerting herself.",
+    "rulePasses": false,
+    "matched": [
+     "laps"
+    ],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Have Tara walk or lightly jog around the field for a few minutes to warm up her muscles and get her breathing comfortable.",
+    "requests": 2,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 1516
+  },
+  {
+   "id": "health-2",
+   "kind": "health",
+   "constraint": "gets migraines from bright screens",
+   "step": "Seat Vivek at the front, next to the projector.",
+   "first": {
+    "produced": true,
+    "rewrite": "Seat Vivek near the back of the classroom, away from the projector and any windows with direct sunlight.",
+    "rulePasses": false,
+    "matched": [
+     "projector"
+    ],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Seat Vivek at the front of the classroom, near the teacher's desk.",
+    "requests": 2,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 1099
+  },
+  {
+   "id": "child-after",
+   "kind": "time-after",
+   "constraint": "has to catch the 3.40 bus, the last one to her village",
+   "step": "Groups still working on their poster stay after school on Wednesday to complete it.",
+   "first": {
+    "produced": true,
+    "rewrite": "This child will work on their poster during lunch or at home to ensure it's completed before Wednesday, allowing them to catch their bus.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": [
+     "catch"
+    ]
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "This child will work on their poster during lunch or at home to ensure it's completed before Wednesday, allowing them to catch their bus.",
+    "requests": 1,
+    "factWords": [
+     "catch"
+    ]
+   },
+   "run": 1,
+   "ms": 697
+  },
+  {
+   "id": "child-before",
+   "kind": "time-before",
+   "constraint": "delivers milk with his uncle until just before the first bell",
+   "step": "All pupils come in early on Monday to rehearse the class assembly.",
+   "first": {
+    "produced": true,
+    "rewrite": "Instead of coming to school early, he helps his uncle with his morning deliveries, ensuring everything is completed before the start of the school day.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": [
+     "uncle"
+    ]
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Instead of coming to school early, he helps his uncle with his morning deliveries, ensuring everything is completed before the start of the school day.",
+    "requests": 1,
+    "factWords": [
+     "uncle"
+    ]
+   },
+   "run": 1,
+   "ms": 697
+  },
+  {
+   "id": "child-days",
+   "kind": "days-away",
+   "constraint": "does not come on Saturdays: she works at the market stall",
+   "step": "The class test on this chapter is on Saturday in the second period.",
+   "first": {
+    "produced": true,
+    "rewrite": "She will review the material on a day before Saturday, to ensure she's prepared for the test.",
+    "rulePasses": false,
+    "matched": [
+     "Saturday"
+    ],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "She completes the assigned material during the week to ensure thorough understanding before the assessment.",
+    "requests": 2,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 1098
+  },
+  {
+   "id": "child-money-1",
+   "kind": "money",
+   "constraint": "the family cannot afford anything beyond the school fees this year",
+   "step": "Every pupil buys a set of twelve colour pencils for the map work.",
+   "first": {
+    "produced": true,
+    "rewrite": "The child uses crayons instead of colour pencils for the map work, prioritizing participation without requiring an expensive supply.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "The child uses crayons instead of colour pencils for the map work, prioritizing participation without requiring an expensive supply.",
+    "requests": 1,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 634
+  },
+  {
+   "id": "child-money-2",
+   "kind": "money",
+   "constraint": "her mother is out of work and there is no money for extras",
+   "step": "Pupils bring money for a new exercise book for the science journal.",
+   "first": {
+    "produced": true,
+    "rewrite": "Instead of a new exercise book, she borrows a classmate's spare one to use for the science journal activity.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "Instead of a new exercise book, she borrows a classmate's spare one to use for the science journal activity.",
+    "requests": 1,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 639
+  },
+  {
+   "id": "child-offline-1",
+   "kind": "no-phone-internet",
+   "constraint": "there is no phone and no internet in the house",
+   "step": "For homework, pupils watch a video about the water cycle online and list its four stages.",
+   "first": {
+    "produced": true,
+    "rewrite": "The child draws a diagram of the water cycle, labeling its four stages based on what they've learned from their textbook and classroom discussions.",
+    "rulePasses": true,
+    "matched": [],
+    "factWords": []
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "The child draws a diagram of the water cycle, labeling its four stages based on what they've learned from their textbook and classroom discussions.",
+    "requests": 1,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 732
+  },
+  {
+   "id": "child-offline-2",
+   "kind": "no-phone-internet",
+   "constraint": "the only phone in the family goes to work with her father",
+   "step": "Pupils send a photo of their finished drawing to the class WhatsApp group tonight.",
+   "first": {
+    "produced": true,
+    "rewrite": "She will share her drawing through another means, like email or a messaging app that isn't reliant on a shared family phone.",
+    "rulePasses": false,
+    "matched": [
+     "email"
+    ],
+    "factWords": [
+     "phone",
+     "family"
+    ]
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "She will share a picture of her drawing with the teacher during the next class session.",
+    "requests": 2,
+    "factWords": []
+   },
+   "run": 1,
+   "ms": 1155
+  },
+  {
+   "id": "child-contact",
+   "kind": "contact",
+   "constraint": "lives with her aunt while her parents work abroad",
+   "step": "Pupils ask their parents to tell them a story from their own school days and write it down.",
+   "first": {
+    "produced": true,
+    "rewrite": "She asks her aunt to share a story from her parents' school days, which she then writes down.",
+    "rulePasses": false,
+    "matched": [
+     "parents"
+    ],
+    "factWords": [
+     "aunt",
+     "parents"
+    ]
+   },
+   "offered": {
+    "ok": true,
+    "suggestion": "She asks her aunt to share a story from her childhood, which she then writes down.",
+    "requests": 2,
+    "factWords": [
+     "aunt"
+    ]
+   },
+   "run": 1,
+   "ms": 1121
+  }
+ ],
+ "lessonTotals": {
+  "calls": 25,
+  "read": 24,
+  "noPoints": 0,
+  "points": 46,
+  "realStage": 46,
+  "rulePasses": 45,
+  "repeatsPrivate": 0,
+  "offered": 46,
+  "offeredRepeatsPrivate": 0,
+  "droppedByRule": 0,
+  "errors": 1,
+  "rated": 0
+ },
+ "lessonRows": [
+  {
+   "id": "english/aarav",
+   "lesson": "English",
+   "child": "Aarav Sharma",
+   "first": [
+    {
+     "stage": "Starter",
+     "do": "Aarav may be feeling anxious. Briefly acknowledge the situation \u2013 'I know things might be a little different for some of you lately' \u2013 without asking for details.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Observe Aarav closely during the pair work. Offer gentle encouragement and check in quietly with him to see if he is understanding the task. If he seems hesitant, offer to work with him for a minute.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Starter",
+     "do": "Aarav may be feeling anxious. Briefly acknowledge the situation \u2013 'I know things might be a little different for some of you lately' \u2013 without asking for details.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Observe Aarav closely during the pair work. Offer gentle encouragement and check in quietly with him to see if he is understanding the task. If he seems hesitant, offer to work with him for a minute.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 2222
+  },
+  {
+   "id": "english/meenal",
+   "lesson": "English",
+   "child": "Meenal",
+   "first": [
+    {
+     "stage": "Teach",
+     "do": "When modelling the description of the school gate, encourage Meenal to verbally contribute ideas or phrases. Offer her to dictate sentences if she feels unsure about writing them down, acknowledging a",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Homework",
+     "do": "Remind Meenal about the remedial writing club after school and reassure her that it's a safe space to practice writing without pressure.",
+     "realStage": true,
+     "rulePasses": false,
+     "matched": [
+      "after school"
+     ],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Teach",
+     "do": "When modelling the description of the school gate, encourage Meenal to verbally contribute ideas or phrases. Offer her to dictate sentences if she feels unsure about writing them down, acknowledging a",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Pair Meenal with a supportive classmate during the practice activity. Offer gentle encouragement and a reassuring presence to help her feel more comfortable sharing her description in a less pressured",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 2,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 2766
+  },
+  {
+   "id": "english/kabir",
+   "lesson": "English",
+   "child": "Kabir",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Pair Kabir with a supportive classmate during the pair description activity.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Pair Kabir with a supportive classmate during the pair description activity.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 677
+  },
+  {
+   "id": "english/ishaan",
+   "lesson": "English",
+   "child": "Ishaan",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Pair Ishaan with a student who is a good collaborator to help him stay engaged and reduce potential conflicts.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Offer Ishaan a slightly more complex descriptive task during the pair work, perhaps asking him to focus on specific details or use more descriptive language.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Pair Ishaan with a student who is a good collaborator to help him stay engaged and reduce potential conflicts.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Offer Ishaan a slightly more complex descriptive task during the pair work, perhaps asking him to focus on specific details or use more descriptive language.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1457
+  },
+  {
+   "id": "english/tanvi",
+   "lesson": "English",
+   "child": "Tanvi",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Encourage Tanvi to help a less confident peer during the pair activity, perhaps by suggesting sentence starters or vocabulary.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Offer Tanvi a supportive comment praising her descriptive language, while discreetly acknowledging her shyness and avoiding putting her on the spot to read aloud if she seems uncomfortable.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Encourage Tanvi to help a less confident peer during the pair activity, perhaps by suggesting sentence starters or vocabulary.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Offer Tanvi a supportive comment praising her descriptive language, while discreetly acknowledging her shyness and avoiding putting her on the spot to read aloud if she seems uncomfortable.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1956
+  },
+  {
+   "id": "maths/aarav",
+   "lesson": "Mathematics",
+   "child": "Aarav Sharma",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Observe Aarav during the practice and offer gentle encouragement and positive reinforcement for effort, acknowledging his strengths in maths.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Homework",
+     "do": "Check in with Aarav privately about the homework, acknowledging his responsibilities at the tea stall and offering support if needed.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Observe Aarav during the practice and offer gentle encouragement and positive reinforcement for effort, acknowledging his strengths in maths.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Homework",
+     "do": "Check in with Aarav privately about the homework, acknowledging his responsibilities at the tea stall and offering support if needed.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1439
+  },
+  {
+   "id": "maths/meenal",
+   "lesson": "Mathematics",
+   "child": "Meenal",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Offer Meenal extra support during the practice activity, providing one-on-one assistance or allowing her to work with a peer she feels comfortable with.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Ensure Meenal understands the questions. Allow her to respond orally if she feels anxious about writing, and offer reassurance.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Offer Meenal extra support during the practice activity, providing one-on-one assistance or allowing her to work with a peer she feels comfortable with.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Ensure Meenal understands the questions. Allow her to respond orally if she feels anxious about writing, and offer reassurance.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1458
+  },
+  {
+   "id": "maths/kabir",
+   "lesson": "Mathematics",
+   "child": "Kabir",
+   "first": [
+    {
+     "stage": "Starter",
+     "do": "Pair Kabir with a supportive classmate during the starter activity.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Observe Kabir closely during the practice activity and offer gentle prompts or redirection if he becomes agitated or disruptive.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Starter",
+     "do": "Pair Kabir with a supportive classmate during the starter activity.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Observe Kabir closely during the practice activity and offer gentle prompts or redirection if he becomes agitated or disruptive.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1096
+  },
+  {
+   "id": "maths/ishaan",
+   "lesson": "Mathematics",
+   "child": "Ishaan",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Pair Ishaan with a student who tends to be patient and minimizes conflict. Encourage them to work together and offer prompts to Ishaan to maintain engagement, perhaps by asking open-ended questions to",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Teach",
+     "do": "Offer Ishaan a slightly more challenging problem or ask him to explain a concept to the class during the 'Teach' stage to maintain his interest when he finishes early.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Pair Ishaan with a student who tends to be patient and minimizes conflict. Encourage them to work together and offer prompts to Ishaan to maintain engagement, perhaps by asking open-ended questions to",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Teach",
+     "do": "Offer Ishaan a slightly more challenging problem or ask him to explain a concept to the class during the 'Teach' stage to maintain his interest when he finishes early.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 2134
+  },
+  {
+   "id": "maths/tanvi",
+   "lesson": "Mathematics",
+   "child": "Tanvi",
+   "first": [
+    {
+     "stage": "Starter",
+     "do": "After the recap, gently ask Tanvi if she'd be willing to demonstrate how she understands halves and quarters to help a classmate, offering encouragement for sharing her knowledge.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "During the practice activity, pair Tanvi with a classmate who might benefit from her assistance. Encourage her to explain her thinking to her partner, fostering a supportive learning environment.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Starter",
+     "do": "After the recap, gently ask Tanvi if she'd be willing to demonstrate how she understands halves and quarters to help a classmate, offering encouragement for sharing her knowledge.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "During the practice activity, pair Tanvi with a classmate who might benefit from her assistance. Encourage her to explain her thinking to her partner, fostering a supportive learning environment.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1725
+  },
+  {
+   "id": "science/aarav",
+   "lesson": "Science",
+   "child": "Aarav Sharma",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Pair Aarav with a supportive classmate during the group activity to ensure he participates actively and feel less pressured.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Check Aarav\u2019s diagram personally during the 'Check' phase, offering encouragement and positive feedback on his effort, acknowledging his strengths in maths.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Pair Aarav with a supportive classmate during the group activity to ensure he participates actively and feel less pressured.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Check Aarav\u2019s diagram personally during the 'Check' phase, offering encouragement and positive feedback on his effort, acknowledging his strengths in maths.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1456
+  },
+  {
+   "id": "science/meenal",
+   "lesson": "Science",
+   "child": "Meenal",
+   "first": [
+    {
+     "stage": "Teach",
+     "do": "Provide reassurance and explain that the demonstration is just to show how shadows work and is not related to any physical concerns.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Teach",
+     "do": "Provide reassurance and explain that the demonstration is just to show how shadows work and is not related to any physical concerns.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1055
+  },
+  {
+   "id": "science/kabir",
+   "lesson": "Science",
+   "child": "Kabir",
+   "first": [
+    {
+     "stage": "Starter",
+     "do": "Seat Kabir near a quieter student to minimize potential disruption.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Assign Kabir to a group with supportive and cooperative classmates, and subtly monitor his interactions during group work.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Starter",
+     "do": "Seat Kabir near a quieter student to minimize potential disruption.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Assign Kabir to a group with supportive and cooperative classmates, and subtly monitor his interactions during group work.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1231
+  },
+  {
+   "id": "science/ishaan",
+   "lesson": "Science",
+   "child": "Ishaan",
+   "first": [],
+   "offered": [],
+   "read": false,
+   "requests": 0,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "error": "The response exceeded output limits and was truncated.",
+   "run": 1,
+   "ms": 159089
+  },
+  {
+   "id": "science/tanvi",
+   "lesson": "Science",
+   "child": "Tanvi",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Pair Tanvi with a less confident student to encourage her to explain concepts and help them, fostering her leadership skills.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Give Tanvi a chance to explain her diagram to the class, fostering her confidence and allowing her to share her understanding beyond the instructed task.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Pair Tanvi with a less confident student to encourage her to explain concepts and help them, fostering her leadership skills.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Give Tanvi a chance to explain her diagram to the class, fostering her confidence and allowing her to share her understanding beyond the instructed task.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1567
+  },
+  {
+   "id": "social/aarav",
+   "lesson": "Social science",
+   "child": "Aarav Sharma",
+   "first": [
+    {
+     "stage": "Starter",
+     "do": "Acknowledge Aarav\u2019s recent absence briefly and offer support. Check in with him privately after the starter to see how he\u2019s managing with helping at the tea stall.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Pair Aarav with a supportive classmate during the map practice to provide assistance and ensure he understands the task. Offer extra scaffolding if needed.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Starter",
+     "do": "Acknowledge Aarav\u2019s recent absence briefly and offer support. Check in with him privately after the starter to see how he\u2019s managing with helping at the tea stall.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Pair Aarav with a supportive classmate during the map practice to provide assistance and ensure he understands the task. Offer extra scaffolding if needed.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1801
+  },
+  {
+   "id": "social/meenal",
+   "lesson": "Social science",
+   "child": "Meenal",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Before distributing the district map, quietly ask Meenal if she feels comfortable. If she expresses anxiety, offer reassurance and allow her to participate at her own pace, perhaps focusing on finding",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Offer Meenal a slightly modified check \u2013 perhaps allowing her to verbally identify the items on the key instead of writing them down, given her test anxieties.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Before distributing the district map, quietly ask Meenal if she feels comfortable. If she expresses anxiety, offer reassurance and allow her to participate at her own pace, perhaps focusing on finding",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Offer Meenal a slightly modified check \u2013 perhaps allowing her to verbally identify the items on the key instead of writing them down, given her test anxieties.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 2140
+  },
+  {
+   "id": "social/kabir",
+   "lesson": "Social science",
+   "child": "Kabir",
+   "first": [
+    {
+     "stage": "Starter",
+     "do": "Pair Kabir with a supportive classmate during the naming places activity to encourage positive interaction.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Offer Kabir a quieter spot during the map practice, providing gentle reminders to focus on the task and avoid frustration.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Starter",
+     "do": "Pair Kabir with a supportive classmate during the naming places activity to encourage positive interaction.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Offer Kabir a quieter spot during the map practice, providing gentle reminders to focus on the task and avoid frustration.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1689
+  },
+  {
+   "id": "social/ishaan",
+   "lesson": "Social science",
+   "child": "Ishaan",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Pair Ishaan with a classmate who works well in groups to support him during map-finding activity. Offer him a slightly more challenging task within the map, like finding a specific landmark on the map",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Teach",
+     "do": "Allow Ishaan to work ahead during the 'Teach' phase. Give him an extension activity like adding details to the school map, such as extracurricular areas.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Pair Ishaan with a classmate who works well in groups to support him during map-finding activity. Offer him a slightly more challenging task within the map, like finding a specific landmark on the map",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Teach",
+     "do": "Allow Ishaan to work ahead during the 'Teach' phase. Give him an extension activity like adding details to the school map, such as extracurricular areas.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 2188
+  },
+  {
+   "id": "social/tanvi",
+   "lesson": "Social science",
+   "child": "Tanvi",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Pair Tanvi with a less confident student during the map practice. Encourage her to explain her findings to her partner.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Homework",
+     "do": "Offer encouragement and assistance to Tanvi, acknowledging her existing reading skills while ensuring the homework is achievable given her limited access to technology.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Pair Tanvi with a less confident student during the map practice. Encourage her to explain her findings to her partner.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Homework",
+     "do": "Offer encouragement and assistance to Tanvi, acknowledging her existing reading skills while ensuring the homework is achievable given her limited access to technology.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1460
+  },
+  {
+   "id": "art/aarav",
+   "lesson": "Art",
+   "child": "Aarav Sharma",
+   "first": [
+    {
+     "stage": "Starter",
+     "do": "Offer Aarav a magazine or coloured paper, acknowledging that he may not have the kit. Say something like, 'Aarav, no worries if you don't have materials yet, we'll find something.'",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Homework",
+     "do": "Offer to help Aarav with sending the photo. Say something like, 'Aarav, sending a photo can be tricky. Would you like me to help you with that?'",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Starter",
+     "do": "Offer Aarav a magazine or coloured paper, acknowledging that he may not have the kit. Say something like, 'Aarav, no worries if you don't have materials yet, we'll find something.'",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Homework",
+     "do": "Offer to help Aarav with sending the photo. Say something like, 'Aarav, sending a photo can be tricky. Would you like me to help you with that?'",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 2404
+  },
+  {
+   "id": "art/meenal",
+   "lesson": "Art",
+   "child": "Meenal",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Offer Meenal a simpler collage task, perhaps focusing on fewer elements or using pre-cut shapes, to build confidence before the main activity.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Before the 'Check' stage, privately ask Meenal if she feels okay and offer reassurance about the exam. Ensure she understands the exam time and location.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Offer Meenal a simpler collage task, perhaps focusing on fewer elements or using pre-cut shapes, to build confidence before the main activity.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Check",
+     "do": "Before the 'Check' stage, privately ask Meenal if she feels okay and offer reassurance about the exam. Ensure she understands the exam time and location.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1612
+  },
+  {
+   "id": "art/kabir",
+   "lesson": "Art",
+   "child": "Kabir",
+   "first": [
+    {
+     "stage": "Starter",
+     "do": "Offer Kabir a magazine and coloured paper privately, ensuring he has materials to participate without prompting comparison to others.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Pair Kabir with a supportive classmate for the collage activity, potentially someone known for being patient and collaborative. Ensure a positive and structured pairing.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Starter",
+     "do": "Offer Kabir a magazine and coloured paper privately, ensuring he has materials to participate without prompting comparison to others.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Pair Kabir with a supportive classmate for the collage activity, potentially someone known for being patient and collaborative. Ensure a positive and structured pairing.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1402
+  },
+  {
+   "id": "art/ishaan",
+   "lesson": "Art",
+   "child": "Ishaan",
+   "first": [
+    {
+     "stage": "Practise",
+     "do": "Pair Ishaan with a classmate known for working well with others during collage creation.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Offer Ishaan a slightly more complex collage prompt or materials to maintain engagement.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Practise",
+     "do": "Pair Ishaan with a classmate known for working well with others during collage creation.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Offer Ishaan a slightly more complex collage prompt or materials to maintain engagement.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1116
+  },
+  {
+   "id": "art/tanvi",
+   "lesson": "Art",
+   "child": "Tanvi",
+   "first": [
+    {
+     "stage": "Starter",
+     "do": "Offer Tanvi a leadership role in helping classmates find materials, acknowledging her reading ability without calling attention to her advancement.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Encourage Tanvi to assist a less confident classmate who is struggling with the collage, fostering her helpfulness and addressing her shyness.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "offered": [
+    {
+     "stage": "Starter",
+     "do": "Offer Tanvi a leadership role in helping classmates find materials, acknowledging her reading ability without calling attention to her advancement.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    },
+    {
+     "stage": "Practise",
+     "do": "Encourage Tanvi to assist a less confident classmate who is struggling with the collage, fostering her helpfulness and addressing her shyness.",
+     "realStage": true,
+     "rulePasses": true,
+     "matched": [],
+     "repeats": [],
+     "rating": null
+    }
+   ],
+   "read": true,
+   "requests": 1,
+   "droppedByRule": 0,
+   "unknownStage": 0,
+   "run": 1,
+   "ms": 1467
+  }
+ ]
+}

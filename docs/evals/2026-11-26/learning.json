@@ -1,0 +1,201 @@
+{
+ "done": true,
+ "at": "2026-11-26T12:53:47.515Z",
+ "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36",
+ "set": "learning",
+ "totals": {
+  "cases": 12,
+  "ruleRight": 12,
+  "model": {
+   "needsKept": 3,
+   "leftOut": 33,
+   "unread": 0
+  }
+ },
+ "rows": [
+  {
+   "id": "absent",
+   "paragraph": "Nikhil was absent for six days this month with his family at a wedding. He is cheerful and tries hard.",
+   "expected": [
+    "missed"
+   ],
+   "byRule": [
+    "missed"
+   ],
+   "ruleRight": true,
+   "byModel": [],
+   "modelSaid": "no needs (left out: 2)",
+   "rating": null,
+   "ms": 5608
+  },
+  {
+   "id": "early",
+   "paragraph": "Farah finishes early in almost every lesson and gets bored. She then starts talking to her neighbour.",
+   "expected": [
+    "early"
+   ],
+   "byRule": [
+    "early"
+   ],
+   "ruleRight": true,
+   "byModel": [
+    {
+     "quote": "Farah finishes early in almost every lesson and gets bored.",
+     "need": "Needs engaging activities to prevent boredom"
+    }
+   ],
+   "modelSaid": "\u201cFarah finishes early in almost every lesson and gets bored.\u201d -> Needs engaging activities to prevent boredom",
+   "rating": null,
+   "ms": 1450
+  },
+  {
+   "id": "tests",
+   "paragraph": "Devika knows the work when I ask her at her desk, but she is afraid of written tests and leaves half the paper blank.",
+   "expected": [
+    "tests"
+   ],
+   "byRule": [
+    "tests"
+   ],
+   "ruleRight": true,
+   "byModel": [],
+   "modelSaid": "no needs (left out: 1)",
+   "rating": null,
+   "ms": 721
+  },
+  {
+   "id": "group",
+   "paragraph": "Samar argues with his partner in pair work nearly every time. Alone he works steadily.",
+   "expected": [
+    "group"
+   ],
+   "byRule": [
+    "group"
+   ],
+   "ruleRight": true,
+   "byModel": [],
+   "modelSaid": "no needs (left out: 3)",
+   "rating": null,
+   "ms": 1067
+  },
+  {
+   "id": "shy",
+   "paragraph": "Lata is very shy and will not answer in front of the class, though her written work is good.",
+   "expected": [
+    "shy"
+   ],
+   "byRule": [
+    "shy"
+   ],
+   "ruleRight": true,
+   "byModel": [],
+   "modelSaid": "no needs (left out: 2)",
+   "rating": null,
+   "ms": 1047
+  },
+  {
+   "id": "reads-below",
+   "paragraph": "Gopal struggles with reading and is about two years behind the class. He follows well when a story is read to him.",
+   "expected": [
+    "reads-below"
+   ],
+   "byRule": [
+    "reads-below"
+   ],
+   "ruleRight": true,
+   "byModel": [
+    {
+     "quote": "Gopal struggles with reading and is about two years behind the class.",
+     "need": "Needs targeted reading support and remediation"
+    },
+    {
+     "quote": "He follows well when a story is read to him.",
+     "need": "Needs auditory learning experiences to build skills"
+    }
+   ],
+   "modelSaid": "\u201cGopal struggles with reading and is about two years behind the class.\u201d -> Needs targeted reading support and remediation; \u201cHe follows well when a story is read to him.\u201d -> Needs auditory learning experiences to build skills",
+   "rating": null,
+   "ms": 1533
+  },
+  {
+   "id": "reads-above",
+   "paragraph": "Rhea reads far above her grade level and has finished every book on the class shelf.",
+   "expected": [
+    "reads-above"
+   ],
+   "byRule": [
+    "reads-above"
+   ],
+   "ruleRight": true,
+   "byModel": [],
+   "modelSaid": "no needs (left out: 2)",
+   "rating": null,
+   "ms": 985
+  },
+  {
+   "id": "homework",
+   "paragraph": "Imran has not handed in homework for three weeks. In class he does the work without trouble.",
+   "expected": [
+    "homework"
+   ],
+   "byRule": [
+    "homework"
+   ],
+   "ruleRight": true,
+   "byModel": [],
+   "modelSaid": "no needs (left out: 2)",
+   "rating": null,
+   "ms": 1074
+  },
+  {
+   "id": "two",
+   "paragraph": "Pooja missed two weeks of school in October and now freezes in tests, even on work she knew before.",
+   "expected": [
+    "missed",
+    "tests"
+   ],
+   "byRule": [
+    "missed",
+    "tests"
+   ],
+   "ruleRight": true,
+   "byModel": [],
+   "modelSaid": "no needs (left out: 4)",
+   "rating": null,
+   "ms": 2415
+  },
+  {
+   "id": "none-health",
+   "paragraph": "Vikram has asthma and keeps an inhaler in his bag. He must not run in the dust.",
+   "expected": [],
+   "byRule": [],
+   "ruleRight": true,
+   "byModel": [],
+   "modelSaid": "no needs (left out: 8)",
+   "rating": null,
+   "ms": 2964
+  },
+  {
+   "id": "none-family",
+   "paragraph": "Sana's mother works nights, so nobody can come to school meetings. The family cannot pay for the trip.",
+   "expected": [],
+   "byRule": [],
+   "ruleRight": true,
+   "byModel": [],
+   "modelSaid": "no needs (left out: 7)",
+   "rating": null,
+   "ms": 3032
+  },
+  {
+   "id": "unlisted",
+   "paragraph": "Harsh understands a new idea much faster when he can draw it. He loses the thread in long spoken explanations.",
+   "expected": [],
+   "byRule": [],
+   "ruleRight": true,
+   "byModel": [],
+   "modelSaid": "no needs (left out: 2)",
+   "rating": null,
+   "ms": 1566
+  }
+ ]
+}

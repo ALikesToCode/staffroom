@@ -1,0 +1,503 @@
+{
+ "done": true,
+ "at": "2026-11-26T06:14:27.655Z",
+ "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36",
+ "set": "heldout",
+ "perFact": true,
+ "runsPerCase": 3,
+ "totals": {
+  "runs": 48,
+  "conflictCases": 24,
+  "conflictsCaught": 24,
+  "conflictsUnsure": 0,
+  "conflictsMissed": 0,
+  "compatibleCases": 24,
+  "compatiblePassed": 20,
+  "compatibleFlaggedAsConflict": 4,
+  "compatibleUnsure": 0,
+  "failures": 0,
+  "medianMs": 960
+ },
+ "rows": [
+  {
+   "id": "heldout-time-1-conflict",
+   "run": 1,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Pooja to enter the quiz, which conflicts with her responsibility of looking after her brothers from four in the afternoon.",
+   "ms": 3704,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-1-compatible",
+   "run": 1,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require anything that conflicts with Pooja's existing responsibilities.",
+   "ms": 885,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-2-conflict",
+   "run": 1,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Vikram arrives at 9:10 AM, so opening the library at 8 AM requires him to be at school before it opens, which conflicts with his arrival time.",
+   "ms": 1224,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-2-compatible",
+   "run": 1,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't require anything that conflicts with Vikram's bus arrival time.",
+   "ms": 916,
+   "requests": 1
+  },
+  {
+   "id": "heldout-place-3-conflict",
+   "run": 1,
+   "topic": "place",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Zoya to go upstairs, which is not possible given her wheelchair and the lack of a lift.",
+   "ms": 1028,
+   "requests": 1
+  },
+  {
+   "id": "heldout-place-3-compatible",
+   "run": 1,
+   "topic": "place",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice asks Zoya to bring the kit down to the ground floor, which avoids the stairs.",
+   "ms": 987,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-4-conflict",
+   "run": 1,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Harsh must have a snack at eleven, so keeping him in the room with no food contradicts his dietary needs.",
+   "ms": 1037,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-4-compatible",
+   "run": 1,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't conflict with Harsh's need to eat at fixed times.",
+   "ms": 997,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-5-conflict",
+   "run": 1,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires moving Anaya to the back row, which is where she has difficulty following speech.",
+   "ms": 1073,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-5-compatible",
+   "run": 1,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice specifies a seat that accommodates Anaya's hearing difficulty.",
+   "ms": 960,
+   "requests": 1
+  },
+  {
+   "id": "heldout-money-6-conflict",
+   "run": 1,
+   "topic": "money",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The fact states Dhruv cannot buy sports shoes.",
+   "ms": 821,
+   "requests": 1
+  },
+  {
+   "id": "heldout-money-6-compatible",
+   "run": 1,
+   "topic": "money",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require Dhruv to have sports shoes or a kit, which he cannot afford.",
+   "ms": 977,
+   "requests": 1
+  },
+  {
+   "id": "heldout-family-7-conflict",
+   "run": 1,
+   "topic": "family",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Irfan to reveal information about his father's job, which he explicitly doesn't want others at school to know.",
+   "ms": 1090,
+   "requests": 1
+  },
+  {
+   "id": "heldout-family-7-compatible",
+   "run": 1,
+   "topic": "family",
+   "expected": "compatible",
+   "got": "conflict",
+   "reason": "The advice requires Irfan to speak in front of others, which contradicts his desire to keep his father's situation private at school.",
+   "ms": 1093,
+   "requests": 1
+  },
+  {
+   "id": "heldout-custom-8-conflict",
+   "run": 1,
+   "topic": "custom",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice asks Leela to fast on Monday morning, which conflicts with her rule of not eating or drinking until sunset on Mondays.",
+   "ms": 1087,
+   "requests": 1
+  },
+  {
+   "id": "heldout-custom-8-compatible",
+   "run": 1,
+   "topic": "custom",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "Leela does not eat or drink until sunset on Mondays, but Thursday morning is not Monday.",
+   "ms": 926,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-1-conflict",
+   "run": 2,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Pooja to enter the quiz, but the facts state she looks after her brothers from 4 PM, which is when the quiz starts.",
+   "ms": 1065,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-1-compatible",
+   "run": 2,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require anything that conflicts with her existing responsibilities of looking after her brothers.",
+   "ms": 909,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-2-conflict",
+   "run": 2,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Vikram arrives at school at ten to nine, therefore he cannot open the library at eight.",
+   "ms": 908,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-2-compatible",
+   "run": 2,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require Vikram to be present at a time when he cannot attend due to the bus schedule.",
+   "ms": 988,
+   "requests": 1
+  },
+  {
+   "id": "heldout-place-3-conflict",
+   "run": 2,
+   "topic": "place",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Zoya to go to an upstairs science lab, which is inaccessible to her wheelchair.",
+   "ms": 971,
+   "requests": 1
+  },
+  {
+   "id": "heldout-place-3-compatible",
+   "run": 2,
+   "topic": "place",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice asks Zoya to bring the kit down to the ground floor, which avoids the stairs.",
+   "ms": 935,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-4-conflict",
+   "run": 2,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Harsh must have a snack at eleven.",
+   "ms": 815,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-4-compatible",
+   "run": 2,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't conflict with Harsh's diabetes management schedule.",
+   "ms": 885,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-5-conflict",
+   "run": 2,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires moving Anaya to the back row, which is where she cannot follow speech.",
+   "ms": 924,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-5-compatible",
+   "run": 2,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice directly addresses Anaya's hearing difficulty and suggests a seat in the front row on the right-hand side of the room, which is a solution to her challenge of not hearing speech from the back.",
+   "ms": 1356,
+   "requests": 1
+  },
+  {
+   "id": "heldout-money-6-conflict",
+   "run": 2,
+   "topic": "money",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Dhruv's family cannot buy sports shoes.",
+   "ms": 725,
+   "requests": 1
+  },
+  {
+   "id": "heldout-money-6-compatible",
+   "run": 2,
+   "topic": "money",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice asks Dhruv to participate in trials, which doesn't conflict with his lack of sports shoes.",
+   "ms": 1038,
+   "requests": 1
+  },
+  {
+   "id": "heldout-family-7-conflict",
+   "run": 2,
+   "topic": "family",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice asks Irfan to disclose information about his father's job, which he wants to keep private.",
+   "ms": 960,
+   "requests": 1
+  },
+  {
+   "id": "heldout-family-7-compatible",
+   "run": 2,
+   "topic": "family",
+   "expected": "compatible",
+   "got": "conflict",
+   "reason": "The advice requires Irfan to speak in front of others, which contradicts his desire for his father's incarceration to remain private.",
+   "ms": 1019,
+   "requests": 1
+  },
+  {
+   "id": "heldout-custom-8-conflict",
+   "run": 2,
+   "topic": "custom",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Leela fasts on Mondays and does not eat or drink until sunset, so putting her on the tasting panel on Monday morning requires her to eat/drink.",
+   "ms": 1189,
+   "requests": 1
+  },
+  {
+   "id": "heldout-custom-8-compatible",
+   "run": 2,
+   "topic": "custom",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "Leela does not fast on Thursday morning, so she can participate.",
+   "ms": 805,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-1-conflict",
+   "run": 3,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Pooja to attend the quiz from 4-6 PM, which overlaps with the time she is looking after her brothers.",
+   "ms": 935,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-1-compatible",
+   "run": 3,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice does not require anything that contradicts the fact that Pooja looks after her brothers.",
+   "ms": 905,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-2-conflict",
+   "run": 3,
+   "topic": "time",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Vikram arrives at school at 9:40, which requires him to open the library before he arrives.",
+   "ms": 953,
+   "requests": 1
+  },
+  {
+   "id": "heldout-time-2-compatible",
+   "run": 3,
+   "topic": "time",
+   "expected": "compatible",
+   "got": "conflict",
+   "reason": "Vikram arrives at school at ten to nine, and being library monitor likely requires being at the library earlier.",
+   "ms": 992,
+   "requests": 1
+  },
+  {
+   "id": "heldout-place-3-conflict",
+   "run": 3,
+   "topic": "place",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The science lab is upstairs with no lift, which Zoya cannot access in her wheelchair.",
+   "ms": 945,
+   "requests": 1
+  },
+  {
+   "id": "heldout-place-3-compatible",
+   "run": 3,
+   "topic": "place",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice asks Zoya to bring the kit to a ground-floor room, avoiding the stairs.",
+   "ms": 934,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-4-conflict",
+   "run": 3,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "Harsh needs a snack at eleven, and the advice says no food in the room at that time.",
+   "ms": 983,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-4-compatible",
+   "run": 3,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice doesn't conflict with Harsh's diabetes management schedule.",
+   "ms": 858,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-5-conflict",
+   "run": 3,
+   "topic": "health",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The facts state Anaya cannot follow speech from the back of the room, so moving her to the back row creates a conflict.",
+   "ms": 1053,
+   "requests": 1
+  },
+  {
+   "id": "heldout-health-5-compatible",
+   "run": 3,
+   "topic": "health",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "The advice suggests a specific seating arrangement, which directly addresses Anaya's difficulty hearing from the back of the room.",
+   "ms": 1019,
+   "requests": 1
+  },
+  {
+   "id": "heldout-money-6-conflict",
+   "run": 3,
+   "topic": "money",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The fact states Dhruv's family cannot buy sports shoes.",
+   "ms": 847,
+   "requests": 1
+  },
+  {
+   "id": "heldout-money-6-compatible",
+   "run": 3,
+   "topic": "money",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "Dhruv can take part in trials in his ordinary school shoes, as the advice doesn't require anything he cannot do given his circumstances.",
+   "ms": 980,
+   "requests": 1
+  },
+  {
+   "id": "heldout-family-7-conflict",
+   "run": 3,
+   "topic": "family",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice asks Irfan to reveal information about his father's job, which he wants to keep private.",
+   "ms": 958,
+   "requests": 1
+  },
+  {
+   "id": "heldout-family-7-compatible",
+   "run": 3,
+   "topic": "family",
+   "expected": "compatible",
+   "got": "conflict",
+   "reason": "The advice asks Irfan to speak in front of others, which contradicts his desire to keep his father's imprisonment a secret from school.",
+   "ms": 1075,
+   "requests": 1
+  },
+  {
+   "id": "heldout-custom-8-conflict",
+   "run": 3,
+   "topic": "custom",
+   "expected": "conflict",
+   "got": "conflict",
+   "reason": "The advice requires Leela to participate on Monday morning when she is fasting until sunset.",
+   "ms": 919,
+   "requests": 1
+  },
+  {
+   "id": "heldout-custom-8-compatible",
+   "run": 3,
+   "topic": "custom",
+   "expected": "compatible",
+   "got": "fits",
+   "reason": "Leela does not fast on Thursdays, so she can be on the tasting panel.",
+   "ms": 899,
+   "requests": 1
+  }
+ ]
+}
