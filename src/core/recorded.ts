@@ -396,3 +396,8 @@ export type ReplayStage = (typeof REPLAY_STAGES)[number];
 export function replayNext(stage: ReplayStage): ReplayStage {
   return REPLAY_STAGES[Math.min(REPLAY_STAGES.indexOf(stage) + 1, REPLAY_STAGES.length - 1)];
 }
+
+/** The screen before this one, or the first one at the start. */
+export function replayPrev(stage: ReplayStage): ReplayStage {
+  return REPLAY_STAGES[Math.max(REPLAY_STAGES.indexOf(stage) - 1, 0)];
+}

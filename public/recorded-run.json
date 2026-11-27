@@ -728,14 +728,6 @@
  },
  "adjustments": [
   {
-   "itemIndex": 0,
-   "stage": "Starter",
-   "childId": "student-1",
-   "text": "This lesson already suits this need.",
-   "source": "cloud, for a need you approved",
-   "need": "D"
-  },
-  {
    "itemIndex": 1,
    "stage": "Teach",
    "childId": "student-1",
@@ -744,36 +736,12 @@
    "need": "H"
   },
   {
-   "itemIndex": 2,
-   "stage": "Practise",
-   "childId": "student-1",
-   "text": "This lesson already suits this need.",
-   "source": "cloud, for a need you approved",
-   "need": "C"
-  },
-  {
-   "itemIndex": 4,
-   "stage": "Homework",
-   "childId": "student-1",
-   "text": "This lesson already suits this need.",
-   "source": "cloud, for a need you approved",
-   "need": "M"
-  },
-  {
    "itemIndex": 3,
    "stage": "Check",
    "childId": "student-2",
    "text": "Such a pupil dictates their description to a partner instead of writing it, for the same purpose.",
    "source": "cloud, for a need you approved",
    "need": "F"
-  },
-  {
-   "itemIndex": 4,
-   "stage": "Homework",
-   "childId": "student-2",
-   "text": "This lesson already suits this need.",
-   "source": "cloud, for a need you approved",
-   "need": "A"
   },
   {
    "itemIndex": 2,
@@ -828,14 +796,6 @@
    "text": "Such a pupil shares their description in a small group instead of in front of the whole class, for the same purpose.",
    "source": "cloud, for a need you approved",
    "need": "N"
-  },
-  {
-   "itemIndex": 4,
-   "stage": "Homework",
-   "childId": "student-4",
-   "text": "This lesson already suits this need.",
-   "source": "cloud, for a need you approved",
-   "need": "B"
   }
  ],
  "needs": [
@@ -921,33 +881,23 @@
   ]
  },
  "needOutcomes": {
-  "A": "for a stage",
-  "B": "for a stage",
-  "C": "for a stage",
-  "D": "for a stage",
+  "A": "already suits",
+  "B": "already suits",
+  "C": "already suits",
+  "D": "already suits",
   "F": "for a stage",
   "G": "for a stage",
   "H": "for a stage",
   "I": "for a stage",
-  "M": "for a stage",
+  "M": "already suits",
   "N": "for a stage",
   "O": "for a stage"
  },
  "variations": [
   {
-   "itemIndex": 0,
-   "need": "D",
-   "text": "This lesson already suits this need."
-  },
-  {
    "itemIndex": 1,
    "need": "H",
    "text": "Such a pupil reviews a summary sheet of the previous lesson before starting, for the same purpose."
-  },
-  {
-   "itemIndex": 2,
-   "need": "C",
-   "text": "This lesson already suits this need."
   },
   {
    "itemIndex": 2,
@@ -973,21 +923,6 @@
    "itemIndex": 3,
    "need": "N",
    "text": "Such a pupil shares their description in a small group instead of in front of the whole class, for the same purpose."
-  },
-  {
-   "itemIndex": 4,
-   "need": "A",
-   "text": "This lesson already suits this need."
-  },
-  {
-   "itemIndex": 4,
-   "need": "B",
-   "text": "This lesson already suits this need."
-  },
-  {
-   "itemIndex": 4,
-   "need": "M",
-   "text": "This lesson already suits this need."
   }
  ],
  "materials": {

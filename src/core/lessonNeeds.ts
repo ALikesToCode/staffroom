@@ -237,6 +237,9 @@ const ENTRY = /(?:^|\s)Need\s+([A-Za-z]{1,2})\s*\|\s*([^|\n]*?)\s*\|[ \t]*/gu;
 const isSection = (heading: string) => heading.replace(/[\s:.]+$/, '').trim().toLowerCase() === NEEDS_SECTION.toLowerCase();
 const stageKey = (s: string) => s.replace(/\[[^\]]*\]/g, '').replace(/\s*[(\[–—:-]\s*\d+\s*min(?:ute)?s?\.?\s*[)\]]?\s*$/iu, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
+/** Matches replies where the cloud put "This lesson already suits this need." under a stage name instead of "none". */
+export const ALREADY_SUITS_RE = /^(?:this\s+lesson\s+already\s+suits\s+this\s+need|already\s+suited|no\s+change\s+needed)\.?$/iu;
+
 /** The most entries one need may have: one for each of two stages. */
 export const NEED_ENTRIES_MAX = 2;
 
@@ -277,7 +280,7 @@ export function splitVariations(draft: Draft, letters: readonly string[]): Needs
     const need = m[1].toUpperCase();
     const stage = stageKey(m[2]);
     if (!letters.includes(need)) return void dropped++;
-    if (stage === 'none') return void (none.includes(need) || none.push(need));
+    if (stage === 'none' || ALREADY_SUITS_RE.test(text)) return void (none.includes(need) || none.push(need));
     const itemIndex = stage === '' ? -1 : items.findIndex((item) => stageKey(item.heading) === stage);
     if (itemIndex < 0 || text.length === 0 || variations.filter((v) => v.need === need).length >= NEED_ENTRIES_MAX) return void dropped++;
     if (!variations.some((v) => v.itemIndex === itemIndex && v.need === need)) variations.push({ itemIndex, need, text });

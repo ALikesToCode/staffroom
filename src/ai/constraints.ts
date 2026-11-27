@@ -94,6 +94,25 @@ export function mergeProposals(byRule: Constraint[], byModel: Constraint[]): Con
   return out.sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
 }
 
+const isRedundantWithLearning = (c: Constraint) =>
+  !c.confirmed && c.source === 'on-device model' && (c.kind === 'other' || (c.kind === 'days-away' && (c.days?.length ?? 0) === 0));
+
+/**
+ * Put rule learning needs with constraints and fold away overlapping
+ * unconfirmed model "other" or dayless "days-away" proposals, marking the
+ * matching learning needs as found by the model too.
+ */
+export function mergeLearningIntoConstraints(existing: Constraint[], learning: Constraint[]): Constraint[] {
+  const matched = new Set<string>();
+  const mergedLearning = learning.map((l) => {
+    const hits = existing.filter((c) => isRedundantWithLearning(c) && overlap(c, l) && (!c.about || !l.about || c.about === l.about));
+    for (const c of hits) matched.add(c.id);
+    return hits.length > 0 ? { ...l, alsoModel: true } : { ...l };
+  });
+  const kept = existing.filter((c) => !matched.has(c.id)).map((c) => ({ ...c }));
+  return [...kept, ...mergedLearning].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
+}
+
 /** What a run of the model over the note gave. A paragraph that failed is counted, and blocks nothing. */
 export interface ConstraintReport {
   constraints: Constraint[];

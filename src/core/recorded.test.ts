@@ -5,7 +5,7 @@ import { confirmConstraint, lockConstraints, proposeConstraints } from './constr
 import { outgoingOf } from './needs';
 import { DEFAULT_POLICY } from './policy';
 import { needOutcomes as outcomesOf, needsAccount } from './lessonNeeds';
-import { asRecordedRun, browserName, captureRun, RECORDED_FILE, replayBanner, replayNext, type RecordedRun, RECORDED_SOURCE, sourceOf } from './recorded';
+import { asRecordedRun, browserName, captureRun, RECORDED_FILE, replayBanner, replayNext, replayPrev, type RecordedRun, RECORDED_SOURCE, sourceOf } from './recorded';
 
 const vault = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
 let held = { entities: vault, constraints: proposeConstraints(SAMPLE_NOTE, vault) };
@@ -251,6 +251,10 @@ describe('a recorded run', () => {
     expect(replayNext('review')).toBe('result');
     expect(replayNext('result')).toBe('signed');
     expect(replayNext('signed')).toBe('signed');
+    expect(replayPrev('signed')).toBe('result');
+    expect(replayPrev('result')).toBe('review');
+    expect(replayPrev('review')).toBe('write');
+    expect(replayPrev('write')).toBe('write');
   });
 
   it('validates, if the file is there', () => {

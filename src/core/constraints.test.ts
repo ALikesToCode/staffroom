@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { askForConstraints, mergeProposals, readConstraintAnswer, studentParagraphs } from '../ai/constraints';
+import { askForConstraints, mergeLearningIntoConstraints, mergeProposals, readConstraintAnswer, studentParagraphs } from '../ai/constraints';
+import { proposeLearning } from './lessonNeeds';
 import type { Constraint, Entity } from './types';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redact } from './vault';
@@ -365,6 +366,28 @@ describe('constraints proposed by the on-device model', () => {
     ]);
     // The rules' own list is not changed.
     expect(byRule.some((c) => c.alsoModel)).toBe(false);
+  });
+
+  it('folds overlapping model other and dayless days-away proposals into rule learning needs', () => {
+    const sample = rulesVault(SAMPLE_NOTE, SAMPLE_CLASS_LIST);
+    const byRule = proposeConstraints(SAMPLE_NOTE, sample);
+    const aaravId = sample.find((e) => e.surfaces.includes('Aarav'))!.id;
+    const ishaanId = sample.find((e) => e.surfaces.includes('Ishaan'))!.id;
+    const modelExtras: Constraint[] = [
+      { id: 'm-missed', kind: 'days-away', text: 'missed four days this month', at: SAMPLE_NOTE.indexOf('missed four days'), days: [], about: aaravId, source: 'on-device model', confirmed: false },
+      { id: 'm-hw', kind: 'other', text: 'has not handed in homework for two weeks', at: SAMPLE_NOTE.indexOf('has not handed in homework'), about: aaravId, source: 'on-device model', confirmed: false },
+      { id: 'm-fight', kind: 'other', text: 'Kabir and Ishaan fight most days during group work.', at: SAMPLE_NOTE.indexOf('Kabir and Ishaan fight'), source: 'on-device model', confirmed: false },
+      { id: 'm-early', kind: 'other', text: 'Ishaan finishes early and gets bored.', at: SAMPLE_NOTE.indexOf('Ishaan finishes early'), about: ishaanId, source: 'on-device model', confirmed: false },
+      { id: 'm-friday', kind: 'days-away', text: 'away on Fridays', at: SAMPLE_NOTE.indexOf('Aarav Sharma'), days: ['Friday'], about: aaravId, source: 'on-device model', confirmed: false },
+    ];
+    const existing = [...byRule, ...modelExtras];
+    const learning = proposeLearning(SAMPLE_NOTE, sample);
+    const merged = mergeLearningIntoConstraints(existing, learning);
+    expect(merged.some((c) => ['m-missed', 'm-hw', 'm-fight', 'm-early'].includes(c.id))).toBe(false);
+    // A days-away constraint with named days is kept, and non-overlapping rules stay intact.
+    expect(merged.some((c) => c.id === 'm-friday')).toBe(true);
+    expect(merged.some((c) => c.kind === 'time-after')).toBe(true);
+    expect(merged.filter((c) => c.learn === 'missed' || c.learn === 'homework' || c.learn === 'group' || c.learn === 'early').every((c) => c.alsoModel === true)).toBe(true);
   });
 
   it('goes on when a request fails, and reports it', async () => {

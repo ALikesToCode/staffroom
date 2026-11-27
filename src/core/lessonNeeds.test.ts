@@ -229,6 +229,32 @@ describe('what the cloud wrote for a need', () => {
     const bare = splitVariations({ title: 't', items: [{ heading: 'h', text: 'Plan for needs of the class. Need A | h | not in a section.' }] }, letters);
     expect(bare).toMatchObject({ draft: { title: 't', items: [{ heading: 'h', text: 'Plan for needs of the class. Need A | h | not in a section.' }] }, variations: [], dropped: 0, none: [], missing: letters, section: '' });
     expect(variationLine(variations[0])).toBe('For Need G: such a pupil adds a second paragraph on sounds.');
+
+    // If the cloud puts a stage name instead of "none" alongside "This lesson already suits this need.", treat it as already suited rather than placing it beside a child.
+    const stageAlreadySuits = splitVariations(
+      {
+        title: 't',
+        items: [
+          { heading: 'Homework (0 minutes)', text: 'Write five sentences.' },
+          {
+            heading: 'For each need',
+            text: [
+              'Need A | Homework | This lesson already suits this need.',
+              'Need B | Homework | Already suited.',
+              'Need C | Homework | No change needed.',
+              'Need G | Homework | Add two extension questions.',
+            ].join('\n'),
+          },
+        ],
+      },
+      ['A', 'B', 'C', 'G'],
+    );
+    expect(stageAlreadySuits.none).toEqual(['A', 'B', 'C']);
+    expect(stageAlreadySuits.variations).toEqual([{ itemIndex: 0, need: 'G', text: 'Add two extension questions.' }]);
+    expect(stageAlreadySuits.missing).toEqual([]);
+    expect(stageAlreadySuits.dropped).toBe(0);
+    expect(planWithNeeds(stageAlreadySuits.draft, stageAlreadySuits.variations)).not.toContain('already suits');
+    expect(placeVariations(stageAlreadySuits.variations, needs, entities, stageAlreadySuits.draft.items, all, SAMPLE_NOTE)).toHaveLength(1);
   });
 
   it('asks once more when over a third of the needs have no entry, for the missing letters only', () => {
