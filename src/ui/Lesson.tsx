@@ -24,6 +24,8 @@ export const MODEL_LABEL = 'Suggested on this device from your private note. Not
 export const TEACHER_LABEL = 'Written by you';
 /** Said over a line the cloud wrote for a need, placed beside a child here. */
 export const CLOUD_LABEL = 'Cloud · matched to this child here';
+/** Said over a line the on-device fallback draft wrote for a need, placed beside a child here. */
+export const LOCAL_DRAFT_LABEL = 'On-device draft · matched to this child here';
 /** Said beside a child for a need the cloud was told and wrote nothing for. */
 export const NOTHING_WRITTEN = (letter: string, onDevice = false) =>
   `${onDevice ? 'The on-device draft' : 'The cloud'} wrote nothing for Need ${letter}.`;
@@ -281,7 +283,9 @@ function PointRow({
             </p>
           ) : (
             <>
-              <span className="adj-source">{point.pair ? PAIR_LABEL : recorded && point.source === 'model' ? RECORDED_FIT_LABEL : POINT_LABEL[point.source]}</span>
+              <span className="adj-source">
+                {point.pair ? PAIR_LABEL : point.need && point.source === 'model' ? LOCAL_DRAFT_LABEL : recorded && point.source === 'model' ? RECORDED_FIT_LABEL : POINT_LABEL[point.source]}
+              </span>
               <p>
                 <span className="stage-tag">{stages[point.itemIndex]}</span>
                 {point.need && <span className="stage-tag need-tag">Need {point.need}</span>}

@@ -78,7 +78,7 @@ import {
 } from './core/lesson';
 import { ChildSections, ForTheseChildren, Lessons, type PointActions } from './ui/Lesson';
 import { acceptedPoints, childFitSaid, childNotes, dedupePairVariations, fitSummary, inNoteOrder, missingPoints, namesForNeed, pairPoints, placeVariations, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
-import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
+import { clearUserSession, configured, DEFAULT_POLICY, ensureUser, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, imageOnDeviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { constraintsFromCombined, guardCombinedOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
 import { extractScannedClassList, prepareNotebookImage, transcribeNotebookOnDevice } from './ai/notebook';
@@ -353,8 +353,8 @@ export function App() {
   const [materialsBusy, setMaterialsBusy] = useState(false);
   const [materialsStreamChars, setMaterialsStreamChars] = useState(0);
   const [materialsFail, setMaterialsFail] = useState<string | null>(null);
-  /** What the print sheet holds now: default/both, class-only, teacher-only, or materials with/without names. */
-  const [printWhat, setPrintWhat] = useState<'run' | 'class-only' | 'teacher-only' | 'materials' | 'materials-no-names'>('run');
+  /** What the print sheet holds now: class-only by default (safe on shared printers), teacher-only, or materials with/without names. */
+  const [printWhat, setPrintWhat] = useState<'class-only' | 'teacher-only' | 'materials' | 'materials-no-names'>('class-only');
   /** The receipt of the run on screen, once signed. */
   const signedId = useRef<string | null>(null);
   /** The lessons signed off on this device. */
@@ -444,7 +444,7 @@ export function App() {
   useEffect(() => {
     if (!replay) write(session, CLASS_LIST_KEY, classList, classList.length === 0);
   }, [classList, replay]);
-  useEffect(() => write(local, 'staffroom.keepCopies', keepCopies, false), [keepCopies]);
+  useEffect(() => write(local, 'staffroom.keepCopies', keepCopies, !keepCopies), [keepCopies]);
   useEffect(() => {
     if (!replay) write(session, LESSON_KEY, lesson, false);
   }, [lesson, replay]);
@@ -458,7 +458,7 @@ export function App() {
     if (!replay) storeLessons(lessons, keepClass);
   }, [lessons, keepClass, replay]);
   useEffect(() => {
-    if (!replay) storeReceipts(receipts, keepClass);
+    if (!replay && !storeReceipts(receipts, keepClass) && receipts.length > 0) setStoreFailed(true);
   }, [receipts, keepClass, replay]);
   useEffect(() => {
     if (!replay) write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints, removed }, constraints.length === 0 && removed.length === 0);
@@ -919,11 +919,11 @@ export function App() {
     let split: NeedsReading = approved.lessonNeeds ? splitVariations(drafted.draft, letters) : { draft: drafted.draft, variations: [], dropped: 0, none: [], missing: [], section: '' };
     let second: string | null = null;
     if (askAgain(split.missing, letters)) {
-      // Over a third of the needs have no entry: the cloud is asked once more, for those letters only. The text is the one
+      // Over a third of the needs have no entry: the drafter is asked once more, for those letters only. The text is the one
       // the teacher approved and one more line, so there is no new tick; Inspect shows that it was sent, word for word.
       const again = secondAsk(text, split.missing);
       second = again;
-      setProgress('Asking the cloud once more for the needs it left out');
+      setProgress(drafted.where === 'ON_DEVICE' ? 'Asking this device once more for the needs it left out' : 'Asking the cloud once more for the needs it left out');
       try {
         const more = await timed('draft', () => writeDraft(again, currentTask, cloudModel), (d) => (d.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'));
         if (gone()) return;
@@ -1027,11 +1027,13 @@ export function App() {
     setVariations(split.variations);
     setVariationsDropped(split.dropped);
     setNeedsReply(approved.lessonNeeds ? { section: split.section, none: split.none, missing: split.missing, second } : null);
-    const placed = placeVariations(split.variations, toldNeeds, entities, items, language ? [] : constraints, note);
+    const draftOnDevice = drafted.where === 'ON_DEVICE';
+    const placed = placeVariations(split.variations, toldNeeds, entities, items, language ? [] : constraints, note, draftOnDevice);
     const paired = approved.lessonNeeds ? pairPoints(constraints, entities, items, note) : [];
+    const missing = dedupePairVariations(missingPoints(split.missing, toldNeeds, entities, constraints, note, draftOnDevice), paired, toldNeeds, constraints);
     setPoints([
       ...dedupePairVariations(placed, paired, toldNeeds, constraints),
-      ...missingPoints(split.missing, toldNeeds, entities, constraints, note),
+      ...missing,
       // Two children who work better apart: only this device knows they are each other's classmate.
       ...paired,
     ]);
@@ -1604,10 +1606,10 @@ export function App() {
 
   const printSheet = (kind: typeof printWhat) => {
     setPrintWhat(kind);
-    // The sheet is drawn first, then printed; after printing it holds the signed text again.
+    // The sheet is drawn first, then printed; after printing it returns to safe class-only defaults.
     setTimeout(() => {
       window.print();
-      setPrintWhat('run');
+      setPrintWhat('class-only');
     }, 80);
   };
 
@@ -1689,7 +1691,7 @@ export function App() {
     setMaterialsBusy(false);
     setMaterialsStreamChars(0);
     setMaterialsFail(null);
-    setPrintWhat('run');
+    setPrintWhat('class-only');
     signedId.current = null;
     setPointsSuggested(0);
     setChildSaid({});
@@ -1752,10 +1754,18 @@ export function App() {
     window.getSelection()?.removeAllRanges();
   };
 
-  /** Immediately wipe all notes, class lists, constraints, saved lessons, and local receipts from this browser (shared-PC reset). */
+  /** Immediately wipe all notes, class lists, constraints, saved lessons, local receipts, copy-record opt-in, and the anonymous Auth session from this browser. */
   const clearDesk = () => {
     forgetNote(true, true);
     setKeepClass(false);
+    setKeepCopies(false);
+    setRecords({ state: 'idle' });
+    try {
+      localStorage.removeItem('staffroom.keepCopies');
+    } catch {
+      // Storage is switched off.
+    }
+    void clearUserSession();
     setDeskCleared(true);
     setTimeout(() => setDeskCleared(false), 4000);
   };
@@ -1830,7 +1840,9 @@ export function App() {
         ? { section: '', none: outcomes.filter(([, o]) => o === 'already suits').map(([l]) => l), missing: outcomes.filter(([, o]) => o === 'missing').map(([l]) => l), second: null }
         : null,
     );
-    setMaterials(source.materials ? { materials: { ...source.materials, sheet: source.materials.sheet.map(unnumbered), versions: source.materials.versions.map((v) => ({ ...v, items: v.items.map(unnumbered) })), ticket: source.materials.ticket.map((t) => ({ ...t, question: unnumbered(t.question) })), dropped: 0, same: source.materials.same ?? [], missing: source.materials.missing ?? [] }, where: source.where.materials ?? source.where.draft, model: source.draftModel, text: '', issues: [] } : null);
+    const replayClassPlan = (source.variations?.length ?? 0) > 0 ? planWithNeeds(source.draft, source.variations!) : classPlanText(source.draft);
+    const replayMatText = source.materials ? materialsText(replayClassPlan, nextSent.lessonNeeds, nextSent.language) : '';
+    setMaterials(source.materials ? { materials: { ...source.materials, sheet: source.materials.sheet.map(unnumbered), versions: source.materials.versions.map((v) => ({ ...v, items: v.items.map(unnumbered) })), ticket: source.materials.ticket.map((t) => ({ ...t, question: unnumbered(t.question) })), dropped: 0, same: source.materials.same ?? [], missing: source.materials.missing ?? [] }, where: source.where.materials ?? source.where.draft, model: source.draftModel, text: replayMatText, issues: [] } : null);
     setResult({ draft: source.draft, where: source.where.draft, model: source.draftModel });
     const baseReplyText = [source.draft.title, ...source.draft.items.flatMap((i) => [i.heading, i.text]), ...(source.variations ?? []).map(variationLine)].join('\n');
     const baseModelChecks = source.checks.map(modelSaid);
@@ -2659,7 +2671,10 @@ export function App() {
         <Receipts
           receipts={receipts}
           keepCopies={keepCopies}
-          setKeepCopies={setKeepCopies}
+          setKeepCopies={(on) => {
+            setKeepCopies(on);
+            if (on && !uid) void ensureUser();
+          }}
           signedIn={Boolean(uid)}
           records={records}
           onClear={() => {
@@ -2733,7 +2748,8 @@ export function App() {
                   {isLesson && needsReply && sent && sent.lessonNeeds.length > 0 && <p className="hint">{needsAccount(needOutcomes(sent.lessonNeeds.map((n) => n.letter), variations, needsReply.none))}.</p>}
                   {isLesson && needsReply && needsReply.none.length > 0 && (
                     <p className="hint">
-                      The cloud says this lesson already suits {needsReply.none.map((l) => `Need ${l}${needNames(l).length > 0 ? ` (${needNames(l).join(', ')})` : ''}`).join('; ')}. Read it against what you know.
+                      {result.where === 'ON_DEVICE' ? 'The on-device draft' : 'The cloud'} says this lesson already suits{' '}
+                      {needsReply.none.map((l) => `Need ${l}${needNames(l).length > 0 ? ` (${needNames(l).join(', ')})` : ''}`).join('; ')}. Read it against what you know.
                     </p>
                   )}
                   <h3 className="summary">{restore(draft.title, entities, sent?.tokens)}</h3>
@@ -2741,7 +2757,7 @@ export function App() {
                     {isLesson
                       ? fitSummary(
                           notesByChild.length,
-                          replay ? shownPoints.filter((p) => p.source === 'model').length : pointsSuggested,
+                          replay ? shownPoints.filter((p) => p.source === 'model' && !p.need).length : pointsSuggested,
                           hits,
                           shownPoints,
                           result?.where === 'ON_DEVICE',
@@ -2766,7 +2782,9 @@ export function App() {
                       )}
                       <span className="hint">
                         {variations.length > 0
-                          ? 'The cloud wrote each line for a need, not for a child. This device put it beside the child. Nothing lands until you accept it.'
+                          ? result.where === 'ON_DEVICE'
+                            ? 'This device wrote each line for a need, not for a child, and put it beside the child. Nothing lands until you accept it.'
+                            : 'The cloud wrote each line for a need, not for a child. This device put it beside the child. Nothing lands until you accept it.'
                           : device === 'available'
                             ? 'Write what a child needs, or ask this device for more ideas under a name. Nothing is sent, and nothing lands until you accept it.'
                             : 'No on-device model here. Write what a child needs yourself; a step that goes against a constraint gets starter wording by rule. Nothing lands until you accept it.'}
@@ -3007,6 +3025,7 @@ export function App() {
                   result={materials?.materials ?? null}
                   issues={materials?.issues ?? []}
                   where={materials ? (materials.where === 'IN_CLOUD' ? `Written in the cloud by ${materials.model}` : 'The cloud failed, so the on-device model wrote these') : ''}
+                  onDevice={materials?.where === 'ON_DEVICE'}
                   namesFor={needNames}
                   onSend={() => void makeMaterials()}
                   onPrint={stage === 'signed' && !replay ? printMaterials : undefined}
@@ -3495,7 +3514,9 @@ export function App() {
                       </div>
                       <p className="hint">
                         {variations.length > 0
-                          ? 'The cloud wrote for each need by its letter. It was not told whose a need is, or how many pupils have it.'
+                          ? result.where === 'ON_DEVICE'
+                            ? 'This device wrote for each need by its letter from the same approved text.'
+                            : 'The cloud wrote for each need by its letter. It was not told whose a need is, or how many pupils have it.'
                           : 'The reply uses the stand-ins. Names are put back on your side of the door.'}
                       </p>
                       {variationsDropped > 0 && (
@@ -3504,7 +3525,11 @@ export function App() {
                           {variationsDropped === 1 ? 'it is' : 'they are'} left out.
                         </p>
                       )}
-                      {needsReply?.second && <p className="hint">The cloud was asked once more for the needs its first reply left out. Inspect shows the exact text of that second request.</p>}
+                      {needsReply?.second && (
+                        <p className="hint">
+                          {result.where === 'ON_DEVICE' ? 'The on-device model' : 'The cloud'} was asked once more for the needs its first reply left out. Inspect shows the exact text of that second request.
+                        </p>
+                      )}
                     </article>
                   )}
 
@@ -3515,7 +3540,11 @@ export function App() {
                         <span className="hint">{materials.model}</span>
                       </div>
                       <MaterialsWire result={materials.materials} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
-                      <p className="hint">The cloud was sent the signed class plan and the needs by letter. It was not told whose a need is.</p>
+                      <p className="hint">
+                        {materials.where === 'ON_DEVICE'
+                          ? 'This device wrote these materials from the signed class plan and the needs by letter.'
+                          : 'The cloud was sent the signed class plan and the needs by letter. It was not told whose a need is.'}
+                      </p>
                       <details className="fold">
                         <summary>The text that was sent for the materials · {materials.text.length.toLocaleString()} characters</summary>
                         <pre className="wire">
@@ -3801,7 +3830,7 @@ export function App() {
                   )}
                 </div>
               )}
-              {printWhat !== 'class-only' && (
+              {printWhat === 'teacher-only' && (
                 <div className="print-page">
                   <h1>Teacher's copy: adjustments. Keep this private.</h1>
                   <ForTheseChildren stages={draft.items} adjustments={acceptedNow} />

@@ -44,7 +44,7 @@ export function childNotes(note: string, entities: Entity[], constraints: readon
   const by = new Map<string, string[]>();
   for (const s of sentences(note)) {
     // A sentence is kept with its full stop.
-    const text = flat(`${note.slice(s.start, s.end)}${/[.!?]/u.test(note[s.end] ?? '') ? note[s.end] : ''}`);
+    const text = flat(`${note.slice(s.start, s.end)}${/[.!?।॥]/u.test(note[s.end] ?? '') ? note[s.end] : ''}`);
     if (!text) continue;
     const named = students.filter((x) => wholeWordMatcher(x.surfaces)?.test(text)).map((x) => x.id);
     const owner = named.length > 0 ? named : [ownerAt(note, entities, s.start, s.end)].filter((x): x is string => x !== undefined);
@@ -92,7 +92,7 @@ export function stageLines(items: readonly DraftItem[], entities: Entity[], allo
     seen.set(base.toLowerCase(), n);
     const minutes = /(\d+)\s*min/iu.exec(heading)?.[1];
     const text = flat(restore(item.text, entities, allowed));
-    const end = text.search(/[.!?](?:\s|$)/u);
+    const end = text.search(/[.!?।॥](?:\s|$)/u);
     const summary = (end >= 0 ? text.slice(0, end + 1) : text).slice(0, STAGE_SUMMARY_MAX);
     return { name: n === 1 ? base : `${base} ${n}`, ...(minutes ? { minutes: Number(minutes) } : {}), summary };
   });
@@ -191,7 +191,7 @@ export function fitSummary(children: number, suggested: number, hits: readonly L
   const against = steps + placed.filter((p) => p.state === 'offered' && p.why !== undefined).length;
   const out: string[] = [];
   if (children > 0) out.push(`${count(children, 'child has', 'children have')} private notes.`);
-  if (needs > 0) out.push(`The cloud wrote for ${count(needs, 'need', 'needs')} without knowing whose.`);
+  if (needs > 0) out.push(`${onDevice ? 'The on-device draft' : 'The cloud'} wrote for ${count(needs, 'need', 'needs')} without knowing whose.`);
   if (placed.length > 0) out.push(`${count(placed.length, 'line', 'lines')} placed beside ${count(beside, 'child', 'children')} on this device.`);
   if (pairs > 0) out.push(`${count(pairs, 'seating line', 'seating lines')} added on this device.`);
   if (unanswered > 0) out.push(`${onDevice ? 'The on-device draft' : 'The cloud'} wrote nothing for ${count(unanswered, 'need', 'needs')}.`);
@@ -215,6 +215,7 @@ export function placeVariations(
   items: readonly DraftItem[],
   constraints: readonly Constraint[],
   note: string,
+  onDevice = false,
 ): Point[] {
   const afterBell = afterBellActivities(note);
   const out: Point[] = [];
@@ -236,7 +237,7 @@ export function placeVariations(
         child,
         itemIndex: v.itemIndex,
         text: v.text,
-        source: 'cloud',
+        source: onDevice ? 'model' : 'cloud',
         state: 'offered',
         need: v.need,
         ...(hit?.hit ? { why: hit.hit.reason } : {}),
@@ -252,7 +253,7 @@ export function placeVariations(
  * row beside each child who has the need, with no text. The teacher takes
  * the starter wording, where the kind of constraint has some, or writes it.
  */
-export function missingPoints(missing: readonly string[], needs: readonly LessonNeed[], entities: Entity[], constraints: readonly Constraint[], note: string): Point[] {
+export function missingPoints(missing: readonly string[], needs: readonly LessonNeed[], entities: Entity[], constraints: readonly Constraint[], note: string, onDevice = false): Point[] {
   const out: Point[] = [];
   for (const letter of missing) {
     const need = needs.find((n) => n.letter === letter);
@@ -261,7 +262,7 @@ export function missingPoints(missing: readonly string[], needs: readonly Lesson
       if (!student) continue;
       const behind = constraints.find((c) => need!.constraintIds.includes(c.id) && c.about === childId);
       const starter = behind ? starterFor(behind) : undefined;
-      out.push({ key: `m:${letter}:${childId}`, childId, child: nameInNote(note, student), itemIndex: 0, text: '', source: 'cloud', state: 'offered', need: letter, nothing: true, ...(starter ? { starter } : {}) });
+      out.push({ key: `m:${letter}:${childId}`, childId, child: nameInNote(note, student), itemIndex: 0, text: '', source: onDevice ? 'model' : 'cloud', state: 'offered', need: letter, nothing: true, ...(starter ? { starter } : {}) });
     }
   }
   return out;

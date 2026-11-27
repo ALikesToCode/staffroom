@@ -11,7 +11,7 @@ In India's government and aided schools — where teachers work on shared **ICT-
 
 ## What Staffroom does
 
-Staffroom puts a privacy door between raw classroom notes and the cloud, designed for a shared school desktop (**notes, class lists, constraints, saved lessons, and text-bearing local receipts default to `sessionStorage` only**, with `localStorage` persistence strictly opt-in via *Keep this class in this browser* and a one-click **Clear desk** button that wipes all local browser storage; optional count-only Firestore receipt records, when explicitly opted in via *Keep a copy*, remain in Firestore):
+Staffroom puts a privacy door between raw classroom notes and the cloud, designed for a shared school desktop (**notes, class lists, constraints, saved lessons, and text-bearing local receipts default to `sessionStorage` only**, with `localStorage` persistence strictly opt-in via *Keep this class in this browser* and a one-click **Clear desk** button that wipes `sessionStorage`, opted-in `localStorage` data (`staffroom.keptClass`, `staffroom.keepClass`, `staffroom.lessons`, `staffroom.receipts.v1`), the `staffroom.keepCopies` preference, and signs out the anonymous Firebase Auth session (`clearUserSession()`); optional count-only Firestore receipt records already written under *Keep a copy* opt-in remain in Firestore, while browser print (`Ctrl+P` / `Cmd+P`) defaults to the nameless Class copy (`class-only`) rather than rendering the private Teacher's copy):
 
 1. **Write or scan on the device**: Type notes (English, **Hinglish**, or **Devanagari**) or use **Scan notebook photo / Try sample notebook photo** (`public/sample-notebook.jpg`). Multimodal **Gemini Nano** checks `imageOnDeviceStatus()`, downscales on `<canvas>`, and transcribes handwritten pages locally (`~7.1s`, `229–231` chars on the sample page, `0` cloud inference calls), while `extractScannedClassList()` extracts likely student names directly from the scanned text using local proper-name heuristics.
 2. **Guard locally before anything leaves (`guardCombinedOnDevice`)**: Deterministic pattern/sensitivity rules (covering English, Hinglish, and Devanagari health/family/money phrases plus phone/STD/roll/Aadhaar patterns) run alongside a 1-pass combined Gemini Nano call (`ONLY_ON_DEVICE`). Overlapping unconfirmed Nano proposals are folded into confirmed learning needs (`isRedundantWithLearning`, including non-time `time-after`/`time-before` overlaps lacking schedule cues), and heading paragraphs are skipped in `constraintsFromCombined`. A fail-closed **Exit Gate** (`checkOutgoing` in `src/core/gate.ts` and `outgoingOf` in `src/core/needs.ts`) scans the entire assembled outgoing text (including assembled `Need` blocks) for known withheld items and patterns, alongside mandatory teacher review of any unmarked details.
@@ -40,7 +40,7 @@ In **Inspect**, Staffroom shows all 6 routes (both live and from `public/recorde
 
 - **Firebase AI Logic** (`@firebase/ai`): hybrid routing (`ONLY_ON_DEVICE`, `PREFER_IN_CLOUD`, `PREFER_ON_DEVICE`) with Remote Config model selection.
 - **Firebase App Check**: reCAPTCHA Enterprise in production (`VITE_APPCHECK_DEBUG_TOKEN` unset in production builds; `.env.production.local` strictly separated).
-- **Firebase Hosting**: strict security headers in [`firebase.json`](firebase.json) (`Content-Security-Policy`, `X-Frame-Options: DENY`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`).
+- **Firebase Hosting**: strict security headers in [`firebase.json`](firebase.json) (`Content-Security-Policy` including `connect-src 'self' data:` so `@firebase/ai`'s Chrome Built-in AI multimodal `inlineData` adapter can decode local images locally without network requests, `X-Frame-Options: DENY`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`).
 - **Firebase Authentication & Cloud Firestore**: anonymous session binding and optional explicit receipt saving (`Keep a copy` toggle; default off for shared ICT-lab PCs; Firestore documents store schema-checked counts only with zero free text).
 - **PWA (`vite-plugin-pwa`)**: precaches the app shell (`dist/`, including `public/sample-notebook.jpg`) so local guard, deterministic Return Gate, check, fit, and fallback Nano drafting work offline once visited and Gemini Nano is cached.
 
@@ -55,14 +55,14 @@ Raw logs & methodology live under [`docs/evals/2026-11-28/`](docs/evals/2026-11-
 | **Multimodal Notebook Scan** (`scan`) | Single sample page (`public/sample-notebook.jpg`), Chrome 158 | — | **`~7.1s`**, `229–231` chars transcribed, **`0` cloud calls** |
 | **Offline-before-send Fallback** (`draft`) | `SAMPLE_NOTE`, Chrome 158 with CDP offline emulation before approval | — | **`40.76s`** `PREFER_IN_CLOUD -> ON_DEVICE` stream + local Return Gate check |
 
-- **Automated suite & security**: **`473/473` unit tests** (`21` Vitest files, including mid-stream drop, truncated JSON recovery, and session-only receipt isolation), `tsc --noEmit` (`0` errors), `impeccable detect` (`0` findings), `pnpm audit --prod` (`0` known vulnerabilities).
+- **Automated suite & security**: **`478/478` unit tests** (`21` Vitest files, including mid-stream drop, truncated JSON recovery, failure-safe session-only receipt isolation, and Devanagari sentence segmentation), `tsc --noEmit` (`0` errors), `pnpm audit --prod` (`0` known vulnerabilities).
 
 ## Run & verify locally
 
 ```bash
 pnpm install
 pnpm dev              # http://127.0.0.1:5173
-pnpm test             # 473 tests across 21 Vitest files
+pnpm test             # 478 tests across 21 Vitest files
 pnpm typecheck        # tsc --noEmit
 pnpm build            # dist/ + service worker (including sample-notebook.jpg)
 pnpm audit

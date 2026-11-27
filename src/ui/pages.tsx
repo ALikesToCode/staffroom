@@ -117,14 +117,16 @@ export function DevicePill({
 // ------------------------------------------------------------------ inspect
 
 /** A panel over the page, closed with its button, the Escape key or a click outside it. Traps keyboard focus and restores it on close. */
-function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const panel = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panel.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !panel.current) return;
@@ -156,7 +158,7 @@ function Drawer({ title, onClose, children }: { title: string; onClose: () => vo
       document.removeEventListener('keydown', onKey);
       previous?.focus?.();
     };
-  }, [onClose]);
+  }, []);
   return (
     <div className="drawer-back" onClick={onClose}>
       <div className="drawer" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={panel} onClick={(e) => e.stopPropagation()}>

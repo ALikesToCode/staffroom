@@ -5,6 +5,7 @@ import { CloudText } from './parts';
 
 /** Said over the materials on the device's side. */
 export const MATERIALS_NOTE = 'The cloud wrote each version for a need, by its letter. This device put the names over it. No name was sent.';
+export const MATERIALS_NOTE_LOCAL = 'This device wrote each version for a need, by its letter, and put the names over it. Nothing was sent.';
 
 /**
  * The materials of a signed lesson, on the device's side: crisp 1-click generation
@@ -20,6 +21,7 @@ export function MaterialsCard({
   result,
   issues,
   where,
+  onDevice = false,
   namesFor,
   onSend,
   onPrint,
@@ -39,6 +41,7 @@ export function MaterialsCard({
   /** What the return gate found in the reply. */
   issues: Violation[];
   where: string;
+  onDevice?: boolean;
   /** Whose a need is. Known on this device only. */
   namesFor: (letter: string) => string[];
   onSend: () => void;
@@ -58,7 +61,7 @@ export function MaterialsCard({
           <h3>Materials for this lesson</h3>
           <span className="hint">{where}</span>
         </div>
-        <p className="hint">{MATERIALS_NOTE}</p>
+        <p className="hint">{onDevice ? MATERIALS_NOTE_LOCAL : MATERIALS_NOTE}</p>
         {issues.length > 0 && (
           <div className="caution" role="alert">
             <p>The return gate found something in the materials. Read them before you print.</p>
@@ -121,12 +124,12 @@ export function MaterialsCard({
         ))}
         {result.same.length > 0 && (
           <p className="hint">
-            The class sheet as it is, the cloud says, for {result.same.map((l) => `Need ${l}${namesFor(l).length > 0 ? ` (${namesFor(l).join(', ')})` : ''}`).join('; ')}.
+            The class sheet as it is, {onDevice ? 'the on-device draft' : 'the cloud'} says, for {result.same.map((l) => `Need ${l}${namesFor(l).length > 0 ? ` (${namesFor(l).join(', ')})` : ''}`).join('; ')}.
           </p>
         )}
         {result.missing.length > 0 && (
           <p className="caution">
-            The cloud wrote no sheet with lines on it for {result.missing.map((l) => `Need ${l}${namesFor(l).length > 0 ? ` (${namesFor(l).join(', ')})` : ''}`).join('; ')}. Decide yourself what such a pupil does.
+            {onDevice ? 'The on-device model' : 'The cloud'} wrote no sheet with lines on it for {result.missing.map((l) => `Need ${l}${namesFor(l).length > 0 ? ` (${namesFor(l).join(', ')})` : ''}`).join('; ')}. Decide yourself what such a pupil does.
           </p>
         )}
         {result.dropped > 0 && (

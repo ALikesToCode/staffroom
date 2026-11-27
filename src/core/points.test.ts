@@ -257,4 +257,31 @@ describe('needs the cloud left out, and two children who work better apart', () 
     expect(deduped.some((p) => p.need === otherNeed.letter)).toBe(true);
     expect(fitSummary(5, 0, [], [...deduped, ...paired])).toContain('2 seating lines added on this device.');
   });
+
+  it('attributes on-device drafts honestly across fitSummary, placeVariations, missingPoints, preserves danda, and dedupes missing pair needs', async () => {
+    const { sampleNeeds } = await import('../eval/needs');
+    const { missingPoints, pairPoints, placeVariations } = await import('./points');
+    const s = sampleNeeds();
+    const items = [{ heading: 'Practise (15 minutes)', text: 'Pupils write in pairs.' }];
+    const groupNeed = s.needs.find((n) => n.constraintIds.some((id) => s.constraints.find((c) => c.id === id)?.learn === 'group'))!;
+    const otherNeed = s.needs.find((n) => n.letter !== groupNeed.letter)!;
+    const placedLocal = placeVariations([{ itemIndex: 0, need: otherNeed.letter, text: 'Send home a printed summary.' }], s.needs, s.entities, items, s.constraints, s.note, true);
+    expect(placedLocal[0]?.source).toBe('model');
+    expect(fitSummary(5, 0, [], placedLocal, true)).toBe(
+      `5 children have private notes. The on-device draft wrote for 1 need without knowing whose. ${placedLocal.length} ${placedLocal.length === 1 ? 'line' : 'lines'} placed beside ${new Set(placedLocal.map((p) => p.childId)).size} ${new Set(placedLocal.map((p) => p.childId)).size === 1 ? 'child' : 'children'} on this device.`,
+    );
+
+    const missingLocal = missingPoints([groupNeed.letter, otherNeed.letter], s.needs, s.entities, s.constraints, s.note, true);
+    expect(missingLocal.every((p) => p.source === 'model')).toBe(true);
+    const paired = pairPoints(s.constraints, s.entities, items, s.note);
+    const dedupedMissing = dedupePairVariations(missingLocal, paired, s.needs, s.constraints);
+    expect(dedupedMissing.some((p) => p.need === groupNeed.letter)).toBe(false);
+    expect(dedupedMissing.some((p) => p.need === otherNeed.letter)).toBe(true);
+
+    const hindiNote = 'मीनल को शाम को जल्दी घर जाना पड़ता है।';
+    const hindiVault = [{ id: 's1', kind: 'student' as const, token: '[Student 1]', surfaces: ['मीनल'], source: 'class list' as const, withheld: true }];
+    expect(childNotes(hindiNote, hindiVault, [])[0]?.sentences[0]).toBe(hindiNote);
+    const lines = stageLines([{ heading: 'पहला चरण', text: 'सभी छात्र तीन वाक्य लिखेंगे। उसके बाद अभ्यास होगा।' }], hindiVault, []);
+    expect(lines[0]?.summary).toBe('सभी छात्र तीन वाक्य लिखेंगे।');
+  });
 });

@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { getAI, GoogleAIBackend } from 'firebase/ai';
-import { getAuth, onAuthStateChanged, signInAnonymously, type User } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInAnonymously, signOut, type User } from 'firebase/auth';
 import { collection, doc, getDocs, getFirestore, orderBy, query, setDoc } from 'firebase/firestore';
 import { fetchAndActivate, getRemoteConfig, getValue } from 'firebase/remote-config';
 import type { Kind, Receipt } from '../core/types';
@@ -145,6 +145,28 @@ export function watchUser(onUser: (user: User | null) => void): () => void {
     window.removeEventListener('online', signIn);
     stop();
   };
+}
+
+/** Ensure an anonymous Firebase user is signed in when opting back in after a shared-PC desk clear. */
+export async function ensureUser(): Promise<void> {
+  if (!configured) return;
+  try {
+    const auth = getAuth(app);
+    if (!auth.currentUser) await signInAnonymously(auth);
+  } catch {
+    // Offline or Auth unavailable; watchUser retries when online.
+  }
+}
+
+/** Sign out the anonymous Firebase session on Clear desk so the next teacher on a shared PC starts clean. */
+export async function clearUserSession(): Promise<void> {
+  if (!configured) return;
+  try {
+    const auth = getAuth(app);
+    if (auth.currentUser) await signOut(auth);
+  } catch {
+    // Ignore Auth errors during desk reset.
+  }
 }
 
 /**

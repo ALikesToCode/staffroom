@@ -298,6 +298,7 @@ const NOT_A_PROPER_NAME = new Set([
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
   'class', 'notes', 'note', 'i', 'the', 'he', 'she', 'they', 'we', 'it', 'grade', 'section', 'std', 'standard', 'roll',
   'school', 'term', 'week', 'maths', 'english', 'hindi', 'science', 'aadhaar', 'dob', 'udise', 'ptm',
+  'phone', 'mobile', 'contact', 'tel', 'email', 'address',
   ...HONORIFICS,
   ...NOT_A_NAME,
 ]);

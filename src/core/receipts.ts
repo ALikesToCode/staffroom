@@ -40,26 +40,42 @@ export function loadReceipts(): Receipt[] {
 /**
  * Keep the receipts in sessionStorage by default (wiped when tab closes on a shared PC),
  * or in localStorage only when persist is true (opted in). Clearing (empty array) removes both tiers.
+ * Writes destination first when opting in so a quota/storage error preserves the prior session copy;
+ * always removes persistent localStorage when opting out.
  */
 export function storeReceipts(receipts: Receipt[], persist = false): boolean {
   const target = getStorage(persist ? 'local' : 'session');
   const other = getStorage(persist ? 'session' : 'local');
-  try {
-    other?.removeItem(KEY);
-  } catch {
-    // Ignore errors clearing the unused storage tier.
-  }
-  try {
-    if (receipts.length === 0) {
+  if (receipts.length === 0) {
+    try {
       target?.removeItem(KEY);
-    } else {
-      if (!target) return false;
-      target.setItem(KEY, JSON.stringify(receipts.slice(0, 50)));
+    } catch {
+      // Ignore storage errors while clearing.
+    }
+    try {
+      other?.removeItem(KEY);
+    } catch {
+      // Ignore storage errors while clearing.
     }
     return true;
-  } catch {
-    return false;
   }
+  let ok = false;
+  try {
+    if (target) {
+      target.setItem(KEY, JSON.stringify(receipts.slice(0, 50)));
+      ok = true;
+    }
+  } catch {
+    ok = false;
+  }
+  if (ok || !persist) {
+    try {
+      other?.removeItem(KEY);
+    } catch {
+      // Ignore errors clearing the old storage tier.
+    }
+  }
+  return ok;
 }
 
 const SHORT_TASK: Record<TaskId, string> = { lesson: 'Lesson', plan: 'Support plan', parents: 'Notes to parents', handover: 'Hand-over' };

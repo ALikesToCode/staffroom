@@ -83,4 +83,35 @@ describe('shared-PC receipt storage', () => {
     expect(session.getItem('staffroom.receipts.v1')).toBeNull();
     expect(loadReceipts()).toEqual([]);
   });
+
+  it('preserves sessionStorage on failed opt-in migration, and always clears localStorage on opt-out', () => {
+    const session = fakeStorage();
+    const throwingLocal = {
+      ...fakeStorage(),
+      setItem: () => {
+        throw new Error('QuotaExceededError');
+      },
+    };
+    vi.stubGlobal('sessionStorage', session);
+    vi.stubGlobal('localStorage', throwingLocal);
+
+    const receipt = sampleReceipt();
+    expect(storeReceipts([receipt], false)).toBe(true);
+    expect(storeReceipts([receipt], true)).toBe(false);
+    expect(session.getItem('staffroom.receipts.v1')).not.toBeNull();
+
+    const local = fakeStorage();
+    local.setItem('staffroom.receipts.v1', JSON.stringify([receipt]));
+    const throwingSession = {
+      ...fakeStorage(),
+      setItem: () => {
+        throw new Error('SecurityError');
+      },
+    };
+    vi.stubGlobal('sessionStorage', throwingSession);
+    vi.stubGlobal('localStorage', local);
+
+    expect(storeReceipts([receipt], false)).toBe(false);
+    expect(local.getItem('staffroom.receipts.v1')).toBeNull();
+  });
 });

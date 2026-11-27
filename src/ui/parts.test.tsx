@@ -5,9 +5,9 @@ import { CloudText, DeviceText, Stepper } from './parts';
 import { Caught, ConstraintsPanel } from './Constraints';
 import type { Constraint } from '../core/types';
 import { App } from '../App';
-import { MaterialsPages } from './Materials';
+import { MaterialsCard, MATERIALS_NOTE_LOCAL, MaterialsPages } from './Materials';
 import { CopyPreview } from './PrintPreview';
-import { NetworkSection } from './pages';
+import { Drawer, NetworkSection } from './pages';
 import { addRequests } from '../core/network';
 import type { Materials } from '../core/materials';
 
@@ -306,5 +306,48 @@ describe('Stepper and CopyPreview', () => {
     expect(classSheet).not.toContain('Meenal');
     expect(teacherSheet).toContain('Meenal');
     expect(teacherSheet).toContain('Give two printed photos.');
+  });
+});
+
+describe('MaterialsCard offline copy and Drawer semantics', () => {
+  it('uses on-device provenance wording instead of cloud wording when onDevice is true', () => {
+    const html = renderToStaticMarkup(
+      <MaterialsCard
+        request="Class 6"
+        stopped={[]}
+        busy={false}
+        fail={null}
+        result={{
+          board: ['Line 1'],
+          sheet: ['Q1'],
+          versions: [],
+          ticket: [{ question: 'TQ', answer: 'TA' }],
+          dropped: 0,
+          same: ['A'],
+          missing: ['B'],
+        }}
+        issues={[]}
+        where="The cloud failed, so the on-device model wrote these"
+        onDevice
+        namesFor={(l) => (l === 'B' ? ['Tanvi'] : [])}
+        onSend={() => {}}
+      />,
+    );
+    expect(html).toContain(MATERIALS_NOTE_LOCAL);
+    expect(html).toContain('the on-device draft says');
+    expect(html).toContain('The on-device model wrote no sheet with lines on it for Need B (Tanvi)');
+    expect(html).not.toContain('The cloud wrote');
+  });
+
+  it('renders accessible modal dialog markup in Drawer', () => {
+    const html = renderToStaticMarkup(
+      <Drawer title="Where each step ran" onClose={() => {}}>
+        <button type="button">Inner action</button>
+      </Drawer>,
+    );
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('aria-label="Where each step ran"');
+    expect(html).toContain('Inner action');
   });
 });

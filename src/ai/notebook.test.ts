@@ -37,4 +37,15 @@ describe('on-device multimodal notebook scanner', () => {
     ].join('\n');
     expect(extractScannedClassList(sampleOcr)).toEqual(['Aarav Sharma', 'Diya Sharma', 'Kabir', 'Ishaan', 'Meenal']);
   });
+
+  it('excludes phone and contact labels from extracted class lists on the sample notebook transcription', () => {
+    const samplePage = [
+      'Class 6B - 16 Nov',
+      'Diya Sharma takes the 3:40 bus to Chandpur right after the final period.',
+      'Her mother cooks in two homes and has not paid the term fee yet.',
+      'Meenal Joshi freezes in written tests. Roll no. 6B/23.',
+      'Phone: 98112 34560',
+    ].join('\n');
+    expect(extractScannedClassList(samplePage)).toEqual(['Diya Sharma', 'Meenal Joshi']);
+  });
 });

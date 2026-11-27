@@ -2,7 +2,7 @@ import { findPossibleNames } from '../core/rules';
 import { plainText } from '../core/text';
 import { modelFor } from './routes';
 
-const METADATA_LINE_RE = /^(?:subject|topic|date|teacher|school|class|grade|section|term|roll|period|time)\s*[:-]/i;
+const METADATA_LINE_RE = /^(?:subject|topic|date|teacher|school|class|grade|section|term|roll|period|time|phone|mobile|contact|tel|telephone|email|address|parent|guardian|notes?)\s*[:-]/i;
 const HONORIFIC_BEFORE_RE = /\b(?:mr|mrs|ms|miss|dr|prof|shri|smt|kumari|rev|father|sister|mother|aunt|uncle)\.?\s+$/i;
 const ADULT_ROLE_AFTER_RE = /^\s*(?:\(|,|-)\s*(?:mother|father|parent|guardian|grandmother|grandfather|aunt|uncle|doctor|teacher)\b/i;
 const ROMAN_OR_SINGLE_RE = /^(?:[A-Z]|[IVXLCDM]{1,5})$/;
