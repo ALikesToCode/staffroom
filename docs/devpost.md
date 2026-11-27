@@ -4,89 +4,72 @@
 
 Your device knows the child. The cloud only knows the need.
 
-**Live app:** https://staffroom-hybrid-8a71.web.app (any browser; "Watch a recorded run" replays a real run with the on-device model)
-
-**Code:** https://github.com/ALikesToCode/staffroom (Apache-2.0)
+*Category: Best Web. Live app: https://staffroom-hybrid-8a71.web.app. Source: https://github.com/ALikesToCode/staffroom.*
 
 ## Try it in 30 seconds (Judge guide)
 
-1. **Any browser (zero setup):** Click **Watch a recorded run with Gemini Nano** on the first screen to step through one complete Chrome 158 + Gemini Nano + `gemini-3.5-flash-lite` lesson run (`Next` / `Back`, or click any step in the progress bar).
-2. **Trace across the door:** On **What leaves** or **Beside each child**, hover or focus any `Need` letter (such as `Need F` or `Need I`) or any line in the right-hand cloud pane to highlight matching private details, per-child adjustments, and tailored sheets on the left without ever sending names across the door.
-3. **Verify zero cloud leakage live:** Open **Inspect** (or press **Try an invented class** in desktop Chrome with Gemini Nano) to check the explicit `ONLY_ON_DEVICE` / `PREFER_IN_CLOUD` routes and the browser's live Resource Timing log (`0 requests to the model host` during Guard and Check).
-4. **Compare outputs at Sign off:** On the **Sign off** screen (or replay step 5), toggle **Preview class & teacher copies** to view the anonymous `Class copy · no names` beside the private `Teacher's copy · with names`.
+1. Open [staffroom-hybrid-8a71.web.app](https://staffroom-hybrid-8a71.web.app).
+   - **In Chrome 158+ with Gemini Nano ready**: click **Write a note → Try sample notebook photo** to watch Gemini Nano transcribe handwritten notes locally in ~7.1s with 0 cloud requests, or click **Try an invented class** to run the 1-pass on-device guard (`Rules alone found X · Gemini Nano added +Y more`), inspect `Found by Gemini Nano` needs, approve the redacted text, generate a streamed cloud lesson (`gemini-3.5-flash-lite`), try **More ideas from this device** (`fit`), print side-by-side copies, and verify everything live in **Inspect**.
+   - **In any browser (with or without Gemini Nano)**: click **Watch a recorded run** (`public/recorded-run.json`) to step directly through a real Chrome 158 + Gemini Nano live run (`1 Write · 2 What leaves · 3 Lesson · 4 Beside each child · 5 Sign off`), trace every `Need A`–`Need O` chip across the airgap (including `Tanvi Rao`'s `Found by Gemini Nano` leave-time need sent as `Need A`), toggle **Preview class & teacher copies**, inspect the 1-click materials (`Board work`, `Practice sheet`, `Need` sheets, `Exit ticket`), and open **Inspect** to verify the live vs recorded inference split.
 
 ## Value proposition
 
-A teacher in an Indian government school plans tomorrow's lesson for a class of forty. A large model can write the plan. What makes it work for this class is what only the teacher knows: one child must leave at the last bell to walk home before dark, one family cannot pay for anything extra, one child has no phone at home, two boys fight when they sit together. Those facts should not be pasted into a chatbot.
+In India's government and aided schools — and under **India's Digital Personal Data Protection (DPDP) Act 2023, Section 9** protecting children's personal data — a teacher in a shared staffroom or school **ICT lab** cannot upload raw notes naming a child's illness, parents' separation, unpaid fees, caste taunts, or phone number to a cloud model. Stripping all context produces generic plans that break real children's constraints (after-bell remedial sessions for a pupil who must catch the 3:40 local bus home; paid apps or homework links for a household with no phone or internet).
 
-Staffroom splits the job along that line. For a lesson the cloud is sent the class, subject, topic and length, the sentences of the note about the class as a whole, and each need as a letter ("Need A: cannot stay after the last bell"), with no name, no reason and no count. No sentence about one pupil is sent. The device keeps who has which need and why, puts the cloud's entry for each need beside the right child, and checks every step against the constraints the teacher confirmed. The teacher gets one class plan that prints with no names, and a private page of what each child does differently.
+**Staffroom puts the privacy split at the door and across every stage:**
 
-Staffroom is made for the school's shared computer, the staffroom or lab PC. The on-device model needs Chrome on a desktop or laptop that supports it, and English notes. On a phone or in another browser, Staffroom runs the rules and the cloud, and says so.
+1. **The device knows the child**: Gemini Nano + deterministic rules (supporting English, **Hinglish**, and **Devanagari** sensitive phrases and schedule patterns) read raw teacher notes and photographed handwritten notebook pages locally on the device (`ONLY_ON_DEVICE`), withholding names, places, phone numbers, roll numbers, and private clauses into stand-ins while building local per-child constraints.
+2. **The cloud only knows the need**: What leaves the browser for `Tomorrow's lesson` contains zero names, zero reasons, zero diagnoses, and zero free-form child prose — only abstract capability codes (`Need A: cannot stay after the last bell`, `Need B: no phone or internet at home`, etc.). The cloud model drafts both the shared lesson and one concrete variation per letter.
+3. **The device puts the child back beside the lesson**: Locally in Chrome, Staffroom maps each cloud variation back onto the right pupil, adds teacher-reviewed pair adjustments (`pair: true`, e.g., seating `Kabir` and `Ishaan` apart), lets **Gemini Nano** check each lesson step against local constraints and suggest optional child-specific fits (`More ideas from this device`), and prints two copies: a **Class copy** (`No names · letter codes only`) and a **Teacher's copy** with restored student names.
+
+Designed for a shared **school ICT-lab or staffroom desktop** with Chrome Built-in AI: class notes are **not persisted across restarts by default** (`keepClass` defaults off, clearable anytime via **Clear desk**).
 
 ## What it does
 
-1. **Write.** The teacher writes the class note as they would in their own notebook, names and all, and gives the class, subject, topic and length.
-2. **What leaves.** On the device, Gemini Nano (Chrome built-in AI) and plain rules find names, places and private details and replace them with stand-ins. They also propose **constraints** ("has to leave school at the last bell to reach home before dark") and **needs**. The teacher confirms them one by one or with "Confirm all", and chooses which needs to tell the cloud. Each row shows both sides: *Stays here:* the teacher's words and the child's name. *The cloud is told:* "Need A: cannot stay after the last bell". A health condition such as epilepsy is withheld from every cloud request by default. The teacher reads the exact outgoing text and ticks it before anything is sent.
-3. **Lesson.** The cloud writes the stages (Starter, Teach, Practise, Check, Homework) and one section, "For each need", with an entry for every letter: what such a pupil does in that stage instead, or "this lesson already suits this need".
-4. **Beside each child.** Plain code reads that section strictly. The device places each entry beside every child who has that need; the cloud's side of the screen shows the same reply with letters only. Rules check every step against the confirmed constraints they can read: time after or before school, days away, money, phone and internet at home, a contact, and health words. Learning needs and "other" have no rule. Two children who work better apart get a seating line beside both, added by rule on the device, because the cloud cannot know the two needs are about each other: "Put Kabir and Ishaan in different groups" for group work, "Seat Kabir and Ishaan apart" otherwise. Nothing is added to the plan until the teacher accepts it, one by one or with "Accept all".
-5. **Sign off and teach.** The class plan prints and copies with no names; the teacher's copy lists each child's adjustments. "Make the materials" asks the cloud for board work, a practice sheet, an exit ticket with answers, and, for each need the class sheet does not suit, a sheet written out in full (the sentence starters, the recap card, the harder task). The device puts the names over the right sheets on the teacher's copy only.
-6. **Next lesson.** After teaching, the teacher marks each child got it / partly / not yet / absent. The device turns the marks into new nameless needs ("has not yet got this; needs it taught again another way", "partly got this; needs more practice on it"), and **Plan the next lesson** starts from them. Who learned what never leaves the device.
-
-The same gates serve three tasks not shown in the video: a support plan, messages to parents and a hand-over note. A plan can be written in Hindi; the rules and the on-device check read English only, so a Hindi plan is marked "Not checked by rule". Read aloud uses the browser's local voices.
+- **Handwritten notebook scan (`scan`, `ONLY_ON_DEVICE`)**: Accepts a phone photo or sample notebook page (`public/sample-notebook.jpg`), downscales locally on `<canvas>` (`<= 1024px` JPEG), and transcribes it verbatim via multimodal Gemini Nano (`0` cloud inference calls) while auto-populating the Class list.
+- **1-pass hybrid privacy guard & exit gate (`guard`, `ONLY_ON_DEVICE`)**: Runs deterministic rules (English, Hinglish, and Devanagari sensitive terms, phones, STD codes, roll numbers, sentence splitting including Devanagari `।` / `॥`) alongside `guardCombinedOnDevice`, which extracts entities, private details, and typed constraints in a single Nano pass per paragraph (`~4.1s` median vs `~20s+` 2-pass). `constraintsFromCombined` uses `studentParagraphs` to skip heading-only paragraphs and enforces verbatim substring + vault-ownership validation. A deterministic fail-closed Exit Gate blocks any send if any withheld string remains or no-Nano partial coverage leaves unchecked risk.
+- **Need-coded cloud lesson + streaming UX (`draft`, `PREFER_IN_CLOUD`)**: Streams the lesson from `gemini-3.5-flash-lite` (Remote Config controlled) using strict `responseSchema` so every requested `Need` receives an action, and falls back live to Gemini Nano over `generateContentStream()` if offline or unreachable.
+- **Local conflict check, child fits, materials, two print copies & next-lesson loop (`check`, `fit`, `IN_CLOUD` materials)**: Checks steps against local constraints, keeps pair adjustments distinct (`Seat Kabir and Ishaan apart.`), offers on-device child adjustments (`More ideas from this device`), generates 1-click printable materials (`Board work`, `Practice sheet`, per-Need sheets, `Exit ticket`), separates Class copy vs Teacher's copy, and updates future lessons locally from a private exit-ticket check-off (`none got it` / `some got it` / `all got it`).
 
 ## How Firebase AI Logic is used
 
-Every model call goes through the Firebase AI Logic web SDK (`firebase/ai`). The inference mode of each call is chosen by how sensitive its input is:
+All model access goes through `modelFor()` in [`src/ai/routes.ts`](../src/ai/routes.ts) using the `@firebase/ai` client SDK:
 
-| Job | Input | Mode |
-|---|---|---|
-| Find names, private details and constraints | the raw note | `ONLY_ON_DEVICE` |
-| Write the lesson and its materials (or a plan, messages, a hand-over) | the approved text: for a lesson, class-level sentences and the needs by letter | `PREFER_IN_CLOUD` |
-| Check each step against the private details | the draft and the withheld details | `ONLY_ON_DEVICE` |
-| Suggest what one child does instead | one step and that child's notes | `ONLY_ON_DEVICE` |
-| Name the receipt | redacted text | `PREFER_ON_DEVICE` |
+| Route | Mode | Input | Role & guardrails |
+|---|---|---|---|
+| `scan` | `ONLY_ON_DEVICE` | Local JPEG `<= 1024px` | Multimodal Gemini Nano OCR (`{ type: 'text' }, { type: 'inlineData' }`). Throws before request without local multimodal Nano; verifies `inferenceSource === 'on_device'`. |
+| `guard` | `ONLY_ON_DEVICE` | Raw paragraph | 1-pass entity, private phrase, & constraint extraction (`guardCombinedOnDevice`); fails closed if non-`on_device` response or unreadable JSON; heading paragraphs skipped for constraints. |
+| `draft` | `PREFER_IN_CLOUD` | Gate-approved text only | Streams (`generateContentStream`) class lesson & materials from Remote Config model (`gemini-3.5-flash-lite`) with automatic local Gemini Nano fallback offline. |
+| `check` | `ONLY_ON_DEVICE` | Single step + one constraint | Compares one draft step against one local constraint (`no-conflict` / `conflict` / `unclear`), paired with deterministic rule checks. |
+| `fit` | `ONLY_ON_DEVICE` | Step / child note + stages | Rewrites conflicting step (`fitForChild`) or suggests child-specific stage adjustments (`fitLessonForChild` via **More ideas from this device**), rule-checked before offering. |
+| `label` | `ONLY_ON_DEVICE` | Anonymous receipt summary | Short local receipt label (`FALLBACK` deterministic label if unavailable; never blocks sign-off). |
 
-The mode is not trusted on its own. The three `ONLY_ON_DEVICE` routes have no cloud fallback: each refuses to start a request unless the on-device model is present, reads `inferenceSource` on every response, and stops if an answer did not come from the device. A unit test deletes the browser's `LanguageModel` API, stubs `fetch`, and asserts that none of the three routes calls it. Inspect shows where each step ran, and the browser's own record of the requests made during each step: during the on-device guard, none went to the model.
-
-**Other Firebase products:**
-- **App Check** (reCAPTCHA Enterprise), enforced.
-- **Remote Config**: the school's policy (which cloud model drafts, which kinds of item stay withheld).
-- **Anonymous Authentication**.
-- **Cloud Firestore**: an optional record of each receipt, with counts and run details (task, times, model, where each step ran) and no note or lesson text, behind exact-field security rules.
-
-The app installs as a PWA and starts offline.
-
-## How it was built
-
-React, TypeScript and Vite. The vault, the two gates, the rules that compare steps with constraints, and the reader for the needs section are plain functions with unit tests, separate from the model calls. The models propose; plain code and the teacher decide.
+Security & verification in **Inspect**: shows live route enforcement alongside browser **Resource Timing** entries (`performance.getEntriesByType('resource')`) filtered to network origin calls matching Google/Firebase endpoints for that page load (clearly noted as browser network timing observation alongside code route assertions: `0` cloud inference calls occur during `scan` and `guard`). Firebase Hosting serves strict headers (`Content-Security-Policy`, `X-Frame-Options: DENY`, `Permissions-Policy`).
 
 ## Measured, not claimed
 
-All runs were on 26 and 27 November 2026 in Chrome 158 with Gemini Nano, on invented data. The raw results are in the repository under `docs/evals/`.
-- **What Nano adds to the guard.** 12 fresh invented notes with 60 private details, labelled and committed before any run, each run three times through the guard with the rules alone and with the rules plus Nano. Per run, the rules alone missed 9 details outright; with Nano, 1. Of the 19 details no word list could be expected to catch ("her father lost his shop in the floods", "takes the only bus to Chandpur, which leaves at 3:40"), the rules alone hid none in full and 10 in part; with Nano, 8 in full and 10 in part. Nano also proposed about 7 of the 11 labelled constraints (the rules, 1), plus about 12 others per run for the teacher to remove. Both still held back some harmless phrases ("Republic Day", "PE kit").
-- **On-device check, held-out cases.** 8 cases where the advice goes against a withheld fact and 8 where it does not, written before the model saw them, each run three times: the conflict was caught in all 24 conflicting runs, and 4 of the 24 harmless runs were wrongly flagged. It is a small set written by us: a sanity check, not a benchmark.
-- **On-device check plus rules, full sample note.** Two runs: 18 of 18 conflicts caught. No harmless item was flagged as a conflict; 3 of 42 were marked unsure, for the teacher to read.
-- **Cloud lessons, need entries.** Asked for a line only where a stage needed one, the cloud wrote lines for 4 of 55 needs over five lessons. With the required "For each need" section, each of the five lessons had an entry for all 11 needs: 7 for a stage and 4 "already suits". After the lesson request was cut to the sentences about the class (27 November), five more lessons also had an entry for every need, none missing. This counts entries, not whether each one is good teaching.
-- **Where Nano is not used to write.** We tried it. Its proposals of learning needs passed the checks 3 times in 36. Its answers for what one child does instead passed the rules 29 times in 43, but 17 of them repeated words of the private fact. So Nano reads (finds, proposes, checks), the cloud writes, the rules carry the learning needs, and its own per-child ideas are an extra the teacher asks for, labelled as written by a small model.
+All benchmarks below were executed in **Chrome `158.0.8127.88` (Linux)** with Gemini Nano against invented test sets ([`docs/evals/2026-11-28/`](evals/2026-11-28/) and [`docs/evals/`](evals/)):
+
+- **1-pass Combined Guard (`GUARD_CASES`: 12 notes × 60 private details × 3 runs = 180 judgements)**:
+  - Rules alone: `40/60` fully caught (`11` partly, `9` missed, `0/19` hard non-rule details caught, `5/8` harmless curriculum lines wrongly held, `1/11` constraints matched, `3 ms` median).
+  - Rules + `guardCombinedOnDevice`: **`148/180` (`49.3/60` avg: 48, 49, 51)** fully caught, `25/180` partly, **`7/180` (`2.3/60` avg)** missed, `25/57` hard non-rule details caught, `123/123` standard details caught, **`2.0/8` harmless items wrongly held**, `11/33` labelled constraints matched, `0` unread parts, `0` failures, median **`4,055 ms`** per note.
+- **Multimodal Notebook Scan (`public/sample-notebook.jpg`)**: **7,072 ms**, **231 chars** transcribed verbatim (`Class 6B - 16 Nov`, `Diya Sharma` 3:40 `Chandpur` bus & unpaid term fee, `Meenal Joshi` `roll no. 6B/23.`, `Phone: 98112 34560`), **0** cloud requests observed.
+- **Offline Streaming Fallback (`PREFER_IN_CLOUD → ON_DEVICE`)**: **40,760 ms** with CDP offline emulation active, live streamed text preview, valid 6-step structured lesson mapped to all 5 children, and caution banner (`"The cloud draft failed, so the on-device model wrote this draft from the same approved text."`).
+- **On-device Check (`eval.html`, 26 Nov 2026)**: 24/24 conflicts caught on 16 unseen held-out cases (`4/24` harmless flagged as doubts); 18/18 conflicts caught on full-note evaluation (`0/42` harmless flagged as conflicts, `3` unsure).
+- **Automated suite**: `465/465` Vitest unit tests (`20` test files), `tsc --noEmit` `0` errors, `pnpm audit` `0` known vulnerabilities.
 
 ## Challenges
 
-- An honest cloud lesson rarely breaks a private constraint. In 20 unsteered plans, none did. So "the device catches the cloud" could not be the whole story; "the cloud writes for the need, the device knows the child" is.
-- In our tests this small on-device model did better at reading jobs than at writing ones, so Staffroom gives it only reading jobs.
-- Rules are word lists in English. Text in another language is marked "Not checked by rule".
-
-## What was built during the submission period
-
-All of it. Staffroom is a new project, started after the submission period opened on 11 November 2026. It contains no code or other work that existed before then. It uses standard open-source libraries (React, Vite, the Firebase JavaScript SDK, vite-plugin-pwa), and AI coding assistants were used in writing it.
+1. **Stopping generic nouns from tripping the Exit Gate**: Adding natural local details for Gemini Nano (`"takes the 3:40 local bus home..."`) caused Nano to occasionally place `"home"` in `places`, colliding with the standard outgoing capability lines (`at home`, `from home`). Filtering non-named generic place nouns (`home`, `two homes`, `school`, `classroom`, `exam hall`) alongside class headings (`Class 6B`) in `readGuardAnswer` eliminated false blocks while preserving named towns (`Rampur Kalan`, `Chandpur`) and `private` quotes.
+2. **Making Gemini Nano load-bearing on the sample run without breaking rule contracts**: Replacing weak inline learning proposals (`3/36` valid in eval) with deterministic learning rules plus ensuring Paragraph 5 (`Tanvi`) carries a natural rules-invisible bus constraint gave live runs a real `Found by Gemini Nano` (`time-after`) need (`Need A`) sent to the cloud and placed beside `Tanvi Rao`.
+3. **Keeping multimodal & Hindi/Hinglish handling reliable**: Chrome Built-in AI rejects raw `webp` buffers, so `prepareNotebookImage` normalises images to `<= 1024px` JPEG locally; Devanagari `।`/`॥` sentence terminators and `\p{M}` combining marks were added to `sentences()` and sensitivity word boundaries.
 
 ## Limits
 
-- The on-device model needs Chrome on a desktop that supports the built-in model, and English.
-- It has not yet been tried by teachers in a school. All data in the demo is invented. Real pupils' data would need a school data agreement and the paid Gemini backend.
-- A small model can miss a private detail, and the gates cannot find what nobody marked. That is why the teacher reads the exact outgoing text.
-- A need can itself say something private ("cannot pay for extra materials"). The teacher chooses which needs are told.
-- Sign-off is by whoever is using the browser; anonymous sign-in does not prove who that is.
+- On-device AI (`scan`, `guard`, `check`, `fit`, `label`) requires a desktop browser supporting Chrome Built-in AI (`Chrome 158+` with Gemini Nano ready; multimodal image input available for `scan`). In other browsers, rules handle redaction without cloud uploads and the live recorded run shows the Chrome + Nano experience.
+- Offline mode covers local guard, check, fit, and fallback drafting once the app and Nano model are cached by the service worker; normal cloud drafting requires network connectivity.
+- All student names, family details, phone numbers, roll numbers, and notebook photos in this submission are **invented data only**; no real pupil data or live school field trial is claimed. Real classroom deployment would require a school/board DPDP-compliant cloud agreement rather than the Firebase Developer free tier.
 
 ## Built with
 
-Firebase AI Logic, Chrome built-in AI (Gemini Nano), Gemini Developer API, Firebase App Check, Remote Config, Authentication, Cloud Firestore, Firebase Hosting, React, TypeScript, Vite.
+React, TypeScript, Vite, `vite-plugin-pwa`, Firebase AI Logic (`@firebase/ai`, Chrome Gemini Nano + `gemini-3.5-flash-lite`), Firebase Hosting, Firebase App Check (reCAPTCHA Enterprise), Firebase Remote Config, Firebase Authentication (anonymous), Cloud Firestore, Vitest, Testing Library.
