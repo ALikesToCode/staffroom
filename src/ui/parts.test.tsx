@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildVault } from '../core/vault';
-import { CloudText, DeviceText } from './parts';
+import { CloudText, DeviceText, Stepper } from './parts';
 import { Caught, ConstraintsPanel } from './Constraints';
 import type { Constraint } from '../core/types';
 import { App } from '../App';
 import { MaterialsPages } from './Materials';
+import { CopyPreview } from './PrintPreview';
 import { NetworkSection } from './pages';
 import { addRequests } from '../core/network';
 import type { Materials } from '../core/materials';
@@ -18,6 +19,14 @@ describe('CloudText', () => {
     expect(html).toContain('<span class="bar">[withheld]</span>');
     expect(html).toContain('<span class="bar">[Contact 1]</span>');
     // With the tags taken out, what is left is the outgoing text, character for character.
+    expect(html.replace(/<[^>]+>/g, '')).toBe(text);
+  });
+
+  it('highlights the active Need line when cross-door tracing is wired', () => {
+    const text = 'Need A: leaves early.\nNeed B: no phone at home.';
+    const html = renderToStaticMarkup(<CloudText text={text} activeNeed="B" onHoverNeed={() => {}} />);
+    expect(html).toContain('<span class="need-wire-line"');
+    expect(html).toContain('<span class="need-wire-line is-active"');
     expect(html.replace(/<[^>]+>/g, '')).toBe(text);
   });
 });
@@ -241,5 +250,43 @@ describe('NetworkSection', () => {
     expect(text).toContain('Draft (in the cloud): 1 request to the model host');
     expect(html).not.toMatch(/SECRET|\?key/);
     expect(renderToStaticMarkup(<NetworkSection network={record} steps={[]} />)).toContain('No model step has run in this tab yet.');
+    const replayHtml = renderToStaticMarkup(
+      <NetworkSection
+        network={record}
+        steps={[]}
+        isReplay
+        replayInfo={{ guard: 'ON_DEVICE', draft: 'IN_CLOUD', check: 'ON_DEVICE', draftModel: 'gemini-3.5-flash-lite', hasMaterials: true }}
+      />,
+    );
+    expect(replayHtml).toContain('0 model requests were made in this tab during replay');
+    expect(replayHtml).toContain('Guard (on the device)');
+    expect(replayHtml).toContain('Draft (in the cloud · gemini-3.5-flash-lite)');
+    expect(replayHtml).toContain('Materials (in the cloud · gemini-3.5-flash-lite)');
+  });
+});
+
+describe('Stepper and CopyPreview', () => {
+  it('renders interactive step buttons when onStep is supplied', () => {
+    const html = renderToStaticMarkup(<Stepper step={2} lesson onStep={() => {}} />);
+    expect(html).toContain('<button type="button" class="step-btn"');
+    expect(html).toContain('Lesson');
+  });
+
+  it('keeps student names out of the anonymous class copy inside CopyPreview', () => {
+    const html = renderToStaticMarkup(
+      <CopyPreview
+        title="Describing a place"
+        meta="Class 4 · English"
+        stages={[{ heading: 'Starter', text: 'Look at the market picture together.' }]}
+        variations={[{ itemIndex: 0, need: 'B', text: 'Give two printed photos.' }]}
+        adjustments={[{ child: 'Meenal', itemIndex: 0, text: 'Give two printed photos.', source: 'cloud', need: 'B' }]}
+      />,
+    );
+    const [classSheet, teacherSheet] = html.split('preview-sheet teacher-copy');
+    expect(classSheet).toContain('Class copy · no names');
+    expect(classSheet).toContain('For Need B: Give two printed photos.');
+    expect(classSheet).not.toContain('Meenal');
+    expect(teacherSheet).toContain('Meenal');
+    expect(teacherSheet).toContain('Give two printed photos.');
   });
 });

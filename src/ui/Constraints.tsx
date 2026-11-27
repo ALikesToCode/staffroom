@@ -61,6 +61,8 @@ export function ConstraintsPanel({
   actions,
   needOf,
   lesson = false,
+  activeNeed,
+  onHoverNeed,
 }: {
   /** True for a lesson: a need is told by letter with no child in it, and each row shows what stays and what is told. */
   lesson?: boolean;
@@ -72,11 +74,21 @@ export function ConstraintsPanel({
   actions: ConstraintActions;
   /** The need line of a constraint, as it would be sent. */
   needOf: (c: Constraint) => NeedView;
+  activeNeed?: string | null;
+  onHoverNeed?: (letter: string | null) => void;
 }) {
   const [about, setAbout] = useState('');
   const [kind, setKind] = useState<ConstraintKind>('time-after');
   const [text, setText] = useState('');
+  const [filter, setFilter] = useState<'all' | 'told' | 'stays'>('all');
   const nameOf = (id: string | undefined) => students.find((s) => s.id === id)?.surfaces[0];
+  const isTold = (c: Constraint) => {
+    const n = needOf(c);
+    return Boolean(c.confirmed && c.share && n.line);
+  };
+  const toldCount = constraints.filter(isTold).length;
+  const staysCount = constraints.length - toldCount;
+  const visible = !lesson || filter === 'all' ? constraints : constraints.filter((c) => (filter === 'told' ? isTold(c) : !isTold(c)));
   const add = () => {
     if (text.trim().length === 0) return;
     actions.onAdd({ kind, about: about || undefined, text });
@@ -84,12 +96,37 @@ export function ConstraintsPanel({
   };
   return (
     <div className="constraints">
+      {lesson && constraints.length > 0 && (
+        <div className="filter-bar" role="group" aria-label="Filter constraints">
+          <button type="button" className={filter === 'all' ? 'filter-chip on' : 'filter-chip'} onClick={() => setFilter('all')}>
+            All ({constraints.length})
+          </button>
+          <button type="button" className={filter === 'told' ? 'filter-chip on' : 'filter-chip'} onClick={() => setFilter('told')}>
+            Told to cloud ({toldCount})
+          </button>
+          <button type="button" className={filter === 'stays' ? 'filter-chip on' : 'filter-chip'} onClick={() => setFilter('stays')}>
+            Stays here ({staysCount})
+          </button>
+        </div>
+      )}
       {constraints.length === 0 ? (
         <p className="empty">No constraint was found. Add one below if there is one.</p>
+      ) : visible.length === 0 ? (
+        <p className="empty">No constraints in this view.</p>
       ) : (
         <ul className="constraint-list">
-          {constraints.map((c) => (
-            <ConstraintRow key={c.id} c={c} who={nameOf(c.about) ?? c.childName ?? 'the class'} need={needOf(c)} editable={editable} actions={actions} lesson={lesson} />
+          {visible.map((c) => (
+            <ConstraintRow
+              key={c.id}
+              c={c}
+              who={nameOf(c.about) ?? c.childName ?? 'the class'}
+              need={needOf(c)}
+              editable={editable}
+              actions={actions}
+              lesson={lesson}
+              activeNeed={activeNeed}
+              onHoverNeed={onHoverNeed}
+            />
           ))}
         </ul>
       )}
@@ -148,9 +185,29 @@ export function ConstraintsPanel({
   );
 }
 
-function ConstraintRow({ c, who, need, editable, actions, lesson }: { c: Constraint; who: string; need: NeedView; editable: boolean; actions: ConstraintActions; lesson: boolean }) {
+function ConstraintRow({
+  c,
+  who,
+  need,
+  editable,
+  actions,
+  lesson,
+  activeNeed,
+  onHoverNeed,
+}: {
+  c: Constraint;
+  who: string;
+  need: NeedView;
+  editable: boolean;
+  actions: ConstraintActions;
+  lesson: boolean;
+  activeNeed?: string | null;
+  onHoverNeed?: (letter: string | null) => void;
+}) {
   const nothingToTell = !need.typed && !need.line;
   const telling = Boolean(c.share) && c.confirmed;
+  const letter = telling && need.line ? /^Need ([A-Z]{1,2}):/.exec(need.line)?.[1] : undefined;
+  const traced = Boolean(letter && activeNeed === letter);
   const detail = constraintDetail(c);
   const needInput = need.typed && (
     <label className="field">
@@ -169,12 +226,18 @@ function ConstraintRow({ c, who, need, editable, actions, lesson }: { c: Constra
     </label>
   );
   return (
-    <li className={c.confirmed ? 'constraint confirmed' : 'constraint'}>
-      <div className="c-line">
-        <q>{c.text}</q>
-        <span className="c-who">{who}</span>
-        <span className="kind-chip">{kindLabel(c)}</span>
-      </div>
+    <li
+      className={['constraint', c.confirmed ? 'confirmed' : '', traced ? 'is-traced' : ''].filter(Boolean).join(' ')}
+      onMouseEnter={() => letter && onHoverNeed?.(letter)}
+      onMouseLeave={() => letter && onHoverNeed?.(null)}
+    >
+      {(!lesson || !c.confirmed) && (
+        <div className="c-line">
+          <q>{c.text}</q>
+          <span className="c-who">{who}</span>
+          <span className="kind-chip">{kindLabel(c)}</span>
+        </div>
+      )}
       <div className="c-controls">
         {editable ? (
           <button
@@ -198,6 +261,7 @@ function ConstraintRow({ c, who, need, editable, actions, lesson }: { c: Constra
           <span />
           {lesson ? 'Tell the cloud this need (no name, no reason)' : 'Tell the cloud the need (not the reason)'}
         </label>
+        {lesson && c.confirmed && <span className="kind-chip">{kindLabel(c)}</span>}
         <details className="c-more">
           <summary>Details</summary>
           <p>
@@ -255,7 +319,12 @@ function ConstraintRow({ c, who, need, editable, actions, lesson }: { c: Constra
         </p>
       )}
       {lesson && c.confirmed && (
-        <div className={telling && need.line ? 'need-pair told' : 'need-pair'}>
+        <div
+          className={telling && need.line ? 'need-pair told' : 'need-pair'}
+          tabIndex={letter ? 0 : undefined}
+          onFocus={() => letter && onHoverNeed?.(letter)}
+          onBlur={() => letter && onHoverNeed?.(null)}
+        >
           <p className="stays">
             <span className="pair-label">Stays here</span>
             <q>{c.text}</q>

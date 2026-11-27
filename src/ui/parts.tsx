@@ -14,12 +14,9 @@ export const KIND_LABEL: Record<Kind, string> = {
 
 const ANY_TOKEN = new RegExp(`${TOKEN_RE.source}|${PRIVATE_TOKEN.replace(/[[\]]/g, '\\$&')}`, 'g');
 
-/**
- * Text as the cloud sees it. Each stand-in is drawn as a bar that carries
- * the literal stand-in, square brackets included, so the characters on
- * screen are exactly the characters that are sent.
- */
-export function CloudText({ text }: { text: string }) {
+const NEED_WIRE_RE = /^Need ([A-Z]{1,2})(?::|\s*\|)/;
+
+function TokenBars({ text }: { text: string }) {
   const out: ReactNode[] = [];
   let at = 0;
   for (const m of text.matchAll(ANY_TOKEN)) {
@@ -33,6 +30,59 @@ export function CloudText({ text }: { text: string }) {
   }
   if (at < text.length) out.push(text.slice(at));
   return <>{out}</>;
+}
+
+/**
+ * Text as the cloud sees it. Each stand-in is drawn as a bar that carries
+ * the literal stand-in, square brackets included, so the characters on
+ * screen are exactly the characters that are sent.
+ *
+ * When `onHoverNeed` is supplied, lines naming a Need by letter become
+ * interactive so hovering illuminates the matching child row across the door.
+ */
+export function CloudText({
+  text,
+  activeNeed,
+  onHoverNeed,
+}: {
+  text: string;
+  activeNeed?: string | null;
+  onHoverNeed?: (letter: string | null) => void;
+}) {
+  if (!onHoverNeed && activeNeed === undefined) return <TokenBars text={text} />;
+  const lines = text.split('\n');
+  return (
+    <>
+      {lines.map((line, i) => {
+        const m = NEED_WIRE_RE.exec(line);
+        const letter = m?.[1];
+        const sep = i < lines.length - 1 ? '\n' : '';
+        if (!letter) {
+          return (
+            <Fragment key={i}>
+              <TokenBars text={line} />
+              {sep}
+            </Fragment>
+          );
+        }
+        return (
+          <Fragment key={i}>
+            <span
+              className={activeNeed === letter ? 'need-wire-line is-active' : 'need-wire-line'}
+              tabIndex={0}
+              onMouseEnter={() => onHoverNeed?.(letter)}
+              onMouseLeave={() => onHoverNeed?.(null)}
+              onFocus={() => onHoverNeed?.(letter)}
+              onBlur={() => onHoverNeed?.(null)}
+            >
+              <TokenBars text={line} />
+            </span>
+            {sep}
+          </Fragment>
+        );
+      })}
+    </>
+  );
 }
 
 /**
@@ -119,14 +169,23 @@ export const STEPS = ['Write', 'What leaves', 'Draft', 'What your device caught'
 /** The same five, as a lesson meets them. */
 export const LESSON_STEPS = ['Write', 'What leaves', 'Lesson', 'Beside each child', 'Sign off'];
 
-export function Stepper({ step, lesson = false }: { step: number; lesson?: boolean }) {
+export function Stepper({ step, lesson = false, onStep }: { step: number; lesson?: boolean; onStep?: (index: number) => void }) {
   const steps = lesson ? LESSON_STEPS : STEPS;
   return (
     <ol className="stepper" aria-label="Progress">
       {steps.map((s, i) => (
         <li key={s} className={i < step ? 'done' : i === step ? 'now' : ''} aria-current={i === step ? 'step' : undefined}>
-          <span className="n">{i + 1}</span>
-          {s}
+          {onStep ? (
+            <button type="button" className="step-btn" onClick={() => onStep(i)}>
+              <span className="n">{i + 1}</span>
+              {s}
+            </button>
+          ) : (
+            <>
+              <span className="n">{i + 1}</span>
+              {s}
+            </>
+          )}
         </li>
       ))}
     </ol>

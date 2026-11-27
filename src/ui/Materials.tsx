@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Violation } from '../core/gate';
 import type { Materials } from '../core/materials';
+import { CloudText } from './parts';
 
 /** Said over the materials on the device's side. */
 export const MATERIALS_NOTE = 'The cloud wrote each version for a need, by its letter. This device put the names over it. No name was sent.';
@@ -22,6 +23,8 @@ export function MaterialsCard({
   onSend,
   onPrint,
   noPrint,
+  activeNeed,
+  onHoverNeed,
 }: {
   /** The exact text of the request. */
   request: string;
@@ -40,6 +43,8 @@ export function MaterialsCard({
   onPrint?: (withNames: boolean) => void;
   /** Said under the materials when they cannot be printed. */
   noPrint?: string;
+  activeNeed?: string | null;
+  onHoverNeed?: (letter: string | null) => void;
 }) {
   const [asking, setAsking] = useState(false);
   const [read, setRead] = useState(false);
@@ -82,7 +87,15 @@ export function MaterialsCard({
         </ol>
         {result.versions.length > 0 && <h4>A sheet for each need</h4>}
         {result.versions.map((v) => (
-          <div className="version" key={v.need}>
+          <div
+            className={activeNeed === v.need ? 'version is-traced' : 'version'}
+            key={v.need}
+            tabIndex={onHoverNeed ? 0 : undefined}
+            onMouseEnter={() => onHoverNeed?.(v.need)}
+            onMouseLeave={() => onHoverNeed?.(null)}
+            onFocus={() => onHoverNeed?.(v.need)}
+            onBlur={() => onHoverNeed?.(null)}
+          >
             <p>
               <b>Sheet for Need {v.need}</b>
               {namesFor(v.need).map((n) => (
@@ -164,7 +177,9 @@ export function MaterialsCard({
       ) : (
         <>
           <p className="hint">The exact text that will be sent: the class plan as it stands and the needs by letter. No name is in it.</p>
-          <pre className="wire">{request}</pre>
+          <pre className="wire">
+            <CloudText text={request} activeNeed={activeNeed} onHoverNeed={onHoverNeed} />
+          </pre>
           {stopped.length > 0 && (
             <div className="caution" role="alert">
               <p>The exit gate stopped this text. Nothing will be sent.</p>
@@ -200,7 +215,15 @@ export function MaterialsCard({
 }
 
 /** The materials as the cloud returned them: letters only. */
-export function MaterialsWire({ result }: { result: Materials }) {
+export function MaterialsWire({
+  result,
+  activeNeed,
+  onHoverNeed,
+}: {
+  result: Materials;
+  activeNeed?: string | null;
+  onHoverNeed?: (letter: string | null) => void;
+}) {
   return (
     <div className="wire reply">
       <p>
@@ -222,7 +245,15 @@ export function MaterialsWire({ result }: { result: Materials }) {
         ))}
       </p>
       {result.versions.map((v) => (
-        <p key={v.need}>
+        <p
+          key={v.need}
+          className={activeNeed === v.need ? 'need-wire-line is-active' : onHoverNeed ? 'need-wire-line' : undefined}
+          tabIndex={onHoverNeed ? 0 : undefined}
+          onMouseEnter={() => onHoverNeed?.(v.need)}
+          onMouseLeave={() => onHoverNeed?.(null)}
+          onFocus={() => onHoverNeed?.(v.need)}
+          onBlur={() => onHoverNeed?.(null)}
+        >
           <b>Sheet for Need {v.need}</b>
           {v.note && (
             <>

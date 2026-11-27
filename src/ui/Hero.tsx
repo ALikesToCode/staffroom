@@ -66,7 +66,9 @@ export function Hero({
 
       <figure className="hero-lanes" aria-label="An example from the invented class">
         <div className="mini device">
-          <span className="mini-title">On this device</span>
+          <span className="mini-title">
+            On this device <code className="mini-mode">ONLY_ON_DEVICE</code>
+          </span>
           <p className="mini-note">
             <mark className="k-student held">Tanvi</mark>'s family <mark className="k-private held">does not have a smartphone or an internet connection</mark>.
           </p>
@@ -83,7 +85,9 @@ export function Hero({
           <span>the door</span>
         </div>
         <div className="mini cloud">
-          <span className="mini-title">The cloud</span>
+          <span className="mini-title">
+            The cloud <code className="mini-mode">PREFER_IN_CLOUD</code>
+          </span>
           <p className="mini-wire">Lesson: English, describing a place.</p>
           <p className="mini-wire">
             <b>Not sent</b> what the note says about one pupil

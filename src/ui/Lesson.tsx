@@ -23,7 +23,7 @@ import { RECORDED_FIT_LABEL } from '../core/recorded';
 export const MODEL_LABEL = 'Suggested on this device from your private note. Nothing was sent.';
 export const TEACHER_LABEL = 'Written by you';
 /** Said over a line the cloud wrote for a need, placed beside a child here. */
-export const CLOUD_LABEL = 'Written by the cloud for a need you approved. It did not know whose. Placed beside this child on this device.';
+export const CLOUD_LABEL = 'Cloud · matched to this child here';
 /** Said beside a child for a need the cloud was told and wrote nothing for. */
 export const NOTHING_WRITTEN = (letter: string) => `The cloud wrote nothing for Need ${letter}.`;
 /** Said over a line this device wrote about two children together. */
@@ -254,10 +254,27 @@ function PointForm({ child, stages, from, onSave, onCancel }: { child: string; s
 }
 
 /** One thing a child needs in one stage: the words, who wrote them, and the teacher's choice. */
-function PointRow({ point, stages, live, recorded, actions }: { point: Point; stages: readonly string[]; live: boolean; recorded: boolean; actions: PointActions }) {
+function PointRow({
+  point,
+  stages,
+  live,
+  recorded,
+  actions,
+  activeNeed,
+  onHoverNeed,
+}: {
+  point: Point;
+  stages: readonly string[];
+  live: boolean;
+  recorded: boolean;
+  actions: PointActions;
+  activeNeed?: string | null;
+  onHoverNeed?: (letter: string | null) => void;
+}) {
   const [changing, setChanging] = useState(false);
   const offer = useRef<HTMLDivElement>(null);
   const waiting = point.state === 'offered' && !point.seen;
+  const traced = Boolean(point.need && activeNeed === point.need);
 
   // A point counts as shown once it has been on screen.
   useEffect(() => {
@@ -272,9 +289,19 @@ function PointRow({ point, stages, live, recorded, actions }: { point: Point; st
   }, [waiting, point.key]);
 
   return (
-    <li className={`child-hit ${point.state}`}>
+    <li
+      className={['child-hit', point.state, traced ? 'is-traced' : ''].filter(Boolean).join(' ')}
+      onMouseEnter={() => point.need && onHoverNeed?.(point.need)}
+      onMouseLeave={() => point.need && onHoverNeed?.(null)}
+    >
       {!changing && (
-        <div className="adjustment" ref={offer}>
+        <div
+          className="adjustment"
+          ref={offer}
+          tabIndex={point.need ? 0 : undefined}
+          onFocus={() => point.need && onHoverNeed?.(point.need)}
+          onBlur={() => point.need && onHoverNeed?.(null)}
+        >
           {point.nothing ? (
             <p>
               <span className="stage-tag need-tag">Need {point.need}</span>
@@ -347,6 +374,8 @@ export function ChildSections({
   recorded = false,
   hitActions,
   pointActions,
+  activeNeed,
+  onHoverNeed,
 }: {
   notes: readonly ChildNote[];
   /** The names of the stages, in the lesson's order. */
@@ -365,6 +394,8 @@ export function ChildSections({
   recorded?: boolean;
   hitActions: HitActions;
   pointActions: PointActions;
+  activeNeed?: string | null;
+  onHoverNeed?: (letter: string | null) => void;
 }) {
   const [adding, setAdding] = useState<string | null>(null);
   const forClass = hits.filter((h) => !h.childId || !notes.some((n) => n.id === h.childId));
@@ -390,7 +421,7 @@ export function ChildSections({
             {mine.length > 0 && (
               <ul className="hits">
                 {mine.map((p) => (
-                  <PointRow key={p.key} point={p} stages={stages} live={live} recorded={recorded} actions={pointActions} />
+                  <PointRow key={p.key} point={p} stages={stages} live={live} recorded={recorded} actions={pointActions} activeNeed={activeNeed} onHoverNeed={onHoverNeed} />
                 ))}
               </ul>
             )}

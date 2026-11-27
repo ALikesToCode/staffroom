@@ -166,6 +166,8 @@ export function Inspect({
   secondRequest,
   network,
   steps,
+  isReplay = false,
+  replayInfo,
 }: {
   onClose: () => void;
   taskInstruction: string;
@@ -183,6 +185,8 @@ export function Inspect({
   network: NetworkRecord | null;
   /** The model steps of this tab, with when each started and ended. */
   steps: readonly StepMark[];
+  isReplay?: boolean;
+  replayInfo?: { guard: Where; draft: Where; check: Where; draftModel: string; hasMaterials: boolean };
 }) {
   return (
     <Drawer title="Inspect" onClose={onClose}>
@@ -202,7 +206,7 @@ export function Inspect({
       </ul>
       <p className="hint">{policyLine}</p>
 
-      {network && <NetworkSection network={network} steps={steps} />}
+      {network && <NetworkSection network={network} steps={steps} isReplay={isReplay} replayInfo={replayInfo} />}
 
       {secondRequest && (
         <>
@@ -242,7 +246,17 @@ export { WHERE_RAN };
  * the model steps of this tab. Host and path only: no query string, no
  * header, no token. It reads the record while it is open.
  */
-export function NetworkSection({ network, steps }: { network: NetworkRecord; steps: readonly StepMark[] }) {
+export function NetworkSection({
+  network,
+  steps,
+  isReplay = false,
+  replayInfo,
+}: {
+  network: NetworkRecord;
+  steps: readonly StepMark[];
+  isReplay?: boolean;
+  replayInfo?: { guard: Where; draft: Where; check: Where; draftModel: string; hasMaterials: boolean };
+}) {
   const requests = useSyncExternalStore(network.subscribe, network.list, network.list);
   const reports = stepReports(steps, requests);
   return (
@@ -253,7 +267,34 @@ export function NetworkSection({ network, steps }: { network: NetworkRecord; ste
         what this page fetches, not what the browser fetches for itself, such as the on-device model's download. Only the host and the path are shown.
       </p>
       {reports.length === 0 ? (
-        <p className="hint">No model step has run in this tab yet.</p>
+        isReplay ? (
+          <div className="replay-network">
+            <p className="hint">
+              0 model requests were made in this tab during replay: everything shown comes from the recorded run file on this device.
+            </p>
+            {replayInfo && (
+              <ul className="inspect-network">
+                <li>
+                  <b>Guard ({RECORD_WHERE[replayInfo.guard]})</b>: 0 requests to the model host when recorded in Chrome 158
+                </li>
+                <li>
+                  <b>Draft ({RECORD_WHERE[replayInfo.draft]} · {replayInfo.draftModel})</b>: approved text and nameless needs only
+                </li>
+                <li>
+                  <b>Check ({RECORD_WHERE[replayInfo.check]})</b>: 0 requests to the model host when recorded
+                </li>
+                {replayInfo.hasMaterials && (
+                  <li>
+                    <b>Materials ({RECORD_WHERE[replayInfo.draft]} · {replayInfo.draftModel})</b>: signed class plan and nameless needs only
+                  </li>
+                )}
+              </ul>
+            )}
+            <p className="hint">Press <b>Try an invented class</b> on the Desk to inspect live Resource Timing for your own session.</p>
+          </div>
+        ) : (
+          <p className="hint">No model step has run in this tab yet.</p>
+        )
       ) : (
         <ul className="inspect-network">
           {reports.map((r, i) => (
@@ -289,6 +330,97 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
     <main className="page">
       <h2>How it works</h2>
       <p className="lede">Two models, one door. The small one in your browser decides what may leave. The large one in the cloud writes.</p>
+      <section className="arch-diagram" aria-label="Where each step runs">
+        <div className="arch-band arch-device">
+          <div className="arch-band-head">
+            <span>On this device</span>
+            <code>Gemini Nano in Chrome + plain rules</code>
+          </div>
+          <div className="arch-steps">
+            <div className="arch-step">
+              <b>
+                <span className="n">1</span> Guard
+              </b>
+              <p>Finds names, places, and private details; swaps them for stand-ins. Proposes constraints and needs.</p>
+              <code>ONLY_ON_DEVICE</code>
+            </div>
+            <div className="arch-step">
+              <b>
+                <span className="n">2</span> What leaves
+              </b>
+              <p>Teacher reads the exact outgoing text, checks the exit gate, and ticks approval before anything leaves.</p>
+            </div>
+            <div className="arch-step">
+              <b>
+                <span className="n">4</span> Beside each child
+              </b>
+              <p>Need letters map back to the right children locally. A pair rule seats fighting classmates apart.</p>
+            </div>
+            <div className="arch-step">
+              <b>
+                <span className="n">5</span> Check and sign off
+              </b>
+              <p>Each step is checked against confirmed constraints by rule and withheld details by Nano.</p>
+              <code>ONLY_ON_DEVICE</code>
+            </div>
+          </div>
+        </div>
+
+        <div className="arch-bridge">
+          <div className="arch-wire">
+            <b>↓ Sent across the door</b>
+            <p>
+              Class, subject, topic, length; class-level sentences; <code>Need A: cannot stay after the last bell</code> by letter. No name, no
+              reason, no count.
+            </p>
+          </div>
+          <div className="arch-wire">
+            <b>↑ Returned across the door</b>
+            <p>
+              Lesson stages, plus an entry for every letter (<code>Need F | Check | …</code> or <code>already suits</code>). Materials: one sheet
+              written out per need.
+            </p>
+          </div>
+        </div>
+
+        <div className="arch-band arch-cloud">
+          <div className="arch-band-head">
+            <span>In the cloud</span>
+            <code>{policy.cloudModel}</code>
+          </div>
+          <div className="arch-steps cloud-three">
+            <div className="arch-step">
+              <b>
+                <span className="n">3</span> Lesson and materials
+              </b>
+              <p>Writes one class plan, per-need entries without knowing whose they are, board work, sheets, and exit ticket.</p>
+              <code>PREFER_IN_CLOUD</code>
+            </div>
+            <div className="arch-step">
+              <b>App Check</b>
+              <p>reCAPTCHA Enterprise enforced on cloud calls.</p>
+            </div>
+            <div className="arch-step">
+              <b>Firestore</b>
+              <p>Optional count-only receipt (no note, no draft, no names).</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="arch-band arch-device arch-loop">
+          <b>
+            <span className="n">6</span> After the lesson
+          </b>
+          <span>
+            Exit-ticket marks (Got it / Partly / Not yet / Absent) stay on this device and turn into nameless needs by letter for the next lesson.
+          </span>
+        </div>
+
+        <p className="arch-never">
+          <b>Never sent:</b> names · who has which need · why · exit-ticket marks · the teacher's copy. Health details stay withheld by default.
+        </p>
+      </section>
+
       <table className="routes">
         <thead>
           <tr>
@@ -354,6 +486,39 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
           </details>
         </li>
       </ul>
+      <h3>Measured with Gemini Nano</h3>
+      <p className="hint">Measured on 26 and 27 November 2026 in Chrome 158 with Gemini Nano on invented class notes (docs/evals/).</p>
+      <table className="routes">
+        <thead>
+          <tr>
+            <th>Measurement</th>
+            <th>Observed result</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Guard on 12 fresh invented notes (60 private details, 3 runs each)</td>
+            <td>Rules alone missed 9 of 60 per run (0 of 19 hard details in full); rules + Gemini Nano missed 1 of 60 (8 of 19 hard details in full, 10 in part).</td>
+          </tr>
+          <tr>
+            <td>Check on 16 unseen held-out cases (3 runs each)</td>
+            <td>24 of 24 conflicts caught; 4 of 24 harmless runs wrongly flagged as doubts for the teacher to confirm.</td>
+          </tr>
+          <tr>
+            <td>Check + rules on the full sample note (2 runs)</td>
+            <td>18 of 18 conflicts caught; 0 of 42 harmless items flagged as conflicts (3 marked unsure).</td>
+          </tr>
+          <tr>
+            <td>Structured lesson needs (10 lessons, 11 needs each)</td>
+            <td>100% entry coverage (every letter answered with a stage line or “already suits”, 0 missing), vs 4 of 55 with inline instructions.</td>
+          </tr>
+          <tr>
+            <td>Why Nano reads instead of writes</td>
+            <td>Nano learning-need proposals passed checks 3 of 36 times; per-child rewrites repeated note words 17 of 43 times. Rules carry learning needs; Nano guards and checks.</td>
+          </tr>
+        </tbody>
+      </table>
+
       <h3>What is in force now</h3>
       <dl className="facts">
         <dt>On-device model</dt>

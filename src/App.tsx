@@ -47,7 +47,7 @@ import { canFit, FIT_CHILD_FAILED, FIT_FAILED, FIT_LABEL, fitForChild, fitInputF
 import { useInstall, useUpdate } from './ui/pwa';
 import { checkNeed, needIsTyped, needLine, notSentLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
 import { lessonNeedIsTyped, lessonNeedLine, askAgain, entryLine, lessonNeeds, needLabel, needOutcomes, needsAccount, planWithNeeds, proposeLearning, secondAsk, splitVariations, variationLine, withSecondReading, type LessonNeed, type NeedsReading, type Variation } from './core/lessonNeeds';
-import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, RECORDED_SOURCE, replayBanner, sourceOf, replayNext, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
+import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, RECORDED_SOURCE, replayBanner, replayNext, replayPrev, sourceOf, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyAfterRewrite, familyFor } from './core/family';
 import { REPEATS_NOTE, repeatsForChild, repeatsPrivate } from './core/repeats';
 import {
@@ -82,13 +82,13 @@ import { acceptablePoints, acceptedPoints, childFitSaid, childNotes, fitSummary,
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
-import { constraintsOnDevice, mergeProposals, type ConstraintReport } from './ai/constraints';
-import { learningOnDevice, mergeLearning } from './ai/learning';
+import { constraintsOnDevice, mergeLearningIntoConstraints, mergeProposals, type ConstraintReport } from './ai/constraints';
 import { classView, currentTicketKind, withoutClass, withTicketNeeds } from './core/ticket';
 import { materialsReply, materialsText, unnumbered, type Materials } from './core/materials';
 import { recordNetwork, STEPS_MAX, type StepId, type StepMark, type StepWhere } from './core/network';
 import { stageName } from './core/lesson';
 import { MaterialsCard, MaterialsPages, MaterialsWire } from './ui/Materials';
+import { CopyPreview } from './ui/PrintPreview';
 import { ReadAloud } from './ui/ReadAloud';
 import { NOTE_MAX } from './core/text';
 import {
@@ -380,6 +380,10 @@ export function App() {
   const [recorded, setRecorded] = useState<RecordedRun | null>(null);
   /** Set while a recorded run is replayed. Nothing is sent, no model is asked and no receipt is written. */
   const [replay, setReplay] = useState<RecordedRun | null>(null);
+  /** The need letter currently highlighted across THE DOOR (between device child rows and cloud lines). */
+  const [activeNeed, setActiveNeed] = useState<string | null>(null);
+  /** Whether the side-by-side class copy & teacher's copy preview is open on a signed lesson. */
+  const [previewOpen, setPreviewOpen] = useState(false);
   /** The teacher's own note and settings, put aside while a recorded run is on screen. */
   const stash = useRef<{ note: string; classList: string[]; constraints: Constraint[]; task: TaskId; lesson: LessonFields } | null>(null);
   /** ?capture=1: a developer switch that offers the finished run as a file in the form of a recorded run. */
@@ -595,19 +599,8 @@ export function App() {
       }
     }
     setConstraintGaps(fellShort);
-    // For a lesson: what the note says about how a child learns, proposed by rule. None is confirmed and none is told.
-    if (forLesson) proposed = [...proposed, ...proposeLearning(note, vault)].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
-    if (forLesson && where === 'ON_DEVICE') {
-      // The on-device model looks for learning needs too. A failure here blocks nothing: what the rules found stands.
-      try {
-        setProgress('The on-device model is looking for what each child needs in a lesson');
-        const report = await learningOnDevice(note, vault);
-        if (gone()) return;
-        proposed = mergeLearning(proposed, report.needs);
-      } catch {
-        if (gone()) return;
-      }
-    }
+    // For a lesson: what the note says about how a child learns, proposed by rule and deduplicated against model "other" proposals. None is confirmed and none is told.
+    if (forLesson) proposed = mergeLearningIntoConstraints(proposed, proposeLearning(note, vault));
     // A proposal the teacher removed for this class is not proposed again.
     proposed = withoutRemoved(proposed, removed);
     const held = restoreConstraints(note, vault, constraintsNote.current === note ? constraints : [], proposed);
@@ -1558,6 +1551,8 @@ export function App() {
     setCopied(null);
     setStoreFailed(false);
     setForgetAsk(false);
+    setActiveNeed(null);
+    setPreviewOpen(false);
     setError(null);
   };
 
@@ -1600,6 +1595,109 @@ export function App() {
 
   // ---------------------------------------------------------------- the recorded run
 
+  /** Jump cleanly to any screen of the recorded run. Everything shown comes from the file: no model is asked and nothing is sent. */
+  const jumpReplay = (to: ReplayStage, source: RecordedRun | null = replay) => {
+    if (!source) return;
+    setActiveNeed(null);
+    setPreviewOpen(to === 'signed');
+    if (to === 'write') {
+      setEntities([]);
+      setGuardWhere('NOT_RUN');
+      setSent(null);
+      setResult(null);
+      setChecks([]);
+      setFirstChecks([]);
+      setModelChecks([]);
+      setEdits({});
+      setRechecked(false);
+      setKept([]);
+      setCheckWhere('NOT_RUN');
+      setVariations([]);
+      setNeedsReply(null);
+      setMaterials(null);
+      setReplyIssues([]);
+      setReplyRead(false);
+      setStage('write');
+      return;
+    }
+    setEntities(source.entities);
+    setGuardWhere(source.where.guard);
+    if (to === 'review') {
+      setSent(null);
+      setResult(null);
+      setChecks([]);
+      setFirstChecks([]);
+      setModelChecks([]);
+      setEdits({});
+      setRechecked(false);
+      setKept([]);
+      setCheckWhere('NOT_RUN');
+      setVariations([]);
+      setNeedsReply(null);
+      setMaterials(null);
+      setReplyIssues([]);
+      setReplyRead(false);
+      setStage('review');
+      return;
+    }
+    const tokens = [...new Set(source.outgoing.match(TOKEN_RE) ?? [])];
+    const recordedNeeds = source.task === 'lesson' ? source.needs : undefined;
+    const nextSent = {
+      text: source.outgoing,
+      at: source.recordedAt,
+      entities: source.entities,
+      tokens,
+      online: true,
+      policy: source.policy,
+      constraints: source.constraints,
+      needs: recordedNeeds ? outgoingOf(source.note, source.entities, source.constraints, true).needs : sharedNeeds(source.constraints, source.entities),
+      language: source.task === 'lesson' || source.task === 'parents' ? languageOf(source.lesson) : '',
+      lessonNeeds: (recordedNeeds ?? []).map((n) => ({ ...n, constraintIds: [], children: source.needChildren?.[n.letter] ?? [], others: [], issues: [], sensitive: [] })),
+    };
+    setSent(nextSent);
+    setVariations(source.variations ?? []);
+    // What came of each need, as recorded. A file recorded before this was kept has none, and no line accounts for the needs.
+    const outcomes = Object.entries(source.needOutcomes ?? {});
+    setNeedsReply(
+      source.needOutcomes
+        ? { section: '', none: outcomes.filter(([, o]) => o === 'already suits').map(([l]) => l), missing: outcomes.filter(([, o]) => o === 'missing').map(([l]) => l), second: null }
+        : null,
+    );
+    setMaterials(source.materials ? { materials: { ...source.materials, sheet: source.materials.sheet.map(unnumbered), versions: source.materials.versions.map((v) => ({ ...v, items: v.items.map(unnumbered) })), ticket: source.materials.ticket.map((t) => ({ ...t, question: unnumbered(t.question) })), dropped: 0, same: source.materials.same ?? [], missing: source.materials.missing ?? [] }, where: source.where.draft, model: source.draftModel, text: '', issues: [] } : null);
+    setResult({ draft: source.draft, where: source.where.draft, model: source.draftModel });
+    const baseReplyText = [source.draft.title, ...source.draft.items.flatMap((i) => [i.heading, i.text]), ...(source.variations ?? []).map(variationLine)].join('\n');
+    const baseModelChecks = source.checks.map(modelSaid);
+    let nextChecks = source.checks;
+    let nextKept = source.task === 'lesson' ? source.checks.map(() => true) : startsKept(source.checks);
+    let nextEdits: Record<number, string> = {};
+    let nextRechecked = false;
+    let nextReplyText = baseReplyText;
+    if (to === 'signed' && source.rewrites && source.rewrites.length > 0) {
+      // The last screen shows the run as it stood when it was saved: the rewritten items in place of the
+      // cloud's, checked again here by rule. No model is asked.
+      const came = bracketDraft(source.draft, tokens).items;
+      nextEdits = Object.fromEntries(source.rewrites.map((r) => [r.itemIndex, r.text]));
+      const items = came.map((item, i) => (i in nextEdits ? { ...item, text: nextEdits[i] } : item));
+      const told = new Map(nextSent.needs.map((n) => [n.id, n.line]));
+      const after = recheckItems(items, source.constraints, source.entities, tokens, source.note, told, baseModelChecks, items.map((_, i) => i in nextEdits));
+      nextKept = keptAfterRecheck(nextKept, source.checks, after);
+      nextChecks = after;
+      nextRechecked = true;
+      nextReplyText = [source.draft.title, ...items.flatMap((i) => [i.heading, i.text])].join('\n');
+    }
+    setChecks(nextChecks);
+    setFirstChecks(source.checks);
+    setModelChecks(baseModelChecks);
+    setEdits(nextEdits);
+    setRechecked(nextRechecked);
+    setKept(nextKept);
+    setCheckWhere(source.where.check);
+    // The return gate is plain code, so it is run again here on the recorded reply.
+    setReplyIssues(checkReply(nextReplyText, source.entities, tokens, source.outgoing));
+    setReplyRead(false);
+    setStage(to);
+  };
+
   /** Show the recorded run in place of the teacher's note, which is put aside and brought back on leaving. */
   const startReplay = () => {
     if (!recorded || replay) return;
@@ -1611,6 +1709,7 @@ export function App() {
     setConstraints(recorded.constraints);
     setTask(recorded.task);
     setLesson(recorded.lesson ?? NO_LESSON);
+    jumpReplay('write', recorded);
     setView('desk');
   };
 
@@ -1626,65 +1725,14 @@ export function App() {
     setLesson(back?.lesson ?? NO_LESSON);
   };
 
-  /** The next screen of the replay. Everything shown comes from the file: no model is asked and nothing is sent. */
   const nextInReplay = () => {
     if (!replay || !['write', 'review', 'result'].includes(stage)) return;
-    const to = replayNext(stage as ReplayStage);
-    if (to === 'review') {
-      setEntities(replay.entities);
-      setGuardWhere(replay.where.guard);
-    }
-    if (to === 'result') {
-      const tokens = [...new Set(replay.outgoing.match(TOKEN_RE) ?? [])];
-      const recordedNeeds = replay.task === 'lesson' ? replay.needs : undefined;
-      setSent({
-        text: replay.outgoing,
-        at: replay.recordedAt,
-        entities: replay.entities,
-        tokens,
-        online: true,
-        policy: replay.policy,
-        constraints: replay.constraints,
-        needs: recordedNeeds ? outgoingOf(replay.note, replay.entities, replay.constraints, true).needs : sharedNeeds(replay.constraints, replay.entities),
-        language: replay.task === 'lesson' || replay.task === 'parents' ? languageOf(replay.lesson) : '',
-        lessonNeeds: (recordedNeeds ?? []).map((n) => ({ ...n, constraintIds: [], children: replay.needChildren?.[n.letter] ?? [], others: [], issues: [], sensitive: [] })),
-      });
-      setVariations(replay.variations ?? []);
-      // What came of each need, as recorded. A file recorded before this was kept has none, and no line accounts for the needs.
-      const outcomes = Object.entries(replay.needOutcomes ?? {});
-      setNeedsReply(
-        replay.needOutcomes
-          ? { section: '', none: outcomes.filter(([, o]) => o === 'already suits').map(([l]) => l), missing: outcomes.filter(([, o]) => o === 'missing').map(([l]) => l), second: null }
-          : null,
-      );
-      setMaterials(replay.materials ? { materials: { ...replay.materials, sheet: replay.materials.sheet.map(unnumbered), versions: replay.materials.versions.map((v) => ({ ...v, items: v.items.map(unnumbered) })), ticket: replay.materials.ticket.map((t) => ({ ...t, question: unnumbered(t.question) })), dropped: 0, same: replay.materials.same ?? [], missing: replay.materials.missing ?? [] }, where: replay.where.draft, model: replay.draftModel, text: '', issues: [] } : null);
-      setResult({ draft: replay.draft, where: replay.where.draft, model: replay.draftModel });
-      const replyText = [replay.draft.title, ...replay.draft.items.flatMap((i) => [i.heading, i.text]), ...(replay.variations ?? []).map(variationLine)].join('\n');
-      // The return gate is plain code, so it is run again here on the recorded reply.
-      setReplyIssues(checkReply(replyText, replay.entities, tokens, replay.outgoing));
-      setReplyRead(false);
-      setChecks(replay.checks);
-      setFirstChecks(replay.checks);
-      setModelChecks(replay.checks.map(modelSaid));
-      setKept(replay.task === 'lesson' ? replay.checks.map(() => true) : startsKept(replay.checks));
-      setCheckWhere(replay.where.check);
-    }
-    if (to === 'signed' && sent && replay.rewrites && replay.rewrites.length > 0) {
-      // The last screen shows the run as it stood when it was saved: the rewritten items in place of the
-      // cloud's, checked again here by rule. No model is asked.
-      const came = bracketDraft(replay.draft, sent.tokens).items;
-      const nextEdits = Object.fromEntries(replay.rewrites.map((r) => [r.itemIndex, r.text]));
-      const items = came.map((item, i) => (i in nextEdits ? { ...item, text: nextEdits[i] } : item));
-      const told = new Map(sent.needs.map((n) => [n.id, n.line]));
-      const after = recheckItems(items, replay.constraints, replay.entities, sent.tokens, replay.note, told, modelChecks, items.map((_, i) => i in nextEdits));
-      setKept((k) => keptAfterRecheck(k, checks, after));
-      setChecks(after);
-      setEdits(nextEdits);
-      setRechecked(true);
-      const replyText = [replay.draft.title, ...items.flatMap((i) => [i.heading, i.text])].join('\n');
-      setReplyIssues(checkReply(replyText, replay.entities, sent.tokens, replay.outgoing));
-    }
-    setStage(to);
+    jumpReplay(replayNext(stage as ReplayStage));
+  };
+
+  const prevInReplay = () => {
+    if (!replay || !['review', 'result', 'signed'].includes(stage)) return;
+    jumpReplay(replayPrev(stage as ReplayStage));
   };
 
   /** ?capture=1: save the run on screen as a file in the form of a recorded run. */
@@ -1790,9 +1838,9 @@ export function App() {
   const offers = acceptable(hits, shownAdj);
   const pointOffers = acceptablePoints(shownPoints);
   const offered = hits.filter((h) => shownAdj[h.key]?.state === 'offered').length + waitingPoints.length;
-  // Each child by the same name as their section, whichever way the note first wrote it ("Meenal" or "Meenal Joshi").
+  // Each child by the full class-list name for consistent private Teacher's copy output.
   const acceptedNow = inNoteOrder([...acceptedAdjustments(hits, shownAdj), ...acceptedPoints(shownPoints)], notesByChild).map((a) => {
-    const named = a.childId ? notesByChild.find((n) => n.id === a.childId)?.child : undefined;
+    const named = a.childId ? notesByChild.find((n) => n.id === a.childId)?.name : undefined;
     return named && named !== a.child ? { ...a, child: named } : a;
   });
   /** Something the device can still write: a child it has not answered for, or a hit with nothing offered. */
@@ -2125,7 +2173,12 @@ export function App() {
             {variations
               .filter((v) => v.itemIndex === i)
               .map((v, k) => (
-                <li key={k}>
+                <li
+                  key={k}
+                  className={activeNeed === v.need ? 'is-traced' : undefined}
+                  onMouseEnter={() => setActiveNeed(v.need)}
+                  onMouseLeave={() => setActiveNeed(null)}
+                >
                   <b>For Need {v.need}:</b> {v.text}
                   {/* Whose need it is: known on this device only. */}
                   {sent && namesForNeed(v.need, sent.lessonNeeds, notesByChild, sent.entities).map((name) => (
@@ -2410,7 +2463,15 @@ export function App() {
 
       {view === 'desk' && !landing && (
         <main className="desk">
-          <Stepper step={STEP[stage]} lesson={task === 'lesson'} />
+          <Stepper
+            step={STEP[stage]}
+            lesson={task === 'lesson'}
+            onStep={
+              replay
+                ? (i) => jumpReplay(i === 0 ? 'write' : i === 1 ? 'review' : i === 4 ? 'signed' : 'result')
+                : undefined
+            }
+          />
           {error && (
             <p className="alert" role="alert">
               {error}
@@ -2452,22 +2513,6 @@ export function App() {
                 </article>
               )}
 
-              {isLesson && sent && !replyBlocked && (replay ? Boolean(materials) && (stage === 'result' || stage === 'signed') : stage === 'result' || (stage === 'signed' && keptCount > 0)) && (
-                <MaterialsCard
-                  request={materialsRequest}
-                  stopped={materialsStopped}
-                  busy={materialsBusy}
-                  fail={materialsFail}
-                  result={materials?.materials ?? null}
-                  issues={materials?.issues ?? []}
-                  where={materials ? (materials.where === 'IN_CLOUD' ? `Written in the cloud by ${materials.model}` : 'The cloud failed, so the on-device model wrote these') : ''}
-                  namesFor={needNames}
-                  onSend={() => void makeMaterials()}
-                  onPrint={stage === 'signed' && !replay ? printMaterials : undefined}
-                  noPrint={replay ? 'From the recorded run.' : 'Sign off the lesson to print these.'}
-                />
-              )}
-
               {(stage === 'result' || stage === 'signed') && result && draft && (
                 <article className="card result">
                   {sent?.language && (
@@ -2481,10 +2526,10 @@ export function App() {
                       The cloud says this lesson already suits {needsReply.none.map((l) => `Need ${l}${needNames(l).length > 0 ? ` (${needNames(l).join(', ')})` : ''}`).join('; ')}. Read it against what you know.
                     </p>
                   )}
-                  <p className="eyebrow">{restore(draft.title, entities, sent?.tokens)}</p>
-                  <h3 className="summary">
+                  <h3 className="summary">{restore(draft.title, entities, sent?.tokens)}</h3>
+                  <p className="result-sub">
                     {isLesson ? fitSummary(notesByChild.length, replay ? shownPoints.filter((p) => p.source === 'model').length : pointsSuggested, hits, shownPoints) : summaryLine(checks)}
-                  </h3>
+                  </p>
                   {isLesson && fittingLive && (notesByChild.length > 0 || hits.length > 0) && (
                     <div className="actions fit-all">
                       {(toFit || fittingLesson) && (
@@ -2528,6 +2573,8 @@ export function App() {
                       recorded={Boolean(replay)}
                       hitActions={hitActions}
                       pointActions={pointActions}
+                      activeNeed={activeNeed}
+                      onHoverNeed={setActiveNeed}
                     />
                   )}
                   {canFitHere && (fittable.length > 1 || fittingAll) && (
@@ -2557,6 +2604,11 @@ export function App() {
                         {keptCount > 0 && task !== 'parents' && (
                           <button className="primary" onClick={() => copy('all', isLesson ? classPlan : finalText)} disabled={replyBlocked}>
                             {copyLabel('all', isLesson ? 'Copy the class plan' : 'Copy the text')}
+                          </button>
+                        )}
+                        {keptCount > 0 && isLesson && (
+                          <button className="secondary" onClick={() => setPreviewOpen((o) => !o)}>
+                            {previewOpen ? 'Hide copy preview' : 'Preview class & teacher copies'}
                           </button>
                         )}
                         {keptCount > 0 && isLesson && !replyBlocked && <ReadAloud text={classPlan} language={sent?.language ?? ''} />}
@@ -2678,6 +2730,16 @@ export function App() {
                     </div>
                   )}
 
+                  {isLesson && stage === 'signed' && previewOpen && (replay || keptCount > 0) && (
+                    <CopyPreview
+                      title={draft.title}
+                      meta={[lesson.klass, lesson.subject, lesson.topic, `${lessonMinutes(lesson.minutes)} minutes`].filter(Boolean).join(' · ')}
+                      stages={draft.items.filter((_, i) => kept[i] === true)}
+                      variations={variations}
+                      adjustments={acceptedNow}
+                    />
+                  )}
+
                   {capture && !replay && (
                     <div className="actions">
                       <button className="secondary small" onClick={downloadRun}>
@@ -2693,6 +2755,11 @@ export function App() {
                   {replay && stage === 'signed' && (
                     <div className="actions">
                       <span className="stamp">End of the recorded run</span>
+                      {isLesson && (
+                        <button className="secondary small" onClick={() => setPreviewOpen((o) => !o)}>
+                          {previewOpen ? 'Hide copy preview' : 'Preview class & teacher copies'}
+                        </button>
+                      )}
                       <span className="hint">No receipt was written.</span>
                       <button className="secondary small" onClick={leaveReplay}>
                         Leave the recorded run
@@ -2701,6 +2768,24 @@ export function App() {
                   )}
 
                 </article>
+              )}
+
+              {isLesson && sent && !replyBlocked && (replay ? Boolean(materials) && (stage === 'result' || stage === 'signed') : stage === 'result' || (stage === 'signed' && keptCount > 0)) && (
+                <MaterialsCard
+                  request={materialsRequest}
+                  stopped={materialsStopped}
+                  busy={materialsBusy}
+                  fail={materialsFail}
+                  result={materials?.materials ?? null}
+                  issues={materials?.issues ?? []}
+                  where={materials ? (materials.where === 'IN_CLOUD' ? `Written in the cloud by ${materials.model}` : 'The cloud failed, so the on-device model wrote these') : ''}
+                  namesFor={needNames}
+                  onSend={() => void makeMaterials()}
+                  onPrint={stage === 'signed' && !replay ? printMaterials : undefined}
+                  noPrint={replay ? 'From the recorded run.' : 'Sign off the lesson to print these.'}
+                  activeNeed={activeNeed}
+                  onHoverNeed={setActiveNeed}
+                />
               )}
 
               {/* ---- the task, and for a lesson the lines that say what it is */}
@@ -2906,7 +2991,45 @@ export function App() {
                 </div>
               )}
 
-              {/* ---- the constraints: the centre of the review */}
+              {stage === 'guarding' && (
+                <article className="card">
+                  <Spinner label={download !== null ? `Loading the on-device model: ${Math.round(download * 100)}%` : progress} />
+                </article>
+              )}
+
+              {(stage === 'guarding' || stage === 'review') && (
+                <article className="card">
+                  <div className="card-head">
+                    <h3>Your note</h3>
+                    {noteLinks}
+                  </div>
+                  {forgetQuestion}
+                  <p className="demo-notice">Demonstration. Use invented details only, no real pupils' records.</p>
+                  {noteView}
+                  {stage === 'review' && !replay && (
+                    <div className="select-bar" aria-live="polite">
+                      {selection ? (
+                        <>
+                          <span>
+                            Withhold <q>{selection.length > 48 ? `${selection.slice(0, 48)}…` : selection}</q> as
+                          </span>
+                          {(['student', 'adult', 'place', 'contact', 'id', 'private'] as Kind[]).map((k) => (
+                            <button key={k} className="chip-btn" onClick={() => withholdSelection(k)}>
+                              {KIND_LABEL[k]}
+                            </button>
+                          ))}
+                        </>
+                      ) : selectionNote ? (
+                        <span className="caution selection-note">{selectionNote}</span>
+                      ) : (
+                        <span className="hint">Missed something? Select it in your note to withhold it.</span>
+                      )}
+                    </div>
+                  )}
+                </article>
+              )}
+
+              {/* ---- the constraints: below the highlighted note on Review */}
               {stage === 'review' && (
                 <article className="card constraints-card">
                   <div className="card-head">
@@ -2957,45 +3080,9 @@ export function App() {
                     actions={constraintActions}
                     needOf={needOf}
                     lesson={isLesson}
+                    activeNeed={activeNeed}
+                    onHoverNeed={setActiveNeed}
                   />
-                </article>
-              )}
-
-              {(stage === 'guarding' || stage === 'review') && (
-                <article className="card">
-                  <div className="card-head">
-                    <h3>Your note</h3>
-                    {noteLinks}
-                  </div>
-                  {forgetQuestion}
-                  <p className="demo-notice">Demonstration. Use invented details only, no real pupils' records.</p>
-                  {noteView}
-                  {stage === 'review' && !replay && (
-                    <div className="select-bar" aria-live="polite">
-                      {selection ? (
-                        <>
-                          <span>
-                            Withhold <q>{selection.length > 48 ? `${selection.slice(0, 48)}…` : selection}</q> as
-                          </span>
-                          {(['student', 'adult', 'place', 'contact', 'id', 'private'] as Kind[]).map((k) => (
-                            <button key={k} className="chip-btn" onClick={() => withholdSelection(k)}>
-                              {KIND_LABEL[k]}
-                            </button>
-                          ))}
-                        </>
-                      ) : selectionNote ? (
-                        <span className="caution selection-note">{selectionNote}</span>
-                      ) : (
-                        <span className="hint">Missed something? Select it in your note to withhold it.</span>
-                      )}
-                    </div>
-                  )}
-                </article>
-              )}
-
-              {stage === 'guarding' && (
-                <article className="card">
-                  <Spinner label={download !== null ? `Loading the on-device model: ${Math.round(download * 100)}%` : progress} />
                 </article>
               )}
 
@@ -3033,65 +3120,67 @@ export function App() {
               )}
 
               {stage === 'review' && (
-                <article className="card outbox waiting">
-                  <div className="card-head">
-                    <h3>Waiting at the door</h3>
-                    <span className={violations.length === 0 ? 'gate pass' : 'gate stop'}>
-                      {violations.length === 0 ? 'Exit gate: clear' : `Exit gate: ${violations.length} stopped`}
-                    </span>
-                  </div>
-                  {/* What the guard did not cover is said here, beside the gate: before the text, and above the tick. */}
-                  {nothingWithheld && (
-                    <p className="caution strong" role="alert">
-                      {partOfNote
-                        ? 'Nothing is withheld. The sentences of your note below are exactly as you wrote them: every name and every detail in them will be sent to the cloud model.'
-                        : 'Nothing is withheld. The text below is your note exactly as you wrote it: every name and every detail in it will be sent to the cloud model.'}
-                    </p>
-                  )}
-                  {guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0 && (
-                    <p className="caution">
-                      The on-device model could not read {guardGaps.unread.length} of the {noteParts.length} parts of your note (
-                      {guardGaps.unread.map((i) => `part ${i + 1}`).join(', ')}). They are listed on the device side, under what is withheld.
-                      Check {guardGaps.unread.length === 1 ? 'it' : 'them'} yourself before you approve.
-                    </p>
-                  )}
-                  {guardGaps.dropped > 0 && (
-                    <p className="caution">
-                      The on-device model reported {guardGaps.dropped} {guardGaps.dropped === 1 ? 'item' : 'items'} (a name, a place or a
-                      private detail) that could not be matched to the words of your note, so {guardGaps.dropped === 1 ? 'it was' : 'they were'}{' '}
-                      not withheld. Look for names and private details yourself before you approve.
-                    </p>
-                  )}
-                  {guardGaps.partial > 0 && (
-                    <p className="caution">
-                      {guardGaps.partial} private {guardGaps.partial === 1 ? 'detail was' : 'details were'} matched to your note only in
-                      part. The matching words were withheld. Read the text around each private detail and mark what is left.
-                    </p>
-                  )}
-                  <p className="hint">
-                    {replay ? 'The exact text that was sent on the day' : 'The exact text that will be sent'}, for: {currentTask.label.toLowerCase()}.
-                  </p>
-                  <pre className="wire">
-                    <CloudText text={outgoing} />
-                  </pre>
-                  {!replay && (going.notSent ?? 0) > 0 && <p className="hint">{notSentLine(going.notSent!)}</p>}
-                  {violations.length > 0 && (
-                    <ul className="stops">
-                      {violations.map((v, i) => (
-                        <li key={i}>
-                          <b>{v.what}</b> {v.why}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {nothingWithheld && (
+                <div className="cloud-sticky">
+                  <article className="card outbox waiting">
+                    <div className="card-head">
+                      <h3>Waiting at the door</h3>
+                      <span className={violations.length === 0 ? 'gate pass' : 'gate stop'}>
+                        {violations.length === 0 ? 'Exit gate: clear' : `Exit gate: ${violations.length} stopped`}
+                      </span>
+                    </div>
+                    {/* What the guard did not cover is said here, beside the gate: before the text, and above the tick. */}
+                    {nothingWithheld && (
+                      <p className="caution strong" role="alert">
+                        {partOfNote
+                          ? 'Nothing is withheld. The sentences of your note below are exactly as you wrote them: every name and every detail in them will be sent to the cloud model.'
+                          : 'Nothing is withheld. The text below is your note exactly as you wrote it: every name and every detail in it will be sent to the cloud model.'}
+                      </p>
+                    )}
+                    {guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0 && (
+                      <p className="caution">
+                        The on-device model could not read {guardGaps.unread.length} of the {noteParts.length} parts of your note (
+                        {guardGaps.unread.map((i) => `part ${i + 1}`).join(', ')}). They are listed on the device side, under what is withheld.
+                        Check {guardGaps.unread.length === 1 ? 'it' : 'them'} yourself before you approve.
+                      </p>
+                    )}
+                    {guardGaps.dropped > 0 && (
+                      <p className="caution">
+                        The on-device model reported {guardGaps.dropped} {guardGaps.dropped === 1 ? 'item' : 'items'} (a name, a place or a
+                        private detail) that could not be matched to the words of your note, so {guardGaps.dropped === 1 ? 'it was' : 'they were'}{' '}
+                        not withheld. Look for names and private details yourself before you approve.
+                      </p>
+                    )}
+                    {guardGaps.partial > 0 && (
+                      <p className="caution">
+                        {guardGaps.partial} private {guardGaps.partial === 1 ? 'detail was' : 'details were'} matched to your note only in
+                        part. The matching words were withheld. Read the text around each private detail and mark what is left.
+                      </p>
+                    )}
                     <p className="hint">
-                      {partOfNote
-                        ? 'A receipt holds the text you approved. Here that is the sentences of your note that are sent, as written.'
-                        : 'A receipt holds the text you approved. Here that is your whole note, as written.'}
+                      {replay ? 'The exact text that was sent on the day' : 'The exact text that will be sent'}, for: {currentTask.label.toLowerCase()}.
                     </p>
-                  )}
-                </article>
+                    <pre className="wire">
+                      <CloudText text={outgoing} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
+                    </pre>
+                    {!replay && (going.notSent ?? 0) > 0 && <p className="hint">{notSentLine(going.notSent!)}</p>}
+                    {violations.length > 0 && (
+                      <ul className="stops">
+                        {violations.map((v, i) => (
+                          <li key={i}>
+                            <b>{v.what}</b> {v.why}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {nothingWithheld && (
+                      <p className="hint">
+                        {partOfNote
+                          ? 'A receipt holds the text you approved. Here that is the sentences of your note that are sent, as written.'
+                          : 'A receipt holds the text you approved. Here that is your whole note, as written.'}
+                      </p>
+                    )}
+                  </article>
+                </div>
               )}
 
               {stage === 'drafting' && (
@@ -3108,84 +3197,90 @@ export function App() {
                 </article>
               )}
 
-              {result && stage !== 'review' && stage !== 'drafting' && (
-                <article className="card">
-                  <div className="card-head">
-                    <h3>{result.where === 'IN_CLOUD' ? 'What came back' : 'Written on the device'}</h3>
-                    <span className="hint">{result.model}</span>
-                  </div>
-                  {result.where === 'ON_DEVICE' && (
-                    <>
-                      <p className="caution">The cloud draft failed, so the on-device model wrote this draft from the same approved text.</p>
-                      {/* A separate fact. The app does not know why the cloud draft failed. */}
-                      <p className="hint">Browser reported when you approved: {sent?.online ? 'online' : 'offline'}.</p>
-                    </>
-                  )}
-                  <div className="wire reply">
-                    <strong>
-                      <CloudText text={result.draft.title} />
-                    </strong>
-                    {result.draft.items.map((item, i) => (
-                      <p key={i}>
-                        <b>
-                          <CloudText text={item.heading} />
-                        </b>
-                        <br />
-                        <CloudText text={item.text} />
-                      </p>
-                    ))}
-                    {sectionLines.length > 0 && (
-                      <p>
-                        <b>For each need</b>
-                        {sectionLines.map((l, k) => (
-                          <span key={k}>
+              {((result && stage !== 'review' && stage !== 'drafting') || materials || (sent && stage !== 'review')) && (
+                <div className="cloud-sticky">
+                  {result && stage !== 'review' && stage !== 'drafting' && (
+                    <article className="card">
+                      <div className="card-head">
+                        <h3>{result.where === 'IN_CLOUD' ? 'What came back' : 'Written on the device'}</h3>
+                        <span className="hint">{result.model}</span>
+                      </div>
+                      {result.where === 'ON_DEVICE' && (
+                        <>
+                          <p className="caution">The cloud draft failed, so the on-device model wrote this draft from the same approved text.</p>
+                          {/* A separate fact. The app does not know why the cloud draft failed. */}
+                          <p className="hint">Browser reported when you approved: {sent?.online ? 'online' : 'offline'}.</p>
+                        </>
+                      )}
+                      <div className="wire reply">
+                        <strong>
+                          <CloudText text={result.draft.title} />
+                        </strong>
+                        {result.draft.items.map((item, i) => (
+                          <p key={i}>
+                            <b>
+                              <CloudText text={item.heading} />
+                            </b>
                             <br />
-                            <CloudText text={l} />
-                          </span>
+                            <CloudText text={item.text} />
+                          </p>
                         ))}
+                        {sectionLines.length > 0 && (
+                          <p>
+                            <b>For each need</b>
+                            {sectionLines.map((l, k) => (
+                              <span key={k}>
+                                <br />
+                                <CloudText text={l} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
+                              </span>
+                            ))}
+                          </p>
+                        )}
+                      </div>
+                      <p className="hint">
+                        {variations.length > 0
+                          ? 'The cloud wrote for each need by its letter. It was not told whose a need is, or how many pupils have it.'
+                          : 'The reply uses the stand-ins. Names are put back on your side of the door.'}
                       </p>
-                    )}
-                  </div>
-                  <p className="hint">
-                    {variations.length > 0
-                      ? 'The cloud wrote for each need by its letter. It was not told whose a need is, or how many pupils have it.'
-                      : 'The reply uses the stand-ins. Names are put back on your side of the door.'}
-                  </p>
-                  {variationsDropped > 0 && (
-                    <p className="hint">
-                      {variationsDropped} {variationsDropped === 1 ? 'entry was' : 'entries were'} for a need you did not tell the cloud or a stage that is not in the lesson, or had no words, so{' '}
-                      {variationsDropped === 1 ? 'it is' : 'they are'} left out.
-                    </p>
+                      {variationsDropped > 0 && (
+                        <p className="hint">
+                          {variationsDropped} {variationsDropped === 1 ? 'entry was' : 'entries were'} for a need you did not tell the cloud or a stage that is not in the lesson, or had no words, so{' '}
+                          {variationsDropped === 1 ? 'it is' : 'they are'} left out.
+                        </p>
+                      )}
+                      {needsReply?.second && <p className="hint">The cloud was asked once more for the needs its first reply left out. Inspect shows the exact text of that second request.</p>}
+                    </article>
                   )}
-                  {needsReply?.second && <p className="hint">The cloud was asked once more for the needs its first reply left out. Inspect shows the exact text of that second request.</p>}
-                </article>
-              )}
 
-              {materials && (
-                <article className="card">
-                  <div className="card-head">
-                    <h3>{materials.where === 'IN_CLOUD' ? 'Materials: what came back' : 'Materials: written on the device'}</h3>
-                    <span className="hint">{materials.model}</span>
-                  </div>
-                  <MaterialsWire result={materials.materials} />
-                  <p className="hint">The cloud was sent the signed class plan and the needs by letter. It was not told whose a need is.</p>
-                  <details className="fold">
-                    <summary>The text that was sent for the materials · {materials.text.length.toLocaleString()} characters</summary>
-                    <pre className="wire">{materials.text}</pre>
-                  </details>
-                </article>
-              )}
+                  {materials && (
+                    <article className="card">
+                      <div className="card-head">
+                        <h3>{materials.where === 'IN_CLOUD' ? 'Materials: what came back' : 'Materials: written on the device'}</h3>
+                        <span className="hint">{materials.model}</span>
+                      </div>
+                      <MaterialsWire result={materials.materials} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
+                      <p className="hint">The cloud was sent the signed class plan and the needs by letter. It was not told whose a need is.</p>
+                      <details className="fold">
+                        <summary>The text that was sent for the materials · {materials.text.length.toLocaleString()} characters</summary>
+                        <pre className="wire">
+                          <CloudText text={materials.text} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
+                        </pre>
+                      </details>
+                    </article>
+                  )}
 
-              {sent && stage !== 'review' && (
-                <details className="card fold outbox" open={stage === 'drafting' || undefined}>
-                  {/* "Sent" only once the cloud has answered. Until then, and when it never did, the app cannot say the text arrived. */}
-                  <summary>
-                    {result?.where === 'IN_CLOUD' ? 'Sent' : 'Approved by you'} at {time(sent.at)} · {sent.text.length.toLocaleString()} characters
-                  </summary>
-                  <pre className="wire">
-                    <CloudText text={sent.text} />
-                  </pre>
-                </details>
+                  {sent && stage !== 'review' && (
+                    <details className="card fold outbox" open={stage === 'drafting' || undefined}>
+                      {/* "Sent" only once the cloud has answered. Until then, and when it never did, the app cannot say the text arrived. */}
+                      <summary>
+                        {result?.where === 'IN_CLOUD' ? 'Sent' : 'Approved by you'} at {time(sent.at)} · {sent.text.length.toLocaleString()} characters
+                      </summary>
+                      <pre className="wire">
+                        <CloudText text={sent.text} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
+                      </pre>
+                    </details>
+                  )}
+                </div>
               )}
             </section>
           </div>
@@ -3196,6 +3291,9 @@ export function App() {
               {replay ? (
                 <>
                   <span className="hint">Recorded run: this is the text that was approved and sent on the day. Nothing is sent now.</span>
+                  <button className="secondary" onClick={prevInReplay}>
+                    Back
+                  </button>
                   <button className="primary send" onClick={nextInReplay}>
                     Next
                   </button>
@@ -3242,6 +3340,9 @@ export function App() {
               {replay ? (
                 <>
                   <span className="hint">Recorded run: in a live run you keep or strike each item here, then sign off. Nothing is signed off now.</span>
+                  <button className="secondary" onClick={prevInReplay}>
+                    Back
+                  </button>
                   <button className="primary" onClick={nextInReplay}>
                     Next
                   </button>
@@ -3269,6 +3370,16 @@ export function App() {
                         ? 'Every item is struck. Signing off now rejects the whole draft.'
                         : `${keptCount} kept, ${struckCount} struck.`}
                   </span>
+                  {isLesson && offered > 1 && (
+                    <button
+                      className="secondary"
+                      disabled={signing || !offers.allSeen || !pointOffers.allSeen}
+                      title={!offers.allSeen || !pointOffers.allSeen ? 'Scroll to each suggestion first so none is accepted unseen.' : undefined}
+                      onClick={acceptAll}
+                    >
+                      Accept all {offered}
+                    </button>
+                  )}
                   {toKeep > 0 && !isLesson && (
                     <button className="secondary" disabled={signing} onClick={() => !signingRef.current && setKept((k) => keepNoConflict(k, checks))}>
                       Keep the {toKeep} {toKeep === 1 ? 'item' : 'items'} with no conflict found
@@ -3279,6 +3390,18 @@ export function App() {
                   </button>
                 </>
               )}
+            </div>
+          )}
+
+          {stage === 'signed' && replay && (
+            <div className="action-bar device-bar">
+              <span className="hint">Recorded run: end of the replay. Nothing was sent or stored.</span>
+              <button className="secondary" onClick={prevInReplay}>
+                Back
+              </button>
+              <button className="primary" onClick={leaveReplay}>
+                Leave the recorded run
+              </button>
             </div>
           )}
         </main>
@@ -3303,6 +3426,18 @@ export function App() {
           secondRequest={needsReply?.second ?? undefined}
           network={network}
           steps={steps}
+          isReplay={Boolean(replay)}
+          replayInfo={
+            replay
+              ? {
+                  guard: replay.where.guard,
+                  draft: replay.where.draft,
+                  check: replay.where.check,
+                  draftModel: replay.draftModel,
+                  hasMaterials: Boolean(replay.materials),
+                }
+              : undefined
+          }
           policyLine={
             replay
               ? `Policy on the day: ${replay.policy.from}. Drafting model: ${replay.policy.cloudModel}.`
