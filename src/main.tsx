@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { App } from './App';
 import { announceUpdate } from './ui/pwa';
+import './fonts.css';
 import './styles.css';
 
 // The service worker keeps the page and its assets, so the app can start offline. A newer version is

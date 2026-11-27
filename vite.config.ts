@@ -30,8 +30,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // The app shell, eval.html and its script, the icons, and the recorded run when there is one.
-        globPatterns: ['**/*.{js,css,html,svg,png,json}'],
+        // The app shell, eval.html and its script, the icons, self-hosted fonts, and the recorded run when there is one.
+        globPatterns: ['**/*.{js,css,html,svg,png,json,woff2}'],
         navigateFallback: '/index.html',
         // eval.html is its own page, and Firebase's reserved paths are never the app.
         navigateFallbackDenylist: [/^\/eval\.html/, /^\/__/],
