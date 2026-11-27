@@ -7,6 +7,7 @@ import { NEED_LINE_MAX, NEED_OUTCOMES, type NeedOutcome, type Variation } from '
 import { SUGGESTION_MAX } from './recheck';
 import { currentTicketKind } from './ticket';
 import { ADJUSTMENT_MAX, FIELD_MAX, LANGUAGE_MAX, LAST_TIME_MAX, type AdjustmentSource, type LessonFields } from './lesson';
+import type { StepId, StepWhere } from './network';
 
 // A recorded run: one real run on the sample class, captured in Chrome with the on-device model, kept as a
 // file beside the app. A browser without the on-device model can replay it, read-only. Nothing in a replay
@@ -61,6 +62,15 @@ export const sourceOf = (s: RecordedSource): AdjustmentSource => (s === 'on-devi
 /** The most characters of a rewritten item that a recorded run holds. */
 const REWRITE_MAX = 4000;
 
+/** Scrubbed per-step timing and browser Resource Timing request counts captured at record time. */
+export interface RecordedNetworkStep {
+  step: StepId;
+  where: StepWhere;
+  durationMs: number;
+  modelRequests: number;
+  otherRequests: number;
+}
+
 export interface RecordedRun {
   /** When the run was made, ISO-8601. */
   recordedAt: string;
@@ -79,8 +89,10 @@ export interface RecordedRun {
   draft: Draft;
   /** The verdict for each item of the draft, in order. */
   checks: ItemCheck[];
-  where: { scan?: Where; guard: Where; draft: Where; check: Where };
+  where: { scan?: Where; guard: Where; draft: Where; check: Where; fit?: Where; label?: Where; materials?: Where };
   draftModel: string;
+  /** Scrubbed Resource Timing measurements per step captured when the run was recorded. Absent in older captures. */
+  networkSteps?: RecordedNetworkStep[];
   /** The items the teacher had rewritten when the run was saved, a suggestion saved as it was or changed. Absent: none. */
   rewrites?: RecordedRewrite[];
   /** The suggestions the on-device model made before the run was saved. Shown read-only in a replay. Absent: none. */
@@ -168,6 +180,19 @@ const perItem = <T extends { itemIndex: number }>(v: unknown, count: number, eac
 
 const isItem = (v: unknown): v is { heading: string; text: string } => obj(v) && str(v.heading) && str(v.text);
 
+const STEP_IDS: StepId[] = ['scan', 'guard', 'draft', 'check', 'fit', 'label', 'materials'];
+const STEP_WHERES: StepWhere[] = ['ON_DEVICE', 'IN_CLOUD', 'RULES_ONLY', 'NONE'];
+
+const isNetworkStep = (v: unknown): v is RecordedNetworkStep =>
+  obj(v) &&
+  STEP_IDS.includes(v.step as StepId) &&
+  STEP_WHERES.includes(v.where as StepWhere) &&
+  typeof v.durationMs === 'number' &&
+  Number.isFinite(v.durationMs) &&
+  v.durationMs >= 0 &&
+  num(v.modelRequests) &&
+  num(v.otherRequests);
+
 /**
  * Read a recorded run from the file. Returns undefined for anything that
  * is not one in the present form, so a broken or half-written file offers
@@ -190,10 +215,15 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
   if (
     !obj(where) ||
     ![where.guard, where.draft, where.check].every((w) => WHERES.includes(w as Where)) ||
-    !optional(where.scan, (w) => WHERES.includes(w as Where))
+    !optional(where.scan, (w) => WHERES.includes(w as Where)) ||
+    !optional(where.fit, (w) => WHERES.includes(w as Where)) ||
+    !optional(where.label, (w) => WHERES.includes(w as Where)) ||
+    !optional(where.materials, (w) => WHERES.includes(w as Where))
   ) {
     return undefined;
   }
+  const networkSteps = d.networkSteps;
+  if (networkSteps !== undefined && !list(networkSteps, isNetworkStep)) return undefined;
   const count = draft.items.length;
   const rewrites = d.rewrites;
   if (rewrites !== undefined && !perItem<RecordedRewrite>(rewrites, count, (x) => str(x.text) && x.text.trim().length > 0 && x.text.length <= REWRITE_MAX)) return undefined;
@@ -310,8 +340,12 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
       guard: where.guard as Where,
       draft: where.draft as Where,
       check: where.check as Where,
+      ...(where.fit !== undefined ? { fit: where.fit as Where } : {}),
+      ...(where.label !== undefined ? { label: where.label as Where } : {}),
+      ...(where.materials !== undefined ? { materials: where.materials as Where } : {}),
     },
     draftModel: d.draftModel,
+    ...(networkSteps ? { networkSteps: (networkSteps as RecordedNetworkStep[]).map((s) => ({ step: s.step, where: s.where, durationMs: s.durationMs, modelRequests: s.modelRequests, otherRequests: s.otherRequests })) } : {}),
     ...(rewrites ? { rewrites: rewrites.map((r) => ({ itemIndex: r.itemIndex, text: r.text })) } : {}),
     ...(fits ? { fits: fits.map((f) => ({ itemIndex: f.itemIndex, stepIndex: f.stepIndex, suggestion: f.suggestion })) } : {}),
     ...(obj(lesson)
@@ -366,7 +400,7 @@ export function browserName(userAgent: string): string {
  * An empty list of either is left out.
  */
 export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now: Date, userAgent: string): RecordedRun {
-  const { rewrites, fits, adjustments, needs, needChildren, variations, needOutcomes, materials, where, ...rest } = run;
+  const { rewrites, fits, adjustments, needs, needChildren, variations, needOutcomes, materials, where, networkSteps, ...rest } = run;
   return {
     recordedAt: now.toISOString(),
     chrome: browserName(userAgent),
@@ -375,8 +409,12 @@ export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now:
       guard: where.guard,
       draft: where.draft,
       check: where.check,
+      ...(where.fit ? { fit: where.fit } : {}),
+      ...(where.label ? { label: where.label } : {}),
+      ...(where.materials ? { materials: where.materials } : {}),
     },
     ...rest,
+    ...(networkSteps && networkSteps.length > 0 ? { networkSteps } : {}),
     ...(rewrites && rewrites.length > 0 ? { rewrites } : {}),
     ...(fits && fits.length > 0 ? { fits } : {}),
     ...(adjustments && adjustments.length > 0 ? { adjustments } : {}),

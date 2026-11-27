@@ -163,7 +163,7 @@ export function classSentences(redacted: string, entities: Entity[]): { text: st
       .map((line) => {
         const kept: string[] = [];
         for (const s of sentences(line)) {
-          const whole = s.text + (/^[.!?]*/.exec(line.slice(s.end))?.[0] ?? '');
+          const whole = s.text + (/^[.!?।॥]*/.exec(line.slice(s.end))?.[0] ?? '');
           if (aboutOne(s.text)) notSent++;
           else kept.push(whole);
         }

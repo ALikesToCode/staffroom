@@ -85,7 +85,7 @@ import { extractScannedClassList, prepareNotebookImage, transcribeNotebookOnDevi
 import { mergeLearningIntoConstraints, mergeProposals, type ConstraintReport } from './ai/constraints';
 import { classView, currentTicketKind, withoutClass, withTicketNeeds } from './core/ticket';
 import { materialsReply, materialsText, unnumbered, type Materials } from './core/materials';
-import { recordNetwork, STEPS_MAX, type StepId, type StepMark, type StepWhere } from './core/network';
+import { MODEL_HOST, recordNetwork, STEPS_MAX, type StepId, type StepMark, type StepWhere } from './core/network';
 import { stageName } from './core/lesson';
 import { MaterialsCard, MaterialsPages, MaterialsWire } from './ui/Materials';
 import { CopyPreview } from './ui/PrintPreview';
@@ -331,7 +331,11 @@ export function App() {
   const [needsReply, setNeedsReply] = useState<{ section: string; none: string[]; missing: string[]; second: string | null } | null>(null);
   /** When each model step of this tab started and ended, on the clock of the browser's record of requests. Shown under Inspect. */
   const [steps, setSteps] = useState<StepMark[]>([]);
-  const addStep = (m: StepMark) => setSteps((s) => [...s, m].slice(-STEPS_MAX));
+  const stepsRef = useRef<StepMark[]>([]);
+  const addStep = (m: StepMark) => {
+    stepsRef.current = [...stepsRef.current, m].slice(-STEPS_MAX);
+    setSteps(stepsRef.current);
+  };
   /** Run one model step and keep when it started and ended. What it returns or throws is passed on as it is. */
   const timed = async <T,>(step: StepId, run: () => Promise<T>, whereOf?: (v: T) => StepWhere): Promise<T> => {
     const start = performance.now();
@@ -349,8 +353,8 @@ export function App() {
   const [materialsBusy, setMaterialsBusy] = useState(false);
   const [materialsStreamChars, setMaterialsStreamChars] = useState(0);
   const [materialsFail, setMaterialsFail] = useState<string | null>(null);
-  /** What the print sheet holds now: the signed text, or the materials with or without names. */
-  const [printWhat, setPrintWhat] = useState<'run' | 'materials' | 'materials-no-names'>('run');
+  /** What the print sheet holds now: default/both, class-only, teacher-only, or materials with/without names. */
+  const [printWhat, setPrintWhat] = useState<'run' | 'class-only' | 'teacher-only' | 'materials' | 'materials-no-names'>('run');
   /** The receipt of the run on screen, once signed. */
   const signedId = useRef<string | null>(null);
   /** The lessons signed off on this device. */
@@ -453,6 +457,9 @@ export function App() {
   useEffect(() => {
     if (!replay) storeLessons(lessons, keepClass);
   }, [lessons, keepClass, replay]);
+  useEffect(() => {
+    if (!replay) storeReceipts(receipts, keepClass);
+  }, [receipts, keepClass, replay]);
   useEffect(() => {
     if (!replay) write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints, removed }, constraints.length === 0 && removed.length === 0);
   }, [constraints, replay, removed]);
@@ -560,11 +567,13 @@ export function App() {
         return;
       }
       const prepared = await prepareNotebookImage(blob);
+      const scanStart = performance.now();
       const scanned = await timed(
         'scan',
         () => transcribeNotebookOnDevice(prepared),
         () => 'ON_DEVICE',
       );
+      const scanEnd = performance.now();
       if (runRef.current !== run) return;
       setScanWhere('ON_DEVICE');
       setNote((prev) => {
@@ -579,9 +588,15 @@ export function App() {
       }
       if (isSample && !lesson.subject && !lesson.topic) setLesson(SAMPLE_LESSON);
       setComposing(true);
+      const modelHits = network
+        ? network.list().filter((r) => r.host === MODEL_HOST && r.at >= scanStart && r.at <= scanEnd).length
+        : null;
       setScanPreview({
         url: prepared.previewUrl,
-        summary: `Transcribed ${scanned.text.length} chars locally on Gemini Nano · 0 cloud requests`,
+        summary:
+          modelHits !== null
+            ? `Transcribed ${scanned.text.length} chars locally on Gemini Nano · ${modelHits} model-host ${modelHits === 1 ? 'request' : 'requests'} recorded`
+            : `Transcribed ${scanned.text.length} chars locally on Gemini Nano`,
       });
     } catch (e) {
       if (runRef.current === run) setScanError(`Could not read that notebook image on this device: ${message(e)}`);
@@ -1093,14 +1108,14 @@ export function App() {
     setKept(signed);
     setReceipts(next);
     // The browser can refuse to store (full, or switched off). Say so; the sign-off and the record go on.
-    setStoreFailed(!storeReceipts(next));
+    setStoreFailed(!storeReceipts(next, keepClass));
     if (task === 'lesson' && draft) {
       // The signed lesson is kept on this device only: it has the adjustments in it, with names.
       const stages = draft.items.filter((_, i) => signed[i] === true);
       const saved = savedLesson(receipt.id, receipt.createdAt, lesson, draft.title, stages, inNoteOrder([...acceptedAdjustments(hits, adj), ...acceptedPoints(activePoints)], notesByChild), liveConstraints, {
         needs: sent.lessonNeeds.map((n) => ({ letter: n.letter, line: n.line, children: n.children })),
         // A saved lesson counts the kept stages, so a line for a struck stage is not kept.
-        ...(materials ? { materials: savedMaterials(materials.materials) } : {}),
+        ...(materials ? { materials: savedMaterials(materials.materials, materials.issues) } : {}),
         variations: variations.filter((v) => signed[v.itemIndex] === true).map((v) => ({ ...v, itemIndex: signed.slice(0, v.itemIndex).filter((k) => k === true).length })),
       });
       setLessons((l) => {
@@ -1526,7 +1541,15 @@ export function App() {
       : classPlanText({ title: draft.title, items: keptIndexes.map((i) => draft.items[i]) })
     : '';
 
-  const savedMaterials = (m: Materials) => ({ board: m.board, sheet: m.sheet, versions: m.versions, ticket: m.ticket, same: m.same });
+  const savedMaterials = (m: Materials, issues: readonly Violation[] = []) => ({
+    board: m.board,
+    sheet: m.sheet,
+    versions: m.versions,
+    ticket: m.ticket,
+    same: m.same,
+    ...(m.missing.length > 0 ? { missing: m.missing } : {}),
+    ...(issues.length > 0 ? { issues: issues.map((v) => ({ what: v.what, why: v.why })) } : {}),
+  });
 
   /** The request for materials, exactly as it would be sent: the signed class plan and the needs by letter. */
   const materialsRequest = task === 'lesson' && sent && (stage === 'signed' || stage === 'result') && classPlan ? materialsText(classPlan, sent.lessonNeeds, sent.language) : '';
@@ -1559,14 +1582,14 @@ export function App() {
         (g) => (g.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'),
       );
       if (runRef.current !== run) return;
-      setMaterials({ ...got, text, issues: checkReply(materialsReply(got.materials), sent.entities, sent.tokens, text) });
-      // Counted on the receipt in this browser. Nothing of it is in the record that may leave the device.
-      const id = signedId.current;
       // Kept with the saved lesson, if it is signed already. Letters only: no name is in them.
-      if (id) changeLessons(lessonsRef.current.map((l) => (l.id === id ? { ...l, materials: savedMaterials(got.materials) } : l)));
+      const id = signedId.current;
+      const issues = checkReply(materialsReply(got.materials), sent.entities, sent.tokens, text);
+      if (id) changeLessons(lessonsRef.current.map((l) => (l.id === id ? { ...l, materials: savedMaterials(got.materials, issues) } : l)));
+      setMaterials({ ...got, text, issues });
       setReceipts((rs) => {
         const next = rs.map((r) => (r.id === id && r.lesson ? { ...r, lesson: { ...r.lesson, materialsVersions: got.materials.versions.length } } : r));
-        storeReceipts(next);
+        storeReceipts(next, keepClass);
         return next;
       });
     } catch {
@@ -1579,13 +1602,17 @@ export function App() {
     }
   };
 
-  const printMaterials = (withNames: boolean) => {
-    setPrintWhat(withNames ? 'materials' : 'materials-no-names');
+  const printSheet = (kind: typeof printWhat) => {
+    setPrintWhat(kind);
     // The sheet is drawn first, then printed; after printing it holds the signed text again.
     setTimeout(() => {
       window.print();
       setPrintWhat('run');
     }, 80);
+  };
+
+  const printMaterials = (withNames: boolean) => {
+    printSheet(withNames ? 'materials' : 'materials-no-names');
   };
 
   /** The confirmed needs with a line for a lesson that are not told yet, and the button that tells them all. */
@@ -1623,7 +1650,7 @@ export function App() {
     setStage('write');
     setEntities([]);
     setGuardWhere('NOT_RUN');
-    setScanWhere('NOT_RUN');
+    if (!stepsRef.current.some((s) => s.step === 'scan')) setScanWhere('NOT_RUN');
     setNanoDiff(null);
     setStreamPreview('');
     setGuardGaps(NO_GAPS);
@@ -1803,7 +1830,7 @@ export function App() {
         ? { section: '', none: outcomes.filter(([, o]) => o === 'already suits').map(([l]) => l), missing: outcomes.filter(([, o]) => o === 'missing').map(([l]) => l), second: null }
         : null,
     );
-    setMaterials(source.materials ? { materials: { ...source.materials, sheet: source.materials.sheet.map(unnumbered), versions: source.materials.versions.map((v) => ({ ...v, items: v.items.map(unnumbered) })), ticket: source.materials.ticket.map((t) => ({ ...t, question: unnumbered(t.question) })), dropped: 0, same: source.materials.same ?? [], missing: source.materials.missing ?? [] }, where: source.where.draft, model: source.draftModel, text: '', issues: [] } : null);
+    setMaterials(source.materials ? { materials: { ...source.materials, sheet: source.materials.sheet.map(unnumbered), versions: source.materials.versions.map((v) => ({ ...v, items: v.items.map(unnumbered) })), ticket: source.materials.ticket.map((t) => ({ ...t, question: unnumbered(t.question) })), dropped: 0, same: source.materials.same ?? [], missing: source.materials.missing ?? [] }, where: source.where.materials ?? source.where.draft, model: source.draftModel, text: '', issues: [] } : null);
     setResult({ draft: source.draft, where: source.where.draft, model: source.draftModel });
     const baseReplyText = [source.draft.title, ...source.draft.items.flatMap((i) => [i.heading, i.text]), ...(source.variations ?? []).map(variationLine)].join('\n');
     const baseModelChecks = source.checks.map(modelSaid);
@@ -1890,8 +1917,27 @@ export function App() {
         draft: result.draft,
         // The reply and the verdicts as they first came. What was rewritten or suggested since goes beside them, as it stands now.
         checks: firstChecks,
-        where: { ...(scanWhere === 'ON_DEVICE' ? { scan: 'ON_DEVICE' } : {}), guard: guardWhere, draft: result.where, check: checkWhere },
+        where: {
+          ...(scanWhere === 'ON_DEVICE' ? { scan: 'ON_DEVICE' } : {}),
+          guard: guardWhere,
+          draft: result.where,
+          check: checkWhere,
+          ...(fitWhere !== 'NOT_RUN' ? { fit: fitWhere } : {}),
+          ...(label && label.where !== 'FALLBACK' ? { label: label.where } : {}),
+          ...(materials ? { materials: materials.where } : {}),
+        },
         draftModel: result.model,
+        networkSteps: stepsRef.current.map((s) => {
+          const during = (network?.list() ?? []).filter((r) => r.at >= s.start && r.at <= s.end);
+          const modelRequests = during.filter((r) => r.host === MODEL_HOST).length;
+          return {
+            step: s.step,
+            where: s.where ?? (s.step === 'draft' || s.step === 'materials' ? 'IN_CLOUD' : 'ON_DEVICE'),
+            durationMs: Math.max(0, Math.round(s.end - s.start)),
+            modelRequests,
+            otherRequests: during.length - modelRequests,
+          };
+        }),
         rewrites: Object.entries(edits).map(([i, text]) => ({ itemIndex: Number(i), text })),
         fits,
         ...(task === 'lesson'
@@ -2692,7 +2738,15 @@ export function App() {
                   )}
                   <h3 className="summary">{restore(draft.title, entities, sent?.tokens)}</h3>
                   <p className="result-sub">
-                    {isLesson ? fitSummary(notesByChild.length, replay ? shownPoints.filter((p) => p.source === 'model').length : pointsSuggested, hits, shownPoints) : summaryLine(checks)}
+                    {isLesson
+                      ? fitSummary(
+                          notesByChild.length,
+                          replay ? shownPoints.filter((p) => p.source === 'model').length : pointsSuggested,
+                          hits,
+                          shownPoints,
+                          result?.where === 'ON_DEVICE',
+                        )
+                      : summaryLine(checks)}
                   </p>
                   {isLesson && fittingLive && (notesByChild.length > 0 || hits.length > 0) && (
                     <div className="actions fit-all">
@@ -2733,6 +2787,7 @@ export function App() {
                       hitNotes={adjNotes}
                       said={childSaid}
                       recorded={Boolean(replay)}
+                      onDevice={result?.where === 'ON_DEVICE'}
                       hitActions={hitActions}
                       pointActions={pointActions}
                       activeNeed={activeNeed}
@@ -2779,7 +2834,17 @@ export function App() {
                             Lessons
                           </button>
                         )}
-                        {canPrint && (
+                        {canPrint && isLesson && (
+                          <>
+                            <button className="secondary" onClick={() => printSheet('class-only')}>
+                              Print class copy (no names)
+                            </button>
+                            <button className="secondary" onClick={() => printSheet('teacher-only')}>
+                              Print teacher's copy (private)
+                            </button>
+                          </>
+                        )}
+                        {canPrint && !isLesson && (
                           <button className="secondary" onClick={() => window.print()}>
                             Print
                           </button>
@@ -2790,7 +2855,7 @@ export function App() {
                       </div>
                       {isLesson && keptCount > 0 && (
                         <p className="hint">
-                          The class plan is copied and printed with no name and nothing written for a child. What you accepted for each child prints on a second page, for you.
+                          On a shared printer, print the class copy (no names) separately from your private teacher copy.
                         </p>
                       )}
                       {keptCount === 0 ? (
@@ -3131,7 +3196,7 @@ export function App() {
                       Keep this class in this browser
                       <small>
                         {keepClass
-                          ? 'On: your note, class list and constraints stay in local storage on this computer only.'
+                          ? 'On: your note, class list, constraints, saved lessons and receipts stay in local storage on this computer only.'
                           : 'Personal device only — leave off on a shared staffroom PC (session clears when tab closes).'}
                       </small>
                     </label>
@@ -3553,7 +3618,11 @@ export function App() {
                       ? waitingHits.length > 0
                         ? `${waitingHits.length} ${waitingHits.length === 1 ? 'child still waits' : 'children still wait'} for an adjustment, or for you to leave the step as it is.`
                         : `${acceptedNow.length} accepted for ${new Set(acceptedNow.map((a) => a.child)).size} ${new Set(acceptedNow.map((a) => a.child)).size === 1 ? 'child' : 'children'}. They stay on this device.${
-                            waitingPoints.length > 0 ? ` ${waitingPoints.length} ${waitingPoints.length === 1 ? 'adaptation still waits' : 'adaptations still wait'}.` : ''
+                            waitingPoints.length > 0
+                              ? waitingAcceptablePoints.length > 0 && waitingPoints.length > waitingAcceptablePoints.length
+                                ? ` ${waitingAcceptablePoints.length} ready to accept · ${waitingPoints.length - waitingAcceptablePoints.length} need wording.`
+                                : ` ${waitingPoints.length} ${waitingPoints.length === 1 ? 'adaptation still waits' : 'adaptations still wait'}.`
+                              : ''
                           }`
                       : undecided > 0
                       ? `${undecided} of ${kept.length} still to decide. Nothing is kept until you keep it.`
@@ -3622,11 +3691,10 @@ export function App() {
           replayInfo={
             replay
               ? {
-                  guard: replay.where.guard,
-                  draft: replay.where.draft,
-                  check: replay.where.check,
+                  where: replay.where,
                   draftModel: replay.draftModel,
                   hasMaterials: Boolean(replay.materials),
+                  networkSteps: replay.networkSteps,
                 }
               : undefined
           }
@@ -3640,23 +3708,45 @@ export function App() {
                   : 'Policy: loading. Approval waits for it.'
           }
           ran={{
-            scan: replay ? (replay.where.scan === 'ON_DEVICE' ? `${WHERE_RAN.ON_DEVICE}, in the recorded run` : undefined) : scanWhere === 'ON_DEVICE' ? WHERE_RAN.ON_DEVICE : undefined,
-            guard: stage === 'write' || stage === 'guarding' ? undefined : WHERE_RAN[guardWhere],
-            draft: result && after ? `${WHERE_RAN[result.where]}: ${result.model}` : undefined,
-            check: stage === 'result' || stage === 'signed' ? WHERE_RAN[checkWhere] : undefined,
-            // Listed once the on-device model has answered a fit in this run, or the recorded run holds a suggestion.
-            fit:
-              stage !== 'result' && stage !== 'signed'
+            scan: replay
+              ? replay.where.scan
+                ? `${WHERE_RAN[replay.where.scan]}, in the recorded run`
+                : 'Not recorded in this capture'
+              : scanWhere === 'ON_DEVICE'
+                ? WHERE_RAN.ON_DEVICE
+                : undefined,
+            guard: replay
+              ? `${WHERE_RAN[replay.where.guard]}, in the recorded run`
+              : stage === 'write' || stage === 'guarding'
                 ? undefined
-                : replay
-                  ? (replay.fits ?? []).length > 0 || (replay.adjustments ?? []).some((a) => a.source === 'on-device model')
-                    ? `${WHERE_RAN.ON_DEVICE}, in the recorded run`
-                    : undefined
-                  : fitWhere === 'NOT_RUN'
-                    ? undefined
-                    : WHERE_RAN[fitWhere],
-            label:
-              (stage === 'result' || stage === 'signed') && label && !replay
+                : WHERE_RAN[guardWhere],
+            draft: replay
+              ? `${WHERE_RAN[replay.where.draft]}: ${replay.draftModel}`
+              : result && after
+                ? `${WHERE_RAN[result.where]}: ${result.model}`
+                : undefined,
+            check: replay
+              ? `${WHERE_RAN[replay.where.check]}, in the recorded run`
+              : stage === 'result' || stage === 'signed'
+                ? WHERE_RAN[checkWhere]
+                : undefined,
+            // Listed once the on-device model has answered a fit in this run, or recorded in the replay.
+            fit: replay
+              ? replay.where.fit
+                ? `${WHERE_RAN[replay.where.fit]}, in the recorded run`
+                : (replay.fits ?? []).length > 0 || (replay.adjustments ?? []).some((a) => a.source === 'on-device model')
+                  ? `${WHERE_RAN.ON_DEVICE}, in the recorded run`
+                  : 'Not recorded in this capture'
+              : stage !== 'result' && stage !== 'signed'
+                ? undefined
+                : fitWhere === 'NOT_RUN'
+                  ? undefined
+                  : WHERE_RAN[fitWhere],
+            label: replay
+              ? replay.where.label
+                ? `${WHERE_RAN[replay.where.label]}, in the recorded run`
+                : 'Not recorded in this capture'
+              : (stage === 'result' || stage === 'signed') && label
                 ? label.where === 'FALLBACK'
                   ? 'No model has named this receipt: it has the task and the day'
                   : WHERE_RAN[label.where]
@@ -3680,8 +3770,8 @@ export function App() {
       {/* ------------------------------------------------ what is printed: the signed text, names put back, nothing else */}
       {canPrint && draft && (
         <section className="print-sheet" aria-hidden="true">
-          {printWhat !== 'run' && materials ? (
-            <MaterialsPages title={draft.title} result={materials.materials} namesFor={needNames} withNames={printWhat === 'materials'} />
+          {printWhat === 'materials' || printWhat === 'materials-no-names' ? (
+            materials && <MaterialsPages title={draft.title} result={materials.materials} namesFor={needNames} withNames={printWhat === 'materials'} />
           ) : task === 'parents' ? (
             printable.map(({ item, i, family }) => (
               <div className="print-page" key={i}>
@@ -3692,27 +3782,31 @@ export function App() {
           ) : isLesson ? (
             <>
               {/* Page 1: the class plan, stand-ins as they came. No name and no adjustment: it can be pinned up or shared. */}
-              <div className="print-page">
-                <h1>{draft.title}</h1>
-                <p>{[lesson.klass, lesson.subject, lesson.topic, `${lessonMinutes(lesson.minutes)} minutes`].filter(Boolean).join(' · ')}</p>
-                {draft.items.map((item, i) =>
-                  kept[i] === true ? (
-                    <div key={i}>
-                      <h2>{item.heading}</h2>
-                      <p>{item.text.trim()}</p>
-                      {variations
-                        .filter((v) => v.itemIndex === i)
-                        .map((v, k) => (
-                          <p key={k}>{variationLine(v)}</p>
-                        ))}
-                    </div>
-                  ) : null,
-                )}
-              </div>
-              <div className="print-page">
-                <h1>Teacher's copy: adjustments. Keep this private.</h1>
-                <ForTheseChildren stages={draft.items} adjustments={acceptedNow} />
-              </div>
+              {printWhat !== 'teacher-only' && (
+                <div className="print-page">
+                  <h1>{draft.title}</h1>
+                  <p>{[lesson.klass, lesson.subject, lesson.topic, `${lessonMinutes(lesson.minutes)} minutes`].filter(Boolean).join(' · ')}</p>
+                  {draft.items.map((item, i) =>
+                    kept[i] === true ? (
+                      <div key={i}>
+                        <h2>{item.heading}</h2>
+                        <p>{item.text.trim()}</p>
+                        {variations
+                          .filter((v) => v.itemIndex === i)
+                          .map((v, k) => (
+                            <p key={k}>{variationLine(v)}</p>
+                          ))}
+                      </div>
+                    ) : null,
+                  )}
+                </div>
+              )}
+              {printWhat !== 'class-only' && (
+                <div className="print-page">
+                  <h1>Teacher's copy: adjustments. Keep this private.</h1>
+                  <ForTheseChildren stages={draft.items} adjustments={acceptedNow} />
+                </div>
+              )}
             </>
           ) : (
             <div className="print-page">

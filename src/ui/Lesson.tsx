@@ -25,7 +25,8 @@ export const TEACHER_LABEL = 'Written by you';
 /** Said over a line the cloud wrote for a need, placed beside a child here. */
 export const CLOUD_LABEL = 'Cloud · matched to this child here';
 /** Said beside a child for a need the cloud was told and wrote nothing for. */
-export const NOTHING_WRITTEN = (letter: string) => `The cloud wrote nothing for Need ${letter}.`;
+export const NOTHING_WRITTEN = (letter: string, onDevice = false) =>
+  `${onDevice ? 'The on-device draft' : 'The cloud'} wrote nothing for Need ${letter}.`;
 /** Said over a line this device wrote about two children together. */
 export const PAIR_LABEL = 'By rule, on this device';
 /** Said over a point the on-device model wrote when asked for more ideas. */
@@ -243,6 +244,7 @@ function PointRow({
   stages,
   live,
   recorded,
+  onDevice = false,
   actions,
   activeNeed,
   onHoverNeed,
@@ -251,6 +253,7 @@ function PointRow({
   stages: readonly string[];
   live: boolean;
   recorded: boolean;
+  onDevice?: boolean;
   actions: PointActions;
   activeNeed?: string | null;
   onHoverNeed?: (letter: string | null) => void;
@@ -274,7 +277,7 @@ function PointRow({
           {point.nothing ? (
             <p>
               <span className="stage-tag need-tag">Need {point.need}</span>
-              {NOTHING_WRITTEN(point.need ?? '')}
+              {NOTHING_WRITTEN(point.need ?? '', onDevice)}
             </p>
           ) : (
             <>
@@ -341,6 +344,7 @@ export function ChildSections({
   hitNotes,
   said,
   recorded = false,
+  onDevice = false,
   hitActions,
   pointActions,
   activeNeed,
@@ -361,6 +365,7 @@ export function ChildSections({
   /** Said in a child's section after a fit: nothing suggested, a point dropped, no answer. */
   said: Record<string, string>;
   recorded?: boolean;
+  onDevice?: boolean;
   hitActions: HitActions;
   pointActions: PointActions;
   activeNeed?: string | null;
@@ -390,7 +395,7 @@ export function ChildSections({
             {mine.length > 0 && (
               <ul className="hits">
                 {mine.map((p) => (
-                  <PointRow key={p.key} point={p} stages={stages} live={live} recorded={recorded} actions={pointActions} activeNeed={activeNeed} onHoverNeed={onHoverNeed} />
+                  <PointRow key={p.key} point={p} stages={stages} live={live} recorded={recorded} onDevice={onDevice} actions={pointActions} activeNeed={activeNeed} onHoverNeed={onHoverNeed} />
                 ))}
               </ul>
             )}
@@ -498,7 +503,17 @@ function LessonCard({
         {lesson.materials && (
           <details className="saved-materials">
             <summary>Materials</summary>
-            <MaterialsWire result={{ ...lesson.materials, versions: lesson.materials.versions.map(asVersion), dropped: 0, same: lesson.materials.same ?? [], missing: [] }} />
+            {((lesson.materials.issues?.length ?? 0) > 0 || (lesson.materials.missing?.length ?? 0) > 0) && (
+              <div className="caution" role="alert">
+                {lesson.materials.issues && lesson.materials.issues.length > 0 && (
+                  <p>Return gate warning when generated: {lesson.materials.issues.map((v) => `“${v.what}” (${v.why})`).join('; ')}.</p>
+                )}
+                {lesson.materials.missing && lesson.materials.missing.length > 0 && (
+                  <p>No sheet written for: {lesson.materials.missing.map((l) => `Need ${l}`).join('; ')}.</p>
+                )}
+              </div>
+            )}
+            <MaterialsWire result={{ ...lesson.materials, versions: lesson.materials.versions.map(asVersion), dropped: 0, same: lesson.materials.same ?? [], missing: lesson.materials.missing ?? [] }} />
           </details>
         )}
         <h4>How did it go?</h4>

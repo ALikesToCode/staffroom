@@ -3,19 +3,59 @@ import { layerCounts } from './conflicts';
 
 const KEY = 'staffroom.receipts.v1';
 
-export function loadReceipts(): Receipt[] {
+function getStorage(kind: 'session' | 'local'): Storage | undefined {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? '[]') as Receipt[];
+    return kind === 'session' ? globalThis.sessionStorage : globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseReceipts(raw: string | null): Receipt[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as Receipt[]).slice(0, 50) : [];
   } catch {
     return [];
   }
 }
 
-/** Keep the receipts in this browser. Returns false when the browser would not store them (full, or switched off). */
-export function storeReceipts(receipts: Receipt[]): boolean {
+export function loadReceipts(): Receipt[] {
+  const session = getStorage('session');
+  let sessionRaw: string | null = null;
   try {
-    if (receipts.length === 0) localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, JSON.stringify(receipts.slice(0, 50)));
+    sessionRaw = session?.getItem(KEY) ?? null;
+  } catch {
+    sessionRaw = null;
+  }
+  if (sessionRaw !== null) return parseReceipts(sessionRaw);
+  try {
+    return parseReceipts(getStorage('local')?.getItem(KEY) ?? null);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Keep the receipts in sessionStorage by default (wiped when tab closes on a shared PC),
+ * or in localStorage only when persist is true (opted in). Clearing (empty array) removes both tiers.
+ */
+export function storeReceipts(receipts: Receipt[], persist = false): boolean {
+  const target = getStorage(persist ? 'local' : 'session');
+  const other = getStorage(persist ? 'session' : 'local');
+  try {
+    other?.removeItem(KEY);
+  } catch {
+    // Ignore errors clearing the unused storage tier.
+  }
+  try {
+    if (receipts.length === 0) {
+      target?.removeItem(KEY);
+    } else {
+      if (!target) return false;
+      target.setItem(KEY, JSON.stringify(receipts.slice(0, 50)));
+    }
     return true;
   } catch {
     return false;

@@ -311,7 +311,9 @@ export interface FitPoint {
  * lesson. Undefined: the answer could not be read at all.
  */
 const INTRUSIVE_PROMPT_RE =
-  /\b(?:(?:ask|prompt|invite|have|encourage|get)\b[^.!?\n]{0,50}\b(?:share|recall|describe|discuss|talk about|write about|mention|explain)\b|(?:recall|share|discuss|talk about|draw on|bring up)\b)[^.!?\n]{0,50}\b(?:family(?:'s)?|home\s+(?:life|situation)|tea\s+stall|job|money|income|financial|epilepsy|seizure|illness|health|mother|father|grandmother|parents?|separation|hardships?|situation)\b/i;
+  /\b(?:(?:ask|prompt|invite|have|encourage|get)(?:s|ed|ing)?\b[^.!?\n]{0,50}\b(?:shar(?:e|es|ed|ing)|recall(?:s|ed|ing)?|describ(?:e|es|ed|ing)|discuss(?:es|ed|ing)?|talk(?:s|ed|ing)? about|writ(?:e|es|ing) about|mention(?:s|ed|ing)?|explain(?:s|ed|ing)?)\b|(?:recall(?:s|ed|ing)?|shar(?:e|es|ed|ing)|discuss(?:es|ed|ing)?|talk(?:s|ed|ing)? about|draw(?:s|ed|ing)?\s+on|bring(?:s|ing)? up|brought up|connect(?:s|ed|ing)?|refer(?:s|red|ring)?\s+to|relat(?:e|es|ed|ing)?|us(?:e|es|ing)|incorporat(?:e|es|ing)|bas(?:e|es|ed|ing)|tie(?:s|d)?|weav(?:e|es|ing))\b)[^.!?\n]{0,65}\b(?:family(?:'s)?|home\s+(?:life|situation)|tea\s+stall|job|money|income|financial|epilepsy|seizure|illness|health|mother|father|grandmother|parents?|separation|hardships?|situation|involvement)\b/i;
+
+const PRIVATE_HARDSHIP_NOUN_RE = /\b(?:tea\s+stall|mill\s+job|unpaid\s+fee|parents?\s+separat\w*|divorce)\b/i;
 
 export function readPoints(raw: string, stages: readonly FitStage[]): { points: FitPoint[]; unknown: number } | undefined {
   let parsed: { points?: unknown } | null;
@@ -331,7 +333,7 @@ export function readPoints(raw: string, stages: readonly FitStage[]): { points: 
       const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
       text = (end > 0 ? cut.slice(0, end + 1) : cut).trim();
     }
-    if (text.length === 0 || INTRUSIVE_PROMPT_RE.test(text)) continue;
+    if (text.length === 0 || INTRUSIVE_PROMPT_RE.test(text) || PRIVATE_HARDSHIP_NOUN_RE.test(text)) continue;
     const named = typeof p.stage === 'string' ? p.stage.replace(/\s+/g, ' ').trim().toLowerCase() : '';
     const itemIndex = stages.findIndex((s) => s.name.toLowerCase() === named);
     if (itemIndex < 0) {

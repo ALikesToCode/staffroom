@@ -251,7 +251,7 @@ export interface SavedLesson {
   /** The lines the cloud wrote for needs. `itemIndex` counts the kept stages. */
   variations?: { itemIndex: number; need: string; text: string }[];
   /** The materials the cloud wrote for this lesson, by letter. No name is in them. */
-  materials?: { board: string[]; sheet: string[]; versions: StoredVersion[]; ticket: { question: string; answer: string }[]; same?: string[] };
+  materials?: { board: string[]; sheet: string[]; versions: StoredVersion[]; ticket: { question: string; answer: string }[]; same?: string[]; missing?: string[]; issues?: { what: string; why: string }[] };
   /** How it went, said after teaching. */
   after?: { stages: (StageDone | null)[]; line: string; at: string; ticket?: Record<string, 'got' | 'partly' | 'not' | 'absent'> };
 }

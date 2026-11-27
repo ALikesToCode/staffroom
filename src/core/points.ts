@@ -181,7 +181,7 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
  * `points` are the lines as they stand; `suggested` is how many the
  * on-device model wrote in this run.
  */
-export function fitSummary(children: number, suggested: number, hits: readonly LessonHit[], points: readonly Point[] = []): string {
+export function fitSummary(children: number, suggested: number, hits: readonly LessonHit[], points: readonly Point[] = [], onDevice = false): string {
   const steps = new Set(hits.map((h) => `${h.itemIndex}:${h.stepIndex}`)).size;
   const placed = points.filter((p) => p.need !== undefined && !p.nothing);
   const pairs = points.filter((p) => p.pair).length;
@@ -194,7 +194,7 @@ export function fitSummary(children: number, suggested: number, hits: readonly L
   if (needs > 0) out.push(`The cloud wrote for ${count(needs, 'need', 'needs')} without knowing whose.`);
   if (placed.length > 0) out.push(`${count(placed.length, 'line', 'lines')} placed beside ${count(beside, 'child', 'children')} on this device.`);
   if (pairs > 0) out.push(`${count(pairs, 'seating line', 'seating lines')} added on this device.`);
-  if (unanswered > 0) out.push(`The cloud wrote nothing for ${count(unanswered, 'need', 'needs')}.`);
+  if (unanswered > 0) out.push(`${onDevice ? 'The on-device draft' : 'The cloud'} wrote nothing for ${count(unanswered, 'need', 'needs')}.`);
   if (suggested > 0) out.push(`${count(suggested, 'point', 'points')} suggested on this device.`);
   if (against > 0) out.push(`${against === 1 ? '1 goes' : `${against} go`} against a constraint you confirmed.`);
   return out.length > 0 ? out.join(' ') : 'Your note says nothing about any one child, so there is nothing to fit.';

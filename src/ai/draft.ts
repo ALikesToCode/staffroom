@@ -135,8 +135,16 @@ export async function streamContent(
     const deviceModel = fallbackModel?.();
     if (!deviceModel || deviceModel === model) throw err;
     onChunk?.('');
-    const recovered = await readStream(deviceModel, prompt, onChunk);
-    return { ...recovered, onDevice: true };
+    let recovered: { text: string; onDevice: boolean };
+    try {
+      recovered = await readStream(deviceModel, prompt, onChunk);
+    } catch {
+      throw err;
+    }
+    if (!recovered.onDevice) {
+      throw new Error('The fallback draft did not run on the device.');
+    }
+    return recovered;
   }
 }
 
@@ -161,7 +169,12 @@ export async function writeDraft(
     (t) => {
       try {
         const parsed = JSON.parse(t) as Draft | null;
-        return Boolean(parsed && Array.isArray(parsed.items) && parsed.items.length > 0);
+        return Boolean(
+          parsed &&
+            Array.isArray(parsed.items) &&
+            parsed.items.length > 0 &&
+            parsed.items.every((i) => i && typeof i.heading === 'string' && i.heading.trim().length > 0 && typeof i.text === 'string' && i.text.trim().length > 0),
+        );
       } catch {
         return false;
       }

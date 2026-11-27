@@ -182,4 +182,55 @@ describe('naming the receipt', () => {
     expect(seen[1]).toBe('');
     expect(JSON.parse(res.text).title).toBe('Valid');
   });
+
+  it('rethrows the original cloud error when the local fallback fails (e.g. model not downloaded)', async () => {
+    const cloudErr = new Error('HTTP 429 rate limited');
+    const rejectedCloud = Promise.reject(cloudErr);
+    rejectedCloud.catch(() => {});
+    const cloudBroken = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            throw cloudErr;
+          },
+        },
+        response: rejectedCloud,
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+    const brokenLocal = {
+      generateContentStream: async () => {
+        throw new Error('LanguageModel unavailable');
+      },
+    } as unknown as Parameters<typeof streamContent>[0];
+
+    await expect(streamContent(cloudBroken, 'prompt', undefined, () => brokenLocal)).rejects.toThrow('HTTP 429 rate limited');
+  });
+
+  it('rejects if fallback reports an unexpected non-device inferenceSource', async () => {
+    const cloudErr = new Error('cloud timeout');
+    const rejectedCloud = Promise.reject(cloudErr);
+    rejectedCloud.catch(() => {});
+    const cloudBroken = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            throw cloudErr;
+          },
+        },
+        response: rejectedCloud,
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+    const spoofedLocal = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            yield { text: () => '{"title":"X"}' };
+          },
+        },
+        response: Promise.resolve({ text: () => '{"title":"X"}', inferenceSource: 'in_cloud' }),
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+
+    await expect(streamContent(cloudBroken, 'prompt', undefined, () => spoofedLocal)).rejects.toThrow('did not run on the device');
+  });
 });

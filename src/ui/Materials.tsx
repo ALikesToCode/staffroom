@@ -50,7 +50,7 @@ export function MaterialsCard({
   onHoverNeed?: (letter: string | null) => void;
 }) {
   const [replyRead, setReplyRead] = useState(false);
-  const [noNames, setNoNames] = useState(false);
+  const [withNames, setWithNames] = useState(false);
   if (result) {
     return (
       <article className="card materials">
@@ -145,16 +145,18 @@ export function MaterialsCard({
         {onPrint ? (
           <>
             <div className="actions">
-              <button className="secondary" disabled={issues.length > 0 && !replyRead} onClick={() => onPrint(!noNames)}>
-                Print the materials
+              <button className="secondary" disabled={issues.length > 0 && !replyRead} onClick={() => onPrint(withNames)}>
+                {withNames ? 'Print materials (with names)' : 'Print materials (letter codes only)'}
               </button>
               <label className="read-it">
-                <input type="checkbox" checked={noNames} onChange={(e) => setNoNames(e.target.checked)} />
-                Print without names
+                <input type="checkbox" checked={withNames} onChange={(e) => setWithNames(e.target.checked)} />
+                Include pupil names on printout (private teacher copy)
               </label>
             </div>
             <p className="hint">
-              Prints the class sheet, a sheet for each need{noNames ? ', by its letter' : ' with the names over it, for you to hand out'}, the exit ticket and your answer key.
+              {withNames
+                ? 'Prints the class sheet, a named sheet for each need for you to hand out, the exit ticket and your answer key. Keep this copy private.'
+                : 'Prints letter codes only (no pupil names) — safe for a shared school printer — along with the class sheet, exit ticket and answer key.'}
             </p>
           </>
         ) : (

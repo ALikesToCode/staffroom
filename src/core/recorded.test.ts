@@ -225,7 +225,7 @@ describe('a recorded run', () => {
     expect(asRecordedRun(null)).toBeUndefined();
     expect(asRecordedRun('<!doctype html>')).toBeUndefined();
     expect(asRecordedRun({})).toBeUndefined();
-    for (const key of Object.keys(run).filter((k) => !['rewrites', 'fits', 'lesson', 'adjustments'].includes(k))) {
+    for (const key of Object.keys(run).filter((k) => !['rewrites', 'fits', 'lesson', 'adjustments', 'networkSteps'].includes(k))) {
       const broken = copy();
       delete broken[key];
       expect(asRecordedRun(broken), key).toBeUndefined();
@@ -235,7 +235,9 @@ describe('a recorded run', () => {
     expect(asRecordedRun({ ...copy(), checks: [{ verdict: 'fine', reason: 'r' }] })).toBeUndefined();
     expect(asRecordedRun({ ...copy(), where: { guard: 'ON_DEVICE', draft: 'IN_CLOUD', check: 'SOMEWHERE' } })).toBeUndefined();
     expect(asRecordedRun({ ...copy(), where: { ...run.where, scan: 'SOMEWHERE' } })).toBeUndefined();
-    expect(asRecordedRun({ ...copy(), where: { ...run.where, scan: 'ON_DEVICE' } })!.where.scan).toBe('ON_DEVICE');
+    expect(asRecordedRun({ ...copy(), where: { ...run.where, scan: 'ON_DEVICE', fit: 'ON_DEVICE', label: 'ON_DEVICE', materials: 'IN_CLOUD' } })!.where.label).toBe('ON_DEVICE');
+    expect(asRecordedRun({ ...copy(), networkSteps: [{ step: 'scan', where: 'ON_DEVICE', durationMs: 7000, modelRequests: 0, otherRequests: 0 }] })!.networkSteps).toHaveLength(1);
+    expect(asRecordedRun({ ...copy(), networkSteps: [{ step: 'bad', where: 'ON_DEVICE', durationMs: 100, modelRequests: 0, otherRequests: 0 }] })).toBeUndefined();
     expect(asRecordedRun({ ...copy(), entities: [{ id: 'x' }] })).toBeUndefined();
     expect(asRecordedRun({ ...copy(), constraints: [{ id: 'x', kind: 'curfew', text: 't', source: 'rule', confirmed: true }] })).toBeUndefined();
     expect(asRecordedRun({ ...copy(), draft: { title: 'x', items: [] } })).toBeUndefined();

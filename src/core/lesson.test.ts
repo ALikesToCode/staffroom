@@ -288,10 +288,14 @@ describe('adjustments on the result screen', () => {
       { child: 'Aarav Sharma', lines: [{ stage: 'Practise', text: 'Uses chart paper from the class set.' }] },
       { child: 'Tanvi', lines: [{ stage: 'Homework', text: 'Gets two printed pictures to write from.' }] },
     ]);
-    const kept = savedLesson('l9', '2026-11-26T10:00:00.000Z', SAMPLE_LESSON, 'Describing a place', plan, accepted, constraints);
+    const kept = savedLesson('l9', '2026-11-26T10:00:00.000Z', SAMPLE_LESSON, 'Describing a place', plan, accepted, constraints, {
+      materials: { board: ['Words'], sheet: ['Q1'], versions: [], ticket: [], same: [], missing: ['E'], issues: [{ what: 'Student 1', why: 'name' }] },
+    });
     expect(kept.constraintIds).toHaveLength(6);
     expect(kept.adjustments).toHaveLength(2);
     expect(kept.after).toBeUndefined();
+    expect(kept.materials?.missing).toEqual(['E']);
+    expect(kept.materials?.issues).toEqual([{ what: 'Student 1', why: 'name' }]);
   });
 });
 

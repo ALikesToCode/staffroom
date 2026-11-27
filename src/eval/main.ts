@@ -29,7 +29,7 @@ const runs = Math.max(1, Math.min(20, Number(params.get('runs')) || 1));
 /**
  * ?set=rules: the rule layer on its own, no model, any browser.
  * ?set=full: the whole sample note and six fixed drafts, both layers.
- * ?set=heldout: sixteen single-fact cases the model has not been tuned on.
+ * ?set=heldout (or ?set=check): sixteen single-fact cases the model has not been tuned on.
  * ?set=fit: fourteen steps in conflict, each rewritten by the on-device model for the child, and eight steps of a lesson for which it says what one child does instead.
  * ?set=lesson: five whole lesson plans against the sample class, rule layer only, no model.
  * ?set=needs: five lesson replies with lines for needs, placed beside the children of the sample class. Plain code, no model.
@@ -37,7 +37,8 @@ const runs = Math.max(1, Math.min(20, Number(params.get('runs')) || 1));
  * ?set=guard: twelve fresh notes through the guard, rules only and with the on-device model, three runs unless ?runs= says.
  * No set: the 24 single-fact cases.
  */
-const set = (['rules', 'full', 'heldout', 'fit', 'lesson', 'needs', 'learning', 'guard'] as const).find((s) => s === params.get('set')) ?? 'cases';
+const rawSet = params.get('set') === 'check' ? 'heldout' : params.get('set');
+const set = (['rules', 'full', 'heldout', 'fit', 'lesson', 'needs', 'learning', 'guard'] as const).find((s) => s === rawSet) ?? 'cases';
 /** One fact at a time is the default, as in the app. ?perFact=0 asks about all of a child's facts in one prompt. */
 const perFact = params.get('perFact') !== '0';
 

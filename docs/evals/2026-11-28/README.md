@@ -17,7 +17,7 @@ Measured over **3 full runs × 12 fresh invented notes** (`GUARD_CASES`, `60` pr
 | Constraints matched (`constraintsLabelled`: 11/run) | 1 / 11 | **11 / 33** | **3.7 / 11** |
 | Median per-note latency | 3 ms | **4,055 ms** | 3.68s – 4.20s |
 
-Separately on the app's 5-paragraph `SAMPLE_NOTE` (`3` live Chrome 158 passes, `16.6s – 18.6s` per full note), Paragraph 5 (`Tanvi`) reliably produced a typed `time-after` constraint (`source: "on-device model"`) and private detail that rules alone missed (`3/3` passes). Heading-only paragraphs with no student names are skipped in `constraintsFromCombined` via `studentParagraphs()`.
+Separately on the app's 5-paragraph `SAMPLE_NOTE` (`3` live Chrome 158 passes per revision, `16.6s – 18.6s` per full note): the earlier evening prompt revision yielded a typed `time-after` constraint (`source: "on-device model"`, `3/3`), and the current submitted `SAMPLE_NOTE` (Tanvi's Tuesday town-clinic visit) reliably produces a typed `days-away` constraint (`Need E: away on Tuesdays`, `source: "on-device model"`, `3/3` passes) and private detail that rules alone missed. Heading-only paragraphs with no student names are skipped in `constraintsFromCombined` via `studentParagraphs()`.
 
 ## 2. Multimodal Notebook Photo Scan (`scan`, `ONLY_ON_DEVICE`)
 

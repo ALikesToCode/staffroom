@@ -3,7 +3,8 @@ import type { ConstraintKind, LabelWhere, Receipt, Where } from '../core/types';
 import { TASKS } from '../core/samples';
 import { draftLine, recordIdTail, type ReceiptRecord } from '../core/receipts';
 import { CONSTRAINT_LABEL } from '../core/constraints';
-import { requestLine, stepReports, type NetworkRecord, type StepMark } from '../core/network';
+import { requestLine, STEP_NAME, stepReports, type NetworkRecord, type StepMark } from '../core/network';
+import { type RecordedNetworkStep } from '../core/recorded';
 import { configured, type Policy } from '../ai/firebase';
 import { ROUTES, type DeviceStatus, type RouteId } from '../ai/routes';
 import { CloudText, KIND_LABEL } from './parts';
@@ -115,16 +116,46 @@ export function DevicePill({
 
 // ------------------------------------------------------------------ inspect
 
-/** A panel over the page, closed with its button, the Escape key or a click outside it. */
+/** A panel over the page, closed with its button, the Escape key or a click outside it. Traps keyboard focus and restores it on close. */
 function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panel.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !panel.current) return;
+      const focusable = Array.from(
+        panel.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+      if (focusable.length === 0) {
+        e.preventDefault();
+        panel.current.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === panel.current || !panel.current.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !panel.current.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      previous?.focus?.();
+    };
   }, [onClose]);
   return (
     <div className="drawer-back" onClick={onClose}>
@@ -186,7 +217,12 @@ export function Inspect({
   /** The model steps of this tab, with when each started and ended. */
   steps: readonly StepMark[];
   isReplay?: boolean;
-  replayInfo?: { guard: Where; draft: Where; check: Where; draftModel: string; hasMaterials: boolean };
+  replayInfo?: {
+    where: { scan?: Where; guard: Where; draft: Where; check: Where; fit?: Where; label?: Where; materials?: Where };
+    draftModel: string;
+    hasMaterials: boolean;
+    networkSteps?: RecordedNetworkStep[];
+  };
 }) {
   return (
     <Drawer title="Inspect" onClose={onClose}>
@@ -255,7 +291,12 @@ export function NetworkSection({
   network: NetworkRecord;
   steps: readonly StepMark[];
   isReplay?: boolean;
-  replayInfo?: { guard: Where; draft: Where; check: Where; draftModel: string; hasMaterials: boolean };
+  replayInfo?: {
+    where: { scan?: Where; guard: Where; draft: Where; check: Where; fit?: Where; label?: Where; materials?: Where };
+    draftModel: string;
+    hasMaterials: boolean;
+    networkSteps?: RecordedNetworkStep[];
+  };
 }) {
   const requests = useSyncExternalStore(network.subscribe, network.list, network.list);
   const reports = stepReports(steps, requests);
@@ -270,27 +311,32 @@ export function NetworkSection({
         isReplay ? (
           <div className="replay-network">
             <p className="hint">
-              0 model requests were made in this tab during replay: everything shown comes from the recorded run file on this device.
+              <b>This browser tab (live):</b> 0 model requests were made during replay — everything shown comes from the recorded run file on this device.
             </p>
-            {replayInfo && (
-              <ul className="inspect-network">
-                <li>
-                  <b>Guard ({RECORD_WHERE[replayInfo.guard]})</b>: 0 requests to the model host when recorded in Chrome 158
-                </li>
-                <li>
-                  <b>Draft ({RECORD_WHERE[replayInfo.draft]} · {replayInfo.draftModel})</b>: approved text and nameless needs only
-                </li>
-                <li>
-                  <b>Check ({RECORD_WHERE[replayInfo.check]})</b>: 0 requests to the model host when recorded
-                </li>
-                {replayInfo.hasMaterials && (
-                  <li>
-                    <b>Materials ({RECORD_WHERE[replayInfo.draft]} · {replayInfo.draftModel})</b>: signed class plan and nameless needs only
-                  </li>
-                )}
-              </ul>
+            {replayInfo?.networkSteps && replayInfo.networkSteps.length > 0 ? (
+              <>
+                <p className="hint">
+                  <b>Captured when recorded (from recorded-run.json):</b>
+                </p>
+                <ul className="inspect-network">
+                  {replayInfo.networkSteps.map((s, i) => (
+                    <li key={i}>
+                      <b>
+                        {STEP_NAME[s.step]} ({RECORD_WHERE[s.where === 'NONE' ? 'NOT_RUN' : s.where]})
+                      </b>
+                      : {s.modelRequests} {s.modelRequests === 1 ? 'request' : 'requests'} to the model host
+                      {s.otherRequests > 0 ? `, ${s.otherRequests} ${s.otherRequests === 1 ? 'other request' : 'other requests'}` : ''} ·{' '}
+                      {(s.durationMs / 1000).toFixed(1)} s
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="hint">Per-step Resource Timing counts were not recorded in this capture.</p>
             )}
-            <p className="hint">Press <b>Try an invented class</b> on the Desk to inspect live Resource Timing for your own session.</p>
+            <p className="hint">
+              Press <b>Try an invented class</b> on the Desk to inspect live Resource Timing for your own session.
+            </p>
           </div>
         ) : (
           <p className="hint">No model step has run in this tab yet.</p>

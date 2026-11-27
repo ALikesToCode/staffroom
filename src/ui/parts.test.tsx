@@ -255,13 +255,31 @@ describe('NetworkSection', () => {
         network={record}
         steps={[]}
         isReplay
-        replayInfo={{ guard: 'ON_DEVICE', draft: 'IN_CLOUD', check: 'ON_DEVICE', draftModel: 'gemini-3.5-flash-lite', hasMaterials: true }}
+        replayInfo={{
+          where: { scan: 'ON_DEVICE', guard: 'ON_DEVICE', draft: 'IN_CLOUD', check: 'ON_DEVICE', label: 'ON_DEVICE' },
+          draftModel: 'gemini-3.5-flash-lite',
+          hasMaterials: true,
+          networkSteps: [
+            { step: 'scan', where: 'ON_DEVICE', durationMs: 7100, modelRequests: 0, otherRequests: 0 },
+            { step: 'guard', where: 'ON_DEVICE', durationMs: 4100, modelRequests: 0, otherRequests: 0 },
+            { step: 'draft', where: 'IN_CLOUD', durationMs: 2800, modelRequests: 1, otherRequests: 0 },
+          ],
+        }}
       />,
     );
-    expect(replayHtml).toContain('0 model requests were made in this tab during replay');
+    expect(replayHtml).toContain('0 model requests were made during replay');
+    expect(replayHtml).toContain('Scan notebook (on the device)');
     expect(replayHtml).toContain('Guard (on the device)');
-    expect(replayHtml).toContain('Draft (in the cloud · gemini-3.5-flash-lite)');
-    expect(replayHtml).toContain('Materials (in the cloud · gemini-3.5-flash-lite)');
+    expect(replayHtml).toContain('Draft (in the cloud)');
+    const noStepsHtml = renderToStaticMarkup(
+      <NetworkSection
+        network={record}
+        steps={[]}
+        isReplay
+        replayInfo={{ where: { guard: 'ON_DEVICE', draft: 'IN_CLOUD', check: 'ON_DEVICE' }, draftModel: 'gemini-3.5-flash-lite', hasMaterials: false }}
+      />,
+    );
+    expect(noStepsHtml).toContain('Per-step Resource Timing counts were not recorded in this capture.');
   });
 });
 
