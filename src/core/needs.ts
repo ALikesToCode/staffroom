@@ -129,6 +129,10 @@ export function withNeeds(text: string, lines: string[]): string {
 /** He or she: a sentence that says it is about one person, most likely one pupil or a pupil's parent. */
 const ONE_PERSON = /(?<![\p{L}])(?:he|she|him|his|her|hers|himself|herself)(?![\p{L}])/iu;
 
+/** A sentence with a withheld detail and fewer words than this besides its stand-ins ("[withheld] to [Place 1] and [withheld].") is a fragment about one pupil. */
+const MOSTLY_WITHHELD = 4;
+const wordsBesideStandIns = (s: string) => s.split(PRIVATE_TOKEN).join(' ').replace(TOKEN_RE, ' ').match(/\p{L}+/gu)?.length ?? 0;
+
 /** Said under the exact text of a lesson: how many sentences of the note stay here. A count only. */
 export const notSentLine = (n: number) => `Not sent: ${n} ${n === 1 ? 'sentence' : 'sentences'} about one pupil. Their needs go by letter.`;
 
@@ -136,8 +140,9 @@ export const notSentLine = (n: number) => `Not sent: ${n} ${n === 1 ? 'sentence'
  * For a lesson, the redacted note keeps only what is about the class. A
  * sentence is not sent when it holds the stand-in of a pupil, an adult, a
  * contact or an identity number, or a pupil's or adult's name the teacher
- * released; when it says he or she; or when it is nothing but withheld
- * items. What the cloud needs about one pupil goes as a need, by letter.
+ * released; when it says he or she; or when it is withheld items with
+ * fewer than four other words ("[withheld] to [Place 1] and [withheld].").
+ * What the cloud needs about one pupil goes as a need, by letter.
  * The note keeps its lines and paragraphs; a sentence that is kept is
  * kept character for character.
  */
@@ -149,7 +154,7 @@ export function classSentences(redacted: string, entities: Entity[]): { text: st
     tokens.some((t) => s.includes(t)) ||
     (names?.test(s) ?? false) ||
     ONE_PERSON.test(s) ||
-    s.split(PRIVATE_TOKEN).join('').replace(/[\s\p{P}]/gu, '') === '';
+    (s.includes(PRIVATE_TOKEN) && wordsBesideStandIns(s) < MOSTLY_WITHHELD);
   let notSent = 0;
   const paragraphs = redacted.split(/\n[ \t]*\n/).map((para) =>
     para

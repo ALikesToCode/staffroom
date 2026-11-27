@@ -196,6 +196,7 @@ describe('a lesson request', () => {
     expect(classSentences('Then he left. The room is cold!', vault)).toEqual({ text: 'The room is cold!', notSent: 1 });
     // A word that only holds "he" is no pronoun.
     expect(classSentences('The theme is the harvest.', vault)).toEqual({ text: 'The theme is the harvest.', notSent: 0 });
+    expect(classSentences('[withheld] to [Place 1] and [withheld]. The class visits [Place 1] in [withheld] each year.', vault)).toEqual({ text: 'The class visits [Place 1] in [withheld] each year.', notSent: 1 });
   });
 
   it('still asks for the as-written tick when nothing is withheld, though a sentence about one pupil is left out', () => {
