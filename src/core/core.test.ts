@@ -1196,7 +1196,9 @@ describe('the instruction sent with a draft', () => {
     for (const said of [LESSON_SYSTEM, TASKS[0].instruction]) expect(said).not.toMatch(/money|cost|buy|pay|phone|internet|online|after school|bell|free\b/i);
     expect(LESSON_SYSTEM).toContain('plain text with no markdown');
     expect(LESSON_SYSTEM).toContain('No diagnosis, no labels for children.');
-    expect(LESSON_SYSTEM).toContain("Do not use a child's stand-in or a [Place] stand-in as an example in a whole-class step.");
+    expect(LESSON_SYSTEM).toContain('Never write a square-bracketed word that is not in the notes');
+    // No example stand-in to copy: the lesson's notes seldom hold one.
+    expect(LESSON_SYSTEM).not.toMatch(/\[(?:Student|Adult|Place|Contact|ID)\b/);
     expect(LESSON_SYSTEM).toContain('[withheld] marks a private detail you are not allowed to know.');
   });
 

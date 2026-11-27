@@ -6,6 +6,14 @@ import { modelFor } from './routes';
 
 const REDACTED = `The teacher's notes have been redacted before they reached you. Text in square brackets such as [Student 1], [Adult 1] or [Place 1] stands for a person or place whose identity is withheld. Always refer to them by exactly the same stand-in, brackets included. [withheld] marks a private detail you are not allowed to know. Do not guess what it is and do not ask for it.`;
 
+/**
+ * For a lesson only the note's sentences about the class are sent, so there
+ * is seldom a stand-in in it. Given examples of stand-ins, the cloud wrote
+ * one that was never sent ("a description of [Place 1]"), which the return
+ * gate rightly stops; so a lesson is given no example to copy.
+ */
+const LESSON_REDACTED = `The teacher's notes were redacted before they reached you, and only their sentences about the class as a whole were kept. A word in square brackets stands for a person or place whose identity is withheld; [withheld] marks a private detail you are not allowed to know. Do not guess what either is. Never write a square-bracketed word that is not in the notes, and do not use one as an example in a whole-class step.`;
+
 /** The system instruction sent with a support plan, messages to parents and a hand-over. Shown to the teacher word for word before they approve. */
 export const DRAFT_SYSTEM = `You help a school teacher in India with practical, kind, specific classroom advice.
 
@@ -21,9 +29,9 @@ Write plainly, in plain text with no markdown: no asterisks, no # headings. No d
  */
 export const LESSON_SYSTEM = `You help a school teacher in India plan a practical lesson for the class, level and topic given: its stages, the minutes for each, the materials and the homework.
 
-${REDACTED}
+${LESSON_REDACTED}
 
-Write plainly, in plain text with no markdown: no asterisks, no # headings. No diagnosis, no labels for children. Do not use a child's stand-in or a [Place] stand-in as an example in a whole-class step.`;
+Write plainly, in plain text with no markdown: no asterisks, no # headings. No diagnosis, no labels for children.`;
 
 /** The system instruction for a task. */
 export function draftSystem(task: TaskId): string {
