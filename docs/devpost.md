@@ -8,6 +8,13 @@ Your device knows the child. The cloud only knows the need.
 
 **Code:** https://github.com/ALikesToCode/staffroom (Apache-2.0)
 
+## Try it in 30 seconds (Judge guide)
+
+1. **Any browser (zero setup):** Click **Watch a recorded run with Gemini Nano** on the first screen to step through one complete Chrome 158 + Gemini Nano + `gemini-3.5-flash-lite` lesson run (`Next` / `Back`, or click any step in the progress bar).
+2. **Trace across the door:** On **What leaves** or **Beside each child**, hover or focus any `Need` letter (such as `Need F` or `Need I`) or any line in the right-hand cloud pane to highlight matching private details, per-child adjustments, and tailored sheets on the left without ever sending names across the door.
+3. **Verify zero cloud leakage live:** Open **Inspect** (or press **Try an invented class** in desktop Chrome with Gemini Nano) to check the explicit `ONLY_ON_DEVICE` / `PREFER_IN_CLOUD` routes and the browser's live Resource Timing log (`0 requests to the model host` during Guard and Check).
+4. **Compare outputs at Sign off:** On the **Sign off** screen (or replay step 5), toggle **Preview class & teacher copies** to view the anonymous `Class copy · no names` beside the private `Teacher's copy · with names`.
+
 ## Value proposition
 
 A teacher in an Indian government school plans tomorrow's lesson for a class of forty. A large model can write the plan. What makes it work for this class is what only the teacher knows: one child must leave at the last bell to walk home before dark, one family cannot pay for anything extra, one child has no phone at home, two boys fight when they sit together. Those facts should not be pasted into a chatbot.
@@ -33,7 +40,7 @@ Every model call goes through the Firebase AI Logic web SDK (`firebase/ai`). The
 
 | Job | Input | Mode |
 |---|---|---|
-| Find names, private details, constraints and learning needs | the raw note | `ONLY_ON_DEVICE` |
+| Find names, private details and constraints | the raw note | `ONLY_ON_DEVICE` |
 | Write the lesson and its materials (or a plan, messages, a hand-over) | the approved text: for a lesson, class-level sentences and the needs by letter | `PREFER_IN_CLOUD` |
 | Check each step against the private details | the draft and the withheld details | `ONLY_ON_DEVICE` |
 | Suggest what one child does instead | one step and that child's notes | `ONLY_ON_DEVICE` |
