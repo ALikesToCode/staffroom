@@ -97,7 +97,7 @@ export function DevicePill({
           <div className="pop" role="note">
             <b>How to turn it on</b>
             <ol>
-              <li>Open this page in Chrome 139 or later on a desktop computer.</li>
+              <li>Open this page in Chrome 158 or later on a desktop computer.</li>
               <li>Keep about 22 GB of disk free. Chrome downloads the model the first time.</li>
               <li>If the pill still says this, see the README.</li>
             </ol>

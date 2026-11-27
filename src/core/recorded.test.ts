@@ -234,6 +234,8 @@ describe('a recorded run', () => {
     expect(asRecordedRun({ ...copy(), checks: [] })).toBeUndefined();
     expect(asRecordedRun({ ...copy(), checks: [{ verdict: 'fine', reason: 'r' }] })).toBeUndefined();
     expect(asRecordedRun({ ...copy(), where: { guard: 'ON_DEVICE', draft: 'IN_CLOUD', check: 'SOMEWHERE' } })).toBeUndefined();
+    expect(asRecordedRun({ ...copy(), where: { ...run.where, scan: 'SOMEWHERE' } })).toBeUndefined();
+    expect(asRecordedRun({ ...copy(), where: { ...run.where, scan: 'ON_DEVICE' } })!.where.scan).toBe('ON_DEVICE');
     expect(asRecordedRun({ ...copy(), entities: [{ id: 'x' }] })).toBeUndefined();
     expect(asRecordedRun({ ...copy(), constraints: [{ id: 'x', kind: 'curfew', text: 't', source: 'rule', confirmed: true }] })).toBeUndefined();
     expect(asRecordedRun({ ...copy(), draft: { title: 'x', items: [] } })).toBeUndefined();

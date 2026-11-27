@@ -127,7 +127,8 @@ export function withNeeds(text: string, lines: string[]): string {
 }
 
 /** He or she: a sentence that says it is about one person, most likely one pupil or a pupil's parent. */
-const ONE_PERSON = /(?<![\p{L}])(?:he|she|him|his|her|hers|himself|herself)(?![\p{L}])/iu;
+const ONE_PERSON =
+  /(?<![\p{L}\p{M}])(?:he|she|him|his|her|hers|himself|herself|woh|uska|uski|uske|usse|usko|वह|वो|उसने|उसका|उसकी|उसके|उसको|उसे|उससे)(?![\p{L}\p{M}])/iu;
 
 /** A sentence with a withheld detail and fewer words than this besides its stand-ins ("[withheld] to [Place 1] and [withheld].") is a fragment about one pupil. */
 const MOSTLY_WITHHELD = 4;
@@ -199,12 +200,17 @@ export interface Outgoing {
  */
 export function outgoingOf(note: string, entities: Entity[], constraints: Constraint[], lesson = false): Outgoing {
   const redaction = redactWithTokens(note, entities);
+  const mergeViolations = (gate: Violation[], needIssues: Violation[]): Violation[] => {
+    const seen = new Set(gate.map((v) => v.what.toLowerCase()));
+    return [...gate, ...needIssues.filter((v) => !seen.has(v.what.toLowerCase()))];
+  };
   if (lesson) {
     // A lesson is told its needs by letter, with no child in any line, and no sentence about one pupil. Whose each need is stays here.
     const byLetter = lessonNeeds(constraints, entities);
     const kept = classSentences(redaction.text, entities);
+    const text = withLessonNeeds(kept.text, byLetter);
     return {
-      text: withLessonNeeds(kept.text, byLetter),
+      text,
       // Only the stand-ins that are still in the text may come back.
       tokens: redaction.tokens.filter((t) => kept.text.includes(t)),
       // Leaving a sentence out withholds nothing from the sentences that are sent, so they still need the as-written tick.
@@ -213,18 +219,19 @@ export function outgoingOf(note: string, entities: Entity[], constraints: Constr
       // One entry for each constraint behind a need, so that a rule hit can say the cloud was told it.
       needs: byLetter.flatMap((n) => n.constraintIds.map((id) => ({ id, line: needLabel(n), issues: n.issues }))),
       lessonNeeds: byLetter,
-      violations: [...checkOutgoing(kept.text, entities, note), ...byLetter.flatMap((n) => n.issues)],
+      violations: mergeViolations(checkOutgoing(text, entities, note), byLetter.flatMap((n) => n.issues)),
     };
   }
   const needs = sharedNeeds(constraints, entities);
   const tokens = new Set(redaction.tokens);
   const known = new Set(entities.filter((e) => e.kind !== 'private' && e.withheld).map((e) => e.token));
   for (const n of needs) for (const m of n.line.matchAll(TOKEN_RE)) if (known.has(m[0])) tokens.add(m[0]);
+  const text = withNeeds(redaction.text, needs.map((n) => n.line));
   return {
-    text: withNeeds(redaction.text, needs.map((n) => n.line)),
+    text,
     tokens: [...tokens],
     noteAsWritten: redaction.tokens.length === 0,
     needs,
-    violations: [...checkOutgoing(redaction.text, entities, note), ...needs.flatMap((n) => n.issues)],
+    violations: mergeViolations(checkOutgoing(text, entities, note), needs.flatMap((n) => n.issues)),
   };
 }

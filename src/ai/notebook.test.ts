@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NOTEBOOK_PROMPT, transcribeNotebookOnDevice } from './notebook';
+import { extractScannedClassList, NOTEBOOK_PROMPT, transcribeNotebookOnDevice } from './notebook';
 
 describe('on-device multimodal notebook scanner', () => {
   const fetchSpy = vi.fn(() => Promise.reject(new Error('the network must not be used')));
@@ -23,5 +23,18 @@ describe('on-device multimodal notebook scanner', () => {
     await expect(transcribeNotebookOnDevice({ mimeType: 'image/jpeg', data: '' })).rejects.toThrow(/No image data/);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(NOTEBOOK_PROMPT).toContain('verbatim');
+  });
+
+  it('extracts likely pupil names from raw scanned text while filtering places, adult roles, headers, and duplicates', () => {
+    const sampleOcr = [
+      'Subject: English',
+      'Topic: Describing a place',
+      'Class IV B weekly note',
+      'Aarav Sharma has been unwell and missed four days. Ask Dr. Rao or Sunita Verma (mother) after school.',
+      'Diya Sharma misses Tuesday from Chennai to Delhi.',
+      'Kabir and Ishaan talk beside each other; Meenal speaks Hindi at home.',
+      'Aarav needs clear board steps.',
+    ].join('\n');
+    expect(extractScannedClassList(sampleOcr)).toEqual(['Aarav Sharma', 'Diya Sharma', 'Kabir', 'Ishaan', 'Meenal']);
   });
 });

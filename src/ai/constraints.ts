@@ -94,8 +94,15 @@ export function mergeProposals(byRule: Constraint[], byModel: Constraint[]): Con
   return out.sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
 }
 
+const TIME_OF_DAY_CUE =
+  /\b(?:bell|before\s+school|after\s+school|after\s+class|stays?\s+(?:back|late)|bus|dark|o'?clock|\d{1,2}:\d{2}|\d+\s*(?:am|pm)|morning|evening|afternoon|late\s+home|stall\s+before)\b/i;
+
 const isRedundantWithLearning = (c: Constraint) =>
-  !c.confirmed && c.source === 'on-device model' && (c.kind === 'other' || (c.kind === 'days-away' && (c.days?.length ?? 0) === 0));
+  !c.confirmed &&
+  c.source === 'on-device model' &&
+  (c.kind === 'other' ||
+    (c.kind === 'days-away' && (c.days?.length ?? 0) === 0) ||
+    ((c.kind === 'time-after' || c.kind === 'time-before') && !TIME_OF_DAY_CUE.test(c.text)));
 
 /**
  * Put rule learning needs with constraints and fold away overlapping

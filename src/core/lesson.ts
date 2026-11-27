@@ -270,20 +270,55 @@ const isSaved = (v: unknown): v is SavedLesson => {
   );
 };
 
-export function loadLessons(): SavedLesson[] {
+function parseLessons(raw: string | null): SavedLesson[] {
+  if (!raw) return [];
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? '[]') as unknown;
-    return Array.isArray(raw) ? raw.filter(isSaved).slice(0, LESSONS_MAX) : [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter(isSaved).slice(0, LESSONS_MAX) : [];
   } catch {
     return [];
   }
 }
 
-/** Keep the lessons in this browser, newest first, thirty at most. False when the browser would not store them. */
-export function storeLessons(lessons: SavedLesson[]): boolean {
+function getStorage(kind: 'session' | 'local'): Storage | undefined {
   try {
-    if (lessons.length === 0) localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, JSON.stringify(lessons.slice(0, LESSONS_MAX)));
+    return kind === 'session' ? globalThis.sessionStorage : globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+export function loadLessons(): SavedLesson[] {
+  const session = getStorage('session');
+  let sessionRaw: string | null = null;
+  try {
+    sessionRaw = session?.getItem(KEY) ?? null;
+  } catch {
+    sessionRaw = null;
+  }
+  if (sessionRaw !== null) return parseLessons(sessionRaw);
+  try {
+    return parseLessons(getStorage('local')?.getItem(KEY) ?? null);
+  } catch {
+    return [];
+  }
+}
+
+/** Keep the lessons in sessionStorage by default, or localStorage only when persist is true (opted in). False when storage fails. */
+export function storeLessons(lessons: SavedLesson[], persist = false): boolean {
+  const target = getStorage(persist ? 'local' : 'session');
+  const other = getStorage(persist ? 'session' : 'local');
+  try {
+    other?.removeItem(KEY);
+  } catch {
+    // Ignore errors clearing the unused storage tier.
+  }
+  try {
+    if (lessons.length === 0) target?.removeItem(KEY);
+    else {
+      if (!target) return false;
+      target.setItem(KEY, JSON.stringify(lessons.slice(0, LESSONS_MAX)));
+    }
     return true;
   } catch {
     return false;

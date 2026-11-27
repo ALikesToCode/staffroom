@@ -1,5 +1,40 @@
+import { findPossibleNames } from '../core/rules';
 import { plainText } from '../core/text';
 import { modelFor } from './routes';
+
+const METADATA_LINE_RE = /^(?:subject|topic|date|teacher|school|class|grade|section|term|roll|period|time)\s*[:-]/i;
+const HONORIFIC_BEFORE_RE = /\b(?:mr|mrs|ms|miss|dr|prof|shri|smt|kumari|rev|father|sister|mother|aunt|uncle)\.?\s+$/i;
+const ADULT_ROLE_AFTER_RE = /^\s*(?:\(|,|-)\s*(?:mother|father|parent|guardian|grandmother|grandfather|aunt|uncle|doctor|teacher)\b/i;
+const ROMAN_OR_SINGLE_RE = /^(?:[A-Z]|[IVXLCDM]{1,5})$/;
+
+/**
+ * Extract likely pupil names directly from a transcribed notebook page using local proper-name heuristics.
+ * Filters places, adult honorifics/parentheticals, header metadata lines, and duplicates.
+ */
+export function extractScannedClassList(text: string): string[] {
+  const cleanedLines = text
+    .split('\n')
+    .map((line) => (METADATA_LINE_RE.test(line.trim()) ? '' : line))
+    .join('\n');
+  const raw = findPossibleNames(cleanedLines, []);
+  const kept: string[] = [];
+  const seen = new Set<string>();
+  for (const hit of raw) {
+    if (hit.kind === 'place') continue;
+    const candidate = hit.text.trim();
+    if (!candidate || ROMAN_OR_SINGLE_RE.test(candidate)) continue;
+    const before = cleanedLines.slice(Math.max(0, hit.start - 16), hit.start);
+    if (HONORIFIC_BEFORE_RE.test(before)) continue;
+    const after = cleanedLines.slice(hit.end, hit.end + 32);
+    if (ADULT_ROLE_AFTER_RE.test(after)) continue;
+    const key = candidate.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(candidate);
+  }
+  const multiWordFirsts = new Set(kept.filter((n) => n.includes(' ')).map((n) => n.split(/\s+/)[0].toLowerCase()));
+  return kept.filter((n) => n.includes(' ') || !multiWordFirsts.has(n.toLowerCase()));
+}
 
 export const NOTEBOOK_SYSTEM =
   'You transcribe handwritten school register and teacher notebook pages into clean plain text. Copy every name, phone number, roll number, and detail verbatim line by line. Do not summarise or omit anything.';

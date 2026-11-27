@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildVault } from '../core/vault';
 import { checkOnDevice } from './check';
 import { constraintsOnDevice } from './constraints';
-import { labelReceipt } from './draft';
+import { labelReceipt, streamContent } from './draft';
 import { guardOnDevice } from './guard';
 import { fitForChild, fitStep } from './fit';
 import { transcribeNotebookOnDevice } from './notebook';
@@ -106,5 +106,80 @@ describe('naming the receipt', () => {
       title: 'Support plan for next week',
       where: 'FALLBACK',
     });
+  });
+
+  it('recovers mid-stream network failure via on-device fallback and resets partial chunks', async () => {
+    const err = new Error('network dropped mid-stream');
+    const rejectedResponse = Promise.reject(err);
+    rejectedResponse.catch(() => {});
+    const cloudBroken = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            yield { text: () => '{"title":"Partial' };
+            throw err;
+          },
+        },
+        response: rejectedResponse,
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+    const localDevice = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            yield { text: () => '{"title":"Full"' };
+          },
+        },
+        response: Promise.resolve({ text: () => '{"title":"Full"}', inferenceSource: 'on_device' }),
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+
+    const seen: string[] = [];
+    const res = await streamContent(cloudBroken, 'prompt', (c) => seen.push(c), () => localDevice);
+    expect(res).toEqual({ text: '{"title":"Full"}', onDevice: true });
+    expect(seen).toEqual(['{"title":"Partial', '', '{"title":"Full"', '{"title":"Full"}']);
+  });
+
+  it('recovers silently truncated cloud JSON via on-device fallback when validation fails', async () => {
+    const truncatedCloud = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            yield { text: () => '{"title":"Truncated' };
+          },
+        },
+        response: Promise.resolve({ text: () => '{"title":"Truncated', inferenceSource: 'in_cloud' }),
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+    const localDevice = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            yield { text: () => '{"title":"Valid","items":[{"heading":"Starter","text":"Ok."}]}' };
+          },
+        },
+        response: Promise.resolve({ text: () => '{"title":"Valid","items":[{"heading":"Starter","text":"Ok."}]}', inferenceSource: 'on_device' }),
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+
+    const seen: string[] = [];
+    const res = await streamContent(
+      truncatedCloud,
+      'prompt',
+      (c) => seen.push(c),
+      () => localDevice,
+      (t) => {
+        try {
+          const parsed = JSON.parse(t) as { items?: unknown[] };
+          return Array.isArray(parsed.items) && parsed.items.length > 0;
+        } catch {
+          return false;
+        }
+      },
+    );
+    expect(res.onDevice).toBe(true);
+    expect(seen[0]).toBe('{"title":"Truncated');
+    expect(seen[1]).toBe('');
+    expect(JSON.parse(res.text).title).toBe('Valid');
   });
 });

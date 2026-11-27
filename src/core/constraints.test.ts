@@ -376,6 +376,8 @@ describe('constraints proposed by the on-device model', () => {
     const modelExtras: Constraint[] = [
       { id: 'm-missed', kind: 'days-away', text: 'missed four days this month', at: SAMPLE_NOTE.indexOf('missed four days'), days: [], about: aaravId, source: 'on-device model', confirmed: false },
       { id: 'm-hw', kind: 'other', text: 'has not handed in homework for two weeks', at: SAMPLE_NOTE.indexOf('has not handed in homework'), about: aaravId, source: 'on-device model', confirmed: false },
+      { id: 'm-missed-time', kind: 'time-after', text: 'has missed four days this month', at: SAMPLE_NOTE.indexOf('missed four days'), about: aaravId, source: 'on-device model', confirmed: false },
+      { id: 'm-real-bell', kind: 'time-after', text: 'stays after school on Thursdays', at: SAMPLE_NOTE.indexOf('Tanvi'), about: aaravId, source: 'on-device model', confirmed: false },
       { id: 'm-fight', kind: 'other', text: 'Kabir and Ishaan fight most days during group work.', at: SAMPLE_NOTE.indexOf('Kabir and Ishaan fight'), source: 'on-device model', confirmed: false },
       { id: 'm-early', kind: 'other', text: 'Ishaan finishes early and gets bored.', at: SAMPLE_NOTE.indexOf('Ishaan finishes early'), about: ishaanId, source: 'on-device model', confirmed: false },
       { id: 'm-friday', kind: 'days-away', text: 'away on Fridays', at: SAMPLE_NOTE.indexOf('Aarav Sharma'), days: ['Friday'], about: aaravId, source: 'on-device model', confirmed: false },
@@ -383,8 +385,9 @@ describe('constraints proposed by the on-device model', () => {
     const existing = [...byRule, ...modelExtras];
     const learning = proposeLearning(SAMPLE_NOTE, sample);
     const merged = mergeLearningIntoConstraints(existing, learning);
-    expect(merged.some((c) => ['m-missed', 'm-hw', 'm-fight', 'm-early'].includes(c.id))).toBe(false);
-    // A days-away constraint with named days is kept, and non-overlapping rules stay intact.
+    expect(merged.some((c) => ['m-missed', 'm-hw', 'm-missed-time', 'm-fight', 'm-early'].includes(c.id))).toBe(false);
+    // Genuine time-of-day proposals ("after school") and named-day proposals stay intact.
+    expect(merged.some((c) => c.id === 'm-real-bell')).toBe(true);
     expect(merged.some((c) => c.id === 'm-friday')).toBe(true);
     expect(merged.some((c) => c.kind === 'time-after')).toBe(true);
     expect(merged.filter((c) => c.learn === 'missed' || c.learn === 'homework' || c.learn === 'group' || c.learn === 'early').every((c) => c.alsoModel === true)).toBe(true);

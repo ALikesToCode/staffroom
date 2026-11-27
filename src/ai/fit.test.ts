@@ -215,6 +215,10 @@ describe('what one child needs in a lesson', () => {
     });
     expect(readPoints(points(['Starter', 'One.'], ['Practise', 'Two.'], ['Homework', 'Three.']), stages)!.points).toHaveLength(2);
     expect(readPoints(points(['Starter', `${'A short sentence. '.repeat(20)}`]), stages)!.points[0].text.length).toBeLessThanOrEqual(200);
+    expect(readPoints(points(['Starter', "Prompt Aarav to recall details from his family's situation."], ['Practise', 'Provide extra paper from the class set.']), stages)).toEqual({
+      points: [{ itemIndex: 1, stage: 'Practise', text: 'Provide extra paper from the class set.' }],
+      unknown: 0,
+    });
     expect(readPoints(JSON.stringify({ points: [] }), stages)).toEqual({ points: [], unknown: 0 });
     for (const raw of ['', 'not json', '{"points":"none"}', 'null']) expect(readPoints(raw, stages), raw).toBeUndefined();
   });

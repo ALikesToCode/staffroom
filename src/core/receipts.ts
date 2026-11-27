@@ -14,7 +14,8 @@ export function loadReceipts(): Receipt[] {
 /** Keep the receipts in this browser. Returns false when the browser would not store them (full, or switched off). */
 export function storeReceipts(receipts: Receipt[]): boolean {
   try {
-    localStorage.setItem(KEY, JSON.stringify(receipts.slice(0, 50)));
+    if (receipts.length === 0) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, JSON.stringify(receipts.slice(0, 50)));
     return true;
   } catch {
     return false;

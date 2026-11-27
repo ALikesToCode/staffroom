@@ -219,5 +219,11 @@ describe('a lesson request', () => {
     expect(out.violations.map((v) => v.what)).toEqual(['98765 43210']);
     const typed = outgoingOf(note, vault, [{ ...learning('l', vault[0].id), need: 'has epilepsy' }], true);
     expect(typed.violations.map((v) => v.what)).toEqual(['epilepsy']);
+    // Hinglish and Devanagari singular pronouns are treated as single-pupil sentences too, while nearby words ("वहाँ") stay intact.
+    expect(classSentences('Uska phone band hai. Class reads aloud today.', vault)).toEqual({ text: 'Class reads aloud today.', notSent: 1 });
+    expect(classSentences('वह घर जाती है। वहाँ चित्र लगाएँ।', vault)).toEqual({ text: 'वहाँ चित्र लगाएँ', notSent: 1 });
+    // Full exit gate scans assembled withLessonNeeds() output without duplicating typed-need alerts.
+    const leakedNumber = outgoingOf(note, vault, [{ ...learning('l', vault[0].id), need: 'Ring 98765 43210' }], true);
+    expect(leakedNumber.violations.map((v) => v.what)).toEqual(['98765 43210']);
   });
 });

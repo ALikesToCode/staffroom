@@ -2089,6 +2089,18 @@ details > summary {
   background: rgb(255 255 255 / 0.14);
 }
 
+.action-bar .link {
+  color: #e5eff9;
+}
+
+.action-bar .link:not(:disabled):hover {
+  color: #fff;
+}
+
+.action-bar .link:disabled {
+  color: rgb(255 255 255 / 0.45);
+}
+
 .action-bar button:focus-visible,
 .action-bar input:focus-visible {
   outline-color: #fff;

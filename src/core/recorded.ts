@@ -79,7 +79,7 @@ export interface RecordedRun {
   draft: Draft;
   /** The verdict for each item of the draft, in order. */
   checks: ItemCheck[];
-  where: { guard: Where; draft: Where; check: Where };
+  where: { scan?: Where; guard: Where; draft: Where; check: Where };
   draftModel: string;
   /** The items the teacher had rewritten when the run was saved, a suggestion saved as it was or changed. Absent: none. */
   rewrites?: RecordedRewrite[];
@@ -187,7 +187,13 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
   // One verdict for each item, or the file does not describe one run.
   if (d.checks.length !== draft.items.length) return undefined;
   const where = d.where;
-  if (!obj(where) || ![where.guard, where.draft, where.check].every((w) => WHERES.includes(w as Where))) return undefined;
+  if (
+    !obj(where) ||
+    ![where.guard, where.draft, where.check].every((w) => WHERES.includes(w as Where)) ||
+    !optional(where.scan, (w) => WHERES.includes(w as Where))
+  ) {
+    return undefined;
+  }
   const count = draft.items.length;
   const rewrites = d.rewrites;
   if (rewrites !== undefined && !perItem<RecordedRewrite>(rewrites, count, (x) => str(x.text) && x.text.trim().length > 0 && x.text.length <= REWRITE_MAX)) return undefined;
@@ -299,7 +305,12 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
     policy: { cloudModel: policy.cloudModel, lockedKinds: policy.lockedKinds, origin: policy.origin as Policy['origin'], from: policy.from },
     draft: { title: draft.title, items: draft.items.map((i) => ({ heading: i.heading, text: i.text })) },
     checks: d.checks,
-    where: { guard: where.guard as Where, draft: where.draft as Where, check: where.check as Where },
+    where: {
+      ...(where.scan !== undefined ? { scan: where.scan as Where } : {}),
+      guard: where.guard as Where,
+      draft: where.draft as Where,
+      check: where.check as Where,
+    },
     draftModel: d.draftModel,
     ...(rewrites ? { rewrites: rewrites.map((r) => ({ itemIndex: r.itemIndex, text: r.text })) } : {}),
     ...(fits ? { fits: fits.map((f) => ({ itemIndex: f.itemIndex, stepIndex: f.stepIndex, suggestion: f.suggestion })) } : {}),
@@ -355,10 +366,16 @@ export function browserName(userAgent: string): string {
  * An empty list of either is left out.
  */
 export function captureRun(run: Omit<RecordedRun, 'recordedAt' | 'chrome'>, now: Date, userAgent: string): RecordedRun {
-  const { rewrites, fits, adjustments, needs, needChildren, variations, needOutcomes, materials, ...rest } = run;
+  const { rewrites, fits, adjustments, needs, needChildren, variations, needOutcomes, materials, where, ...rest } = run;
   return {
     recordedAt: now.toISOString(),
     chrome: browserName(userAgent),
+    where: {
+      ...(where.scan ? { scan: where.scan } : {}),
+      guard: where.guard,
+      draft: where.draft,
+      check: where.check,
+    },
     ...rest,
     ...(rewrites && rewrites.length > 0 ? { rewrites } : {}),
     ...(fits && fits.length > 0 ? { fits } : {}),

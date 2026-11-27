@@ -237,7 +237,7 @@ export async function fitForChild(input: ChildFitInput, ask?: FitAsk): Promise<F
 
 /** Kept short, like FIT_SYSTEM. The lesson stays as it is for the class; the answer is for the teacher, about one child. */
 export const FIT_LESSON_SYSTEM =
-  'A teacher has a lesson plan for the whole class and private notes about one child. Write at most two points for the teacher. Each point names one stage of the lesson and gives one sentence of at most 25 words. The sentence begins with a verb and says exactly what the teacher does for this child in that stage. Base each point on one specific thing the notes say and on what that stage asks pupils to do. No general advice such as "offer encouragement" or "pair with a supportive classmate". If nothing in the notes matters for this lesson, give no points. No diagnosis.';
+  'A teacher has a lesson plan for the whole class and private notes about one child. Write at most two points for the teacher. Each point names one stage of the lesson and gives one sentence of at most 25 words. The sentence begins with a verb and says what the teacher does for this child in that stage based on the notes and stage task. No generic encouragement. If nothing in the notes matters for this lesson, give no points. No diagnosis. Never ask a child to share or recall family, money, health, or home hardships.';
 export const FIT_LESSON_CHILD = 'Child: ';
 export const FIT_LESSON_NOTES = 'Notes about the child:';
 export const FIT_LESSON_PLAN = 'Lesson plan:';
@@ -310,6 +310,9 @@ export interface FitPoint {
  * there is one. `unknown` counts the points that named no stage of this
  * lesson. Undefined: the answer could not be read at all.
  */
+const INTRUSIVE_PROMPT_RE =
+  /\b(?:(?:ask|prompt|invite|have|encourage|get)\b[^.!?\n]{0,50}\b(?:share|recall|describe|discuss|talk about|write about|mention|explain)\b|(?:recall|share|discuss|talk about|draw on|bring up)\b)[^.!?\n]{0,50}\b(?:family(?:'s)?|home\s+(?:life|situation)|tea\s+stall|job|money|income|financial|epilepsy|seizure|illness|health|mother|father|grandmother|parents?|separation|hardships?|situation)\b/i;
+
 export function readPoints(raw: string, stages: readonly FitStage[]): { points: FitPoint[]; unknown: number } | undefined {
   let parsed: { points?: unknown } | null;
   try {
@@ -328,7 +331,7 @@ export function readPoints(raw: string, stages: readonly FitStage[]): { points: 
       const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
       text = (end > 0 ? cut.slice(0, end + 1) : cut).trim();
     }
-    if (text.length === 0) continue;
+    if (text.length === 0 || INTRUSIVE_PROMPT_RE.test(text)) continue;
     const named = typeof p.stage === 'string' ? p.stage.replace(/\s+/g, ' ').trim().toLowerCase() : '';
     const itemIndex = stages.findIndex((s) => s.name.toLowerCase() === named);
     if (itemIndex < 0) {

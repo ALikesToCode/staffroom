@@ -178,26 +178,48 @@ describe('a signed lesson, kept on this device', () => {
     constraintIds: constraints.map((c) => c.id),
   };
   const store = new Map<string, string>();
+  const sessionStore = new Map<string, string>();
   beforeEach(() => {
     store.clear();
+    sessionStore.clear();
     (globalThis as { localStorage?: unknown }).localStorage = {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => void store.set(k, v),
       removeItem: (k: string) => void store.delete(k),
     };
+    (globalThis as { sessionStorage?: unknown }).sessionStorage = {
+      getItem: (k: string) => sessionStore.get(k) ?? null,
+      setItem: (k: string, v: string) => void sessionStore.set(k, v),
+      removeItem: (k: string) => void sessionStore.delete(k),
+    };
   });
 
-  it('is stored and read back, thirty at most, and anything not in form is left out', () => {
+  it('is stored in sessionStorage by default and localStorage only when opted in, thirty at most', () => {
     expect(loadLessons()).toEqual([]);
     expect(storeLessons(Array.from({ length: 34 }, (_, i) => ({ ...lesson, id: `l${i}` })))).toBe(true);
+    expect(store.size).toBe(0);
+    expect(sessionStore.size).toBe(1);
     expect(loadLessons()).toHaveLength(30);
     expect(loadLessons()[0]).toEqual({ ...lesson, id: 'l0' });
-    store.set('staffroom.lessons.v1', JSON.stringify([lesson, { id: 'x' }, null]));
+
+    // Opt-in persistence moves lessons into localStorage and clears sessionStorage.
+    expect(storeLessons([lesson], true)).toBe(true);
+    expect(store.size).toBe(1);
+    expect(sessionStore.size).toBe(0);
     expect(loadLessons()).toEqual([lesson]);
-    store.set('staffroom.lessons.v1', 'not json');
-    expect(loadLessons()).toEqual([]);
-    storeLessons([]);
+
+    // Turning persistence off moves them back to sessionStorage and wipes localStorage.
+    expect(storeLessons([lesson], false)).toBe(true);
     expect(store.size).toBe(0);
+    expect(sessionStore.size).toBe(1);
+
+    sessionStore.set('staffroom.lessons.v1', JSON.stringify([lesson, { id: 'x' }, null]));
+    expect(loadLessons()).toEqual([lesson]);
+    sessionStore.set('staffroom.lessons.v1', 'not json');
+    expect(loadLessons()).toEqual([]);
+    storeLessons([], false);
+    expect(store.size).toBe(0);
+    expect(sessionStore.size).toBe(0);
   });
 
   it('gives the next lesson what was done last time, with no adjustment and no name in it', () => {

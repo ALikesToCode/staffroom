@@ -77,11 +77,11 @@ import {
   type SavedLesson,
 } from './core/lesson';
 import { ChildSections, ForTheseChildren, Lessons, type PointActions } from './ui/Lesson';
-import { acceptedPoints, childFitSaid, childNotes, fitSummary, inNoteOrder, missingPoints, namesForNeed, pairPoints, placeVariations, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
+import { acceptedPoints, childFitSaid, childNotes, dedupePairVariations, fitSummary, inNoteOrder, missingPoints, namesForNeed, pairPoints, placeVariations, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
-import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
+import { deviceStatus, imageOnDeviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { constraintsFromCombined, guardCombinedOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
-import { prepareNotebookImage, transcribeNotebookOnDevice } from './ai/notebook';
+import { extractScannedClassList, prepareNotebookImage, transcribeNotebookOnDevice } from './ai/notebook';
 import { mergeLearningIntoConstraints, mergeProposals, type ConstraintReport } from './ai/constraints';
 import { classView, currentTicketKind, withoutClass, withTicketNeeds } from './core/ticket';
 import { materialsReply, materialsText, unnumbered, type Materials } from './core/materials';
@@ -236,6 +236,7 @@ export function App() {
   const [unconfirmAsk, setUnconfirmAsk] = useState<string | null>(null);
   const [guardWhere, setGuardWhere] = useState<Where>('NOT_RUN');
   const [scanWhere, setScanWhere] = useState<Where>('NOT_RUN');
+  const [imageDevice, setImageDevice] = useState<DeviceStatus>('checking');
   const [scanning, setScanning] = useState(false);
   const [scanPreview, setScanPreview] = useState<{ url: string; summary: string } | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -405,6 +406,7 @@ export function App() {
 
   useEffect(() => {
     deviceStatus().then(setDevice);
+    imageOnDeviceStatus().then(setImageDevice);
     const usePolicy = (p: Policy) => {
       policyRef.current = p;
       policyReadyRef.current = true;
@@ -448,6 +450,9 @@ export function App() {
     write(local, KEEP_CLASS_KEY, keepClass, !keepClass);
     write(local, CLASS_KEY, { note, classList, constraints, constraintsNote: constraintsNote.current, lesson, removed } satisfies KeptClass, !keepClass || note === '');
   }, [keepClass, note, classList, constraints, lesson, removed, replay]);
+  useEffect(() => {
+    if (!replay) storeLessons(lessons, keepClass);
+  }, [lessons, keepClass, replay]);
   useEffect(() => {
     if (!replay) write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints, removed }, constraints.length === 0 && removed.length === 0);
   }, [constraints, replay, removed]);
@@ -537,15 +542,21 @@ export function App() {
   const noteNow = note;
   const classListNow = classList;
   /** Transcribe a handwritten register photo strictly on-device via Gemini Nano (`ONLY_ON_DEVICE`), adding its text to the note. */
-  const scanNotebookFile = async (blob: Blob) => {
+  const scanNotebookFile = async (blob: Blob, isSample = false) => {
     if (replay || scanning) return;
     setScanning(true);
     setScanError(null);
     const run = runRef.current;
     try {
       const ready = await turnOnDevice();
-      if (!ready || runRef.current !== run) {
-        setScanError('Notebook photo transcription requires Chrome with Gemini Nano ready on this device.');
+      const imgStatus = await imageOnDeviceStatus();
+      setImageDevice(imgStatus);
+      if (!ready || imgStatus === 'unsupported' || imgStatus === 'unavailable' || runRef.current !== run) {
+        setScanError(
+          imgStatus === 'unsupported' || imgStatus === 'unavailable'
+            ? 'Notebook image transcription is not available in this browser (Chrome Built-in multimodal Nano required).'
+            : 'Notebook photo transcription requires Chrome with Gemini Nano ready on this device.',
+        );
         return;
       }
       const prepared = await prepareNotebookImage(blob);
@@ -561,12 +572,12 @@ export function App() {
         const combined = trimmed ? `${trimmed}\n\n${scanned.text}` : scanned.text;
         return combined.slice(0, NOTE_MAX);
       });
-      // Seed missing student names from the sample list if the note was blank or mentions sample students, keeping any teacher list intact.
+      // Seed missing student names from the scanned text itself using local proper-name rules, keeping any teacher list intact.
       if (classList.length === 0) {
-        const matched = SAMPLE_CLASS_LIST.filter((name) => scanned.text.toLowerCase().includes(name.split(' ')[0].toLowerCase()));
+        const matched = extractScannedClassList(scanned.text);
         if (matched.length > 0) setClassList(matched);
       }
-      if (!lesson.subject && !lesson.topic) setLesson(SAMPLE_LESSON);
+      if (isSample && !lesson.subject && !lesson.topic) setLesson(SAMPLE_LESSON);
       setComposing(true);
       setScanPreview({
         url: prepared.previewUrl,
@@ -586,7 +597,7 @@ export function App() {
       const resp = await fetch(`${import.meta.env.BASE_URL}sample-notebook.jpg`);
       if (!resp.ok) throw new Error('Sample notebook image was not found.');
       const blob = await resp.blob();
-      await scanNotebookFile(blob);
+      await scanNotebookFile(blob, true);
     } catch (e) {
       setScanError(message(e));
     }
@@ -1001,11 +1012,13 @@ export function App() {
     setVariations(split.variations);
     setVariationsDropped(split.dropped);
     setNeedsReply(approved.lessonNeeds ? { section: split.section, none: split.none, missing: split.missing, second } : null);
+    const placed = placeVariations(split.variations, toldNeeds, entities, items, language ? [] : constraints, note);
+    const paired = approved.lessonNeeds ? pairPoints(constraints, entities, items, note) : [];
     setPoints([
-      ...placeVariations(split.variations, toldNeeds, entities, items, language ? [] : constraints, note),
+      ...dedupePairVariations(placed, paired, toldNeeds, constraints),
       ...missingPoints(split.missing, toldNeeds, entities, constraints, note),
       // Two children who work better apart: only this device knows they are each other's classmate.
-      ...(approved.lessonNeeds ? pairPoints(constraints, entities, items, note) : []),
+      ...paired,
     ]);
     setPointsSuggested(0);
     setChildSaid({});
@@ -1022,7 +1035,11 @@ export function App() {
     setLabel({ title: plain, where: 'FALLBACK' });
     sendingRef.current = false;
     setStage('result');
-    void timed('label', () => labelReceipt(text, plain, cloudModel), (named) => (named.where === 'FALLBACK' ? 'NONE' : named.where)).then((named) => {
+    const labelSource =
+      task === 'lesson' && lessonReady(lesson)
+        ? [lesson.klass, lesson.subject, lesson.topic].filter(Boolean).join(' — ')
+        : `${currentTask.label}\n${text}`;
+    void timed('label', () => labelReceipt(labelSource, plain, cloudModel), (named) => (named.where === 'FALLBACK' ? 'NONE' : named.where)).then((named) => {
       if (gone() || signingRef.current) return;
       // The title is model-written and is kept with the receipt, so it passes the same checks as outgoing text
       // (names, withheld items, patterns, sensitive words) or the plain title stays.
@@ -1088,7 +1105,7 @@ export function App() {
       });
       setLessons((l) => {
         const all = [saved, ...l];
-        storeLessons(all);
+        storeLessons(all, keepClass);
         return all.slice(0, 30);
       });
     }
@@ -1467,7 +1484,7 @@ export function App() {
 
   const changeLessons = (next: SavedLesson[]) => {
     setLessons(next);
-    storeLessons(next);
+    storeLessons(next, keepClass);
   };
 
   /** Open the write screen for the lesson after this one: same class, same subject, and what was done last time. */
@@ -1674,14 +1691,14 @@ export function App() {
    * Forget the raw note, the class list, the vault and the results: from memory and from storage.
    * Receipts hold approved text, so the teacher is asked about them and they go only on a yes.
    */
-  const forgetNote = (alsoReceipts: boolean) => {
+  const forgetNote = (alsoReceipts: boolean, alsoLessons = false) => {
     clearRun();
     if (alsoReceipts) {
       setReceipts([]);
       storeReceipts([]);
     }
     // The marks and needs of each child go with the class. The class plans stay.
-    changeLessons(lessons.map(withoutClass));
+    changeLessons(alsoLessons ? [] : lessons.map(withoutClass));
     setNote('');
     setClassList([]);
     setConstraints([]);
@@ -1710,7 +1727,7 @@ export function App() {
 
   /** Immediately wipe all notes, class lists, constraints, saved lessons, and local receipts from this browser (shared-PC reset). */
   const clearDesk = () => {
-    forgetNote(true);
+    forgetNote(true, true);
     setKeepClass(false);
     setDeskCleared(true);
     setTimeout(() => setDeskCleared(false), 4000);
@@ -1873,7 +1890,7 @@ export function App() {
         draft: result.draft,
         // The reply and the verdicts as they first came. What was rewritten or suggested since goes beside them, as it stands now.
         checks: firstChecks,
-        where: { guard: guardWhere, draft: result.where, check: checkWhere },
+        where: { ...(scanWhere === 'ON_DEVICE' ? { scan: 'ON_DEVICE' } : {}), guard: guardWhere, draft: result.where, check: checkWhere },
         draftModel: result.model,
         rewrites: Object.entries(edits).map(([i, text]) => ({ itemIndex: Number(i), text })),
         fits,
@@ -3054,7 +3071,9 @@ export function App() {
                       <button className="link" type="button" disabled={scanning} onClick={() => void scanSampleNotebook()}>
                         Try sample notebook photo
                       </button>
-                      {noModel && <span className="hint">Notebook photo transcription requires Chrome's built-in Gemini Nano.</span>}
+                      {noModel || imageDevice === 'unsupported' || imageDevice === 'unavailable' ? (
+                        <span className="hint">Notebook photo transcription requires Chrome's built-in Gemini Nano with image support.</span>
+                      ) : null}
                     </div>
                   )}
                   {scanPreview && (
@@ -3621,7 +3640,7 @@ export function App() {
                   : 'Policy: loading. Approval waits for it.'
           }
           ran={{
-            scan: scanWhere === 'ON_DEVICE' ? WHERE_RAN.ON_DEVICE : undefined,
+            scan: replay ? (replay.where.scan === 'ON_DEVICE' ? `${WHERE_RAN.ON_DEVICE}, in the recorded run` : undefined) : scanWhere === 'ON_DEVICE' ? WHERE_RAN.ON_DEVICE : undefined,
             guard: stage === 'write' || stage === 'guarding' ? undefined : WHERE_RAN[guardWhere],
             draft: result && after ? `${WHERE_RAN[result.where]}: ${result.model}` : undefined,
             check: stage === 'result' || stage === 'signed' ? WHERE_RAN[checkWhere] : undefined,

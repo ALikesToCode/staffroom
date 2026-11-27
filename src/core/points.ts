@@ -184,6 +184,7 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 export function fitSummary(children: number, suggested: number, hits: readonly LessonHit[], points: readonly Point[] = []): string {
   const steps = new Set(hits.map((h) => `${h.itemIndex}:${h.stepIndex}`)).size;
   const placed = points.filter((p) => p.need !== undefined && !p.nothing);
+  const pairs = points.filter((p) => p.pair).length;
   const unanswered = new Set(points.filter((p) => p.nothing).map((p) => p.need)).size;
   const needs = new Set(placed.map((p) => p.need)).size;
   const beside = new Set(placed.map((p) => p.childId)).size;
@@ -192,6 +193,7 @@ export function fitSummary(children: number, suggested: number, hits: readonly L
   if (children > 0) out.push(`${count(children, 'child has', 'children have')} private notes.`);
   if (needs > 0) out.push(`The cloud wrote for ${count(needs, 'need', 'needs')} without knowing whose.`);
   if (placed.length > 0) out.push(`${count(placed.length, 'line', 'lines')} placed beside ${count(beside, 'child', 'children')} on this device.`);
+  if (pairs > 0) out.push(`${count(pairs, 'seating line', 'seating lines')} added on this device.`);
   if (unanswered > 0) out.push(`The cloud wrote nothing for ${count(unanswered, 'need', 'needs')}.`);
   if (suggested > 0) out.push(`${count(suggested, 'point', 'points')} suggested on this device.`);
   if (against > 0) out.push(`${against === 1 ? '1 goes' : `${against} go`} against a constraint you confirmed.`);
@@ -299,6 +301,24 @@ export function pairPoints(constraints: readonly Constraint[], entities: Entity[
     }
   }
   return out;
+}
+
+/**
+ * Remove redundant cloud variations for a "group" learning need when a local
+ * two-child pair line already covers that child, keeping one clear seating instruction.
+ */
+export function dedupePairVariations(
+  placed: readonly Point[],
+  pairs: readonly Point[],
+  needs: readonly LessonNeed[],
+  constraints: readonly Constraint[],
+): Point[] {
+  if (pairs.length === 0) return [...placed];
+  const groupIds = new Set(constraints.filter((c) => c.kind === 'learning' && c.learn === 'group').map((c) => c.id));
+  const groupNeeds = new Set(needs.filter((n) => n.constraintIds.some((id) => groupIds.has(id))).map((n) => n.letter));
+  if (groupNeeds.size === 0) return [...placed];
+  const pairChildren = new Set(pairs.map((p) => p.childId));
+  return placed.filter((p) => !(p.need && groupNeeds.has(p.need) && pairChildren.has(p.childId)));
 }
 
 /** The names beside each line for a need, for the device's side of the lesson: who has that need. Never sent. */

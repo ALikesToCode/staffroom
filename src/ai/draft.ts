@@ -2,7 +2,7 @@ import { MATERIALS_SCHEMA, MATERIALS_SYSTEM, readMaterials, type Materials } fro
 import type { Draft, LabelWhere, Task, TaskId, Where } from '../core/types';
 import { ON_DEVICE_MODEL } from '../core/receipts';
 import { plainText } from '../core/text';
-import { modelFor } from './routes';
+import { modelFor, onDeviceFallbackFor } from './routes';
 
 const REDACTED = `The teacher's notes have been redacted before they reached you. Text in square brackets such as [Student 1], [Adult 1] or [Place 1] stands for a person or place whose identity is withheld. Always refer to them by exactly the same stand-in, brackets included. [withheld] marks a private detail you are not allowed to know. Do not guess what it is and do not ask for it.`;
 
@@ -88,7 +88,7 @@ export interface DraftResult {
  * Stream a response from a hybrid PREFER_IN_CLOUD model, forwarding partial text as it arrives
  * and returning the final aggregated text and verified `inferenceSource`.
  */
-async function streamContent(
+async function readStream(
   model: ReturnType<typeof modelFor>,
   prompt: string,
   onChunk?: (accumulatedText: string) => void,
@@ -113,6 +113,34 @@ async function streamContent(
 }
 
 /**
+ * Stream a response from a hybrid PREFER_IN_CLOUD model, forwarding partial text as it arrives
+ * and returning the final aggregated text and verified `inferenceSource`.
+ * If a stream fails mid-flight (e.g. connection dropped after headers/first chunk) and Chrome's
+ * built-in model is available locally, reset partial preview text and recover via ONLY_ON_DEVICE.
+ */
+export async function streamContent(
+  model: ReturnType<typeof modelFor>,
+  prompt: string,
+  onChunk?: (accumulatedText: string) => void,
+  fallbackModel?: () => ReturnType<typeof modelFor> | null,
+  validate?: (text: string) => boolean,
+): Promise<{ text: string; onDevice: boolean }> {
+  try {
+    const result = await readStream(model, prompt, onChunk);
+    if (!result.onDevice && validate && !validate(result.text)) {
+      throw new Error('The streamed cloud reply ended incomplete.');
+    }
+    return result;
+  } catch (err) {
+    const deviceModel = fallbackModel?.();
+    if (!deviceModel || deviceModel === model) throw err;
+    onChunk?.('');
+    const recovered = await readStream(deviceModel, prompt, onChunk);
+    return { ...recovered, onDevice: true };
+  }
+}
+
+/**
  * Write the draft from the redacted, teacher-approved text. The route is
  * PREFER_IN_CLOUD: the cloud model writes it, and the on-device model takes
  * over when the cloud cannot be reached.
@@ -123,8 +151,22 @@ export async function writeDraft(
   cloudModel: string,
   onProgressText?: (partialText: string) => void,
 ): Promise<DraftResult> {
-  const model = modelFor('draft', { system: draftSystem(task.id), schema: SCHEMA, cloudModel });
-  const { text, onDevice } = await streamContent(model, draftPrompt(redacted, task), onProgressText);
+  const opts = { system: draftSystem(task.id), schema: SCHEMA, cloudModel };
+  const model = modelFor('draft', opts);
+  const { text, onDevice } = await streamContent(
+    model,
+    draftPrompt(redacted, task),
+    onProgressText,
+    () => onDeviceFallbackFor(opts),
+    (t) => {
+      try {
+        const parsed = JSON.parse(t) as Draft | null;
+        return Boolean(parsed && Array.isArray(parsed.items) && parsed.items.length > 0);
+      } catch {
+        return false;
+      }
+    },
+  );
   const draft = JSON.parse(text) as Draft;
   if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) {
     throw new Error('The model returned an empty draft.');
@@ -156,8 +198,15 @@ export async function writeMaterials(
   cloudModel: string,
   onProgressText?: (partialText: string) => void,
 ): Promise<MaterialsResult> {
-  const model = modelFor('draft', { system: MATERIALS_SYSTEM, schema: MATERIALS_SCHEMA, cloudModel });
-  const { text: raw, onDevice } = await streamContent(model, text, onProgressText);
+  const opts = { system: MATERIALS_SYSTEM, schema: MATERIALS_SCHEMA, cloudModel };
+  const model = modelFor('draft', opts);
+  const { text: raw, onDevice } = await streamContent(
+    model,
+    text,
+    onProgressText,
+    () => onDeviceFallbackFor(opts),
+    (t) => Boolean(readMaterials(plainText(t), letters)),
+  );
   const materials = readMaterials(plainText(raw), letters);
   if (!materials) throw new Error('The materials that came back were not whole.');
   return { materials, where: onDevice ? 'ON_DEVICE' : 'IN_CLOUD', model: onDevice ? ON_DEVICE_MODEL : cloudModel };
@@ -168,7 +217,7 @@ export const LABEL_SYSTEM =
   "You write a short plain title, six words at most, for a teacher's note. Reply with the title only, no quotes, no full stop. Never include a name.";
 
 /** How much of the approved text the naming call is given. */
-export const LABEL_CHARS = 1200;
+export const LABEL_CHARS = 240;
 
 /** The whole prompt for the naming call: the start of the approved text and nothing else. */
 export function labelPrompt(redacted: string): string {

@@ -74,9 +74,8 @@ export function onDeviceModelPresent(): boolean {
  * refuses to build the model in that case, and it gives an ONLY_ON_DEVICE
  * route no cloud parameters at all.
  */
-export function modelFor(route: RouteId, { system, schema, cloudModel, multimodal }: Options): GenerativeModel {
-  const mode = ROUTES.find((r) => r.id === route)!.mode;
-  const onDevice = {
+function buildOnDeviceParams({ system, schema, multimodal }: Options) {
+  return {
     createOptions: {
       expectedInputs: multimodal === 'image' ? IMAGE_ENGLISH : ENGLISH,
       expectedOutputs: ENGLISH,
@@ -84,6 +83,11 @@ export function modelFor(route: RouteId, { system, schema, cloudModel, multimoda
     },
     promptOptions: schema ? { responseConstraint: schema } : undefined,
   };
+}
+
+export function modelFor(route: RouteId, { system, schema, cloudModel, multimodal }: Options): GenerativeModel {
+  const mode = ROUTES.find((r) => r.id === route)!.mode;
+  const onDevice = buildOnDeviceParams({ system, schema, multimodal });
   if (mode === InferenceMode.ONLY_ON_DEVICE) {
     if (!onDeviceModelPresent()) {
       throw new Error('This browser has no on-device model, so the request was not started. Nothing was sent.');
@@ -101,6 +105,12 @@ export function modelFor(route: RouteId, { system, schema, cloudModel, multimoda
         : { temperature: 0.4 },
     },
   });
+}
+
+/** Return a strict on-device model when ready locally, for mid-stream offline recovery after a cloud stream drops. */
+export function onDeviceFallbackFor(options: Options): GenerativeModel | null {
+  if (!onDeviceModelPresent()) return null;
+  return getGenerativeModel(ai, { mode: InferenceMode.ONLY_ON_DEVICE, onDeviceParams: buildOnDeviceParams(options) });
 }
 
 // ---------------------------------------------------------------- device status

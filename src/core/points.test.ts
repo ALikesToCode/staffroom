@@ -5,7 +5,7 @@ import { addConstraint, confirmConstraint, lockConstraints, proposeConstraints, 
 import { lessonHits } from './lesson';
 import { outgoingOf } from './needs';
 import { buildVault, deterministicCandidates, possibleNameCandidates } from './vault';
-import { acceptablePoints, acceptedPoints, byChild, childFitSaid, childNotes, fitSummary, inNoteOrder, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './points';
+import { acceptablePoints, acceptedPoints, byChild, childFitSaid, childNotes, dedupePairVariations, fitSummary, inNoteOrder, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './points';
 
 const vault = buildVault(SAMPLE_NOTE, [...deterministicCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST), ...possibleNameCandidates(SAMPLE_NOTE, SAMPLE_CLASS_LIST)]);
 let held = { entities: vault, constraints: proposeConstraints(SAMPLE_NOTE, vault) };
@@ -231,5 +231,30 @@ describe('needs the cloud left out, and two children who work better apart', () 
     const one = s.constraints.filter((c) => !(c.learn === 'group' && c.aboutName?.startsWith('Ishaan')));
     expect(pairPoints(one, s.entities, items, s.note)).toEqual([]);
     expect(pairPoints(s.constraints.map((c) => (c.learn === 'group' ? { ...c, confirmed: false } : c)), s.entities, items, s.note)).toEqual([]);
+  });
+
+  it('deduplicates group-need cloud variations when local pair lines cover Kabir and Ishaan, and counts pair lines in fitSummary', async () => {
+    const { sampleNeeds } = await import('../eval/needs');
+    const { pairPoints, placeVariations } = await import('./points');
+    const s = sampleNeeds();
+    const items = [{ heading: 'Practise (15 minutes)', text: 'Pupils write in pairs.' }];
+    const groupNeed = s.needs.find((n) => n.constraintIds.some((id) => s.constraints.find((c) => c.id === id)?.learn === 'group'))!;
+    const otherNeed = s.needs.find((n) => n.letter !== groupNeed.letter)!;
+    const placed = placeVariations(
+      [
+        { itemIndex: 0, need: groupNeed.letter, text: 'Seat apart from the specified classmate.' },
+        { itemIndex: 0, need: otherNeed.letter, text: 'Give an extension card.' },
+      ],
+      s.needs,
+      s.entities,
+      items,
+      s.constraints,
+      s.note,
+    );
+    const paired = pairPoints(s.constraints, s.entities, items, s.note);
+    const deduped = dedupePairVariations(placed, paired, s.needs, s.constraints);
+    expect(deduped.some((p) => p.need === groupNeed.letter)).toBe(false);
+    expect(deduped.some((p) => p.need === otherNeed.letter)).toBe(true);
+    expect(fitSummary(5, 0, [], [...deduped, ...paired])).toContain('2 seating lines added on this device.');
   });
 });
