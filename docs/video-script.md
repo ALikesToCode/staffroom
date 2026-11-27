@@ -1,49 +1,58 @@
-# Staffroom: video script (under 3:00)
+# Staffroom Demo Video Script & Shot List (`staffroom-demo-v6.mp4`)
 
-All footage comes from the app as it is: the hosted site, a live run in Chrome 158 with Gemini Nano, and the recorded-run replay. Every class detail is invented. A time-lapse or a cut in waiting time is labelled on screen. The voice-over is English, synthetic (Nivedita, Maya 2), with burned-in English captions.
+- **Runtime**: `2m 22s` (`142.0s`, 1920x1080 H.264 @ 30fps, AAC narration)
+- **Narration voice**: Maya 2 (`Nivedita`, seed 11)
+- **Captions**: `/home/mysterious/Videos/staffroom-demo-v6.srt`
+- **Live app**: `https://staffroom-hybrid-8a71.web.app` (or click **Watch a recorded run** in any browser without Chrome Built-in Gemini Nano)
 
-| # | On screen | Voice-over |
-|---|---|---|
-| 1 | "Stays here" \| "The cloud is told" for Meenal: "has to leave school at the last bell to reach home before dark" beside "Need A: cannot stay after the last bell". | Meenal has to leave at the last bell to walk home before dark. Her teacher knows that. The cloud is not told. It gets a letter and a need: Need A, cannot stay after the last bell. No name, no reason, no count. |
-| 2 | The lesson comes back. The cloud lane shows "Need F \| …" with letters only; the device lane shows the same line with "Meenal Joshi" beside it, and "For each need: …". | The cloud writes tomorrow's lesson for the whole class, and an entry for every need, without knowing whose need it is. This laptop keeps who has which need, and puts each entry beside the right child. |
-| 3 | Title card: Staffroom. "Your device knows the child. The cloud only knows the need." | This is Staffroom, for teachers in India's public schools, on the staffroom computer. A class of forty, a lesson every day, and a notebook full of things that must not travel. |
-| 4 | Live run. The teacher's note with names. "Run the guard": stand-ins appear. The pill reads "On-device model: ready" and the guard chip reads ONLY_ON_DEVICE. | The teacher writes as they would in their own notebook. Gemini Nano, running in Chrome on this laptop, finds the names and private details and swaps them for stand-ins. That call has no cloud fallback. With no model, only the rules run. |
-| 5 | The constraints card: "Confirm all", the need switches, the epilepsy row "Stays here. Nothing is told." | It also proposes constraints and needs. The teacher confirms them and chooses what the cloud may hear: the need, not the reason. A health condition is withheld by default. |
-| 6 | "What leaves": the exact outgoing text (the class line, the needs by letter, the lesson lines) and "Not sent: 14 sentences about one pupil. Their needs go by letter." The tick, then "Approve and send". | For a lesson, no sentence about one pupil is sent. The teacher reads the exact text and ticks it before anything leaves. |
-| 7 | "Beside each child": the placed lines for Aarav, Meenal, Kabir, Ishaan and Tanvi, and the seating line marked "By rule, on this device". "Accept all". | The cloud wrote an entry for every need. The device placed each one. It also adds what only it can know: the two boys who fight are fighting each other, so it seats them apart. Rules check each step against what the teacher confirmed. Nothing is added until the teacher accepts it. |
-| 8 | "Make the materials": a "Sheet for Need …" written out in full, the child's name on the device side only. The print preview: page 1 with no names, then the teacher's copy. | Then the materials: board work, a practice sheet, a sheet written out for each need, and an exit ticket. The class copy has no names. The teacher's copy does, and stays here. |
-| 9 | Lessons page: the exit-ticket grid (Got it / Partly / Not yet / Absent), "Plan the next lesson", the review with "Need J: has not yet got…". | After the lesson, the teacher marks who got it. That stays on the device. The next lesson plans for "pupils who have not got it yet" without the cloud learning who. |
-| 10 | Inspect: the routes (ONLY_ON_DEVICE, PREFER_IN_CLOUD, PREFER_ON_DEVICE) and where each step ran; "Network, as the browser records it" for the guard and the draft. Then the measured-numbers card. | Every call goes through Firebase AI Logic. The mode follows the data: raw notes only on the device, approved text in the cloud. Inspect shows the browser's own record: during the on-device guard, no request went to the model. On twelve fresh notes, the rules alone missed nine private details in sixty. With Gemini Nano, one. |
-| 11 | A browser without the model: the first screen with "Watch a recorded run with Gemini Nano", the replay. End card: live URL, repo, "Voice-over: synthetic voice (Maya 2, Kyutai Mimi codec)". | No on-device model? The rules and the cloud still work, and a recorded real run shows the rest. Staffroom. The cloud plans for the class. Your device knows the child. |
+All pupil notes, names, and exit-ticket records shown are invented.
 
-The seating line in shot 7 follows the run: "Seat Kabir and Ishaan apart." when practice is independent work, "Put Kabir and Ishaan in different groups." on a group stage; paragraph 7 then says "seats them apart" or "puts them in different groups" to match.
+---
 
-Numbers card (shot 10), word for word:
-- Measured on invented data, 26 and 27 Nov 2026, Chrome 158 with Gemini Nano
-- Guard, 12 fresh notes, 60 private details, per run of 3: missed by the rules alone 9, with Gemini Nano 1
-- Check, 8 unseen conflict cases, 3 runs: 24 of 24 caught; 4 of 24 harmless runs flagged
-- Raw results: github.com/ALikesToCode/staffroom, docs/evals
+## Segment Breakdown & Exact Narration
 
-## Voice-over text, in one piece
+### 0. Hook (`0:00 – 0:10`)
+- **Visual**: Opening title card (`Your device knows the child. The cloud only knows the need.`) -> live Landing Door diagram showing `On-device model: ready` beside `ON THIS DEVICE` (`ONLY_ON_DEVICE`) and `THE CLOUD` (`PREFER_IN_CLOUD`).
+- **Voiceover**:
+  > Shared school PCs cannot paste pupil notes into the cloud. Staffroom puts a privacy door on Chrome with Firebase AI Logic.
 
-Meenal has to leave at the last bell to walk home before dark. Her teacher knows that. The cloud is not told. It gets a letter and a need: Need A, cannot stay after the last bell. No name, no reason, no count.
+### 1. Multimodal Notebook Scan (`0:10 – 0:27`) — `ONLY_ON_DEVICE`
+- **Visual**: Handwritten register photo (`public/sample-notebook.jpg`) -> `Try sample notebook photo` -> local multimodal transcription (`229 chars`, `0 model-host requests recorded`) and local Class list name extraction (`Diya Sharma`, `Meenal Joshi`).
+- **Voiceover**:
+  > Start with a handwritten register photo. Strictly on-device multimodal Gemini Nano transcribes it locally with zero cloud requests, and local name rules extract pupil names straight from the scanned text.
 
-The cloud writes tomorrow's lesson for the whole class, and an entry for every need, without knowing whose need it is. This laptop keeps who has which need, and puts each entry beside the right child.
+### 2. Hybrid Guard & Exit Gate (`0:27 – 0:50`) — `ONLY_ON_DEVICE`
+- **Visual**: Switching to the invented 6-pupil class (`4.1x` speed-up during local pass) -> `Found by Gemini Nano`: Tanvi's Tuesday town-clinic visit withheld locally (`STAYS HERE`), abstracted into `THE CLOUD IS TOLD: Need E: away on Tuesdays` -> reviewed `Waiting at the door` / `Exit gate: clear` payload with zero pupil names or reasons (`874 characters to gemini-3.5-flash-lite`).
+- **Voiceover**:
+  > Switching to an invented six-pupil class, the one-pass on-device guard pairs Hinglish and English rules with Gemini Nano. Nano catches what rules miss: Tanvi misses Tuesdays for her grandmother's town clinic visit. Private reasons stay local; only class context and anonymous letter codes like Need E cross the reviewed Exit Gate.
 
-This is Staffroom, for teachers in India's public schools, on the staffroom computer. A class of forty, a lesson every day, and a notebook full of things that must not travel.
+### 3. Cloud Draft & Restoring the Child Locally (`0:50 – 1:11`) — `PREFER_IN_CLOUD` + `ONLY_ON_DEVICE`
+- **Visual**: Right pane streams whole-class lesson + lettered adaptations (`gemini-3.5-flash-lite`) while left pane runs local checks (`checking item 3 of 5`) -> `Beside each child` shows `Need E` catch-up matched to `Tanvi Rao`, deterministic local pair rule `Seat Kabir and Ishaan apart.` beside `Kabir Qureshi`, and empathetic local Nano fit beside `Aarav Sharma`.
+- **Voiceover**:
+  > Gemini 3.5 Flash Lite streams the whole-class lesson and adapts each lettered need without ever knowing whose it is. Back on Chrome, Need E lands beside Tanvi, Kabir and Ishaan get one clear seating line, and local Nano suggests empathetic classroom support for Aarav.
 
-The teacher writes as they would in their own notebook. Gemini Nano, running in Chrome on this laptop, finds the names and private details and swaps them for stand-ins. That call has no cloud fallback. With no model, only the rules run.
+### 4. Materials, Separate Print Copies & Exit Ticket Loop (`1:11 – 1:32`) — `IN_CLOUD` + Local Loop
+- **Visual**: `Materials for this lesson` (`On the board` + `Practice sheet for the class`) -> `Sheet for Need E` beside `Tanvi Rao` -> Signed lesson showing separate `Print class copy (no names)` and `Print teacher's copy (private)` controls -> `Lessons` tab exit tickets (`Got it`, `Partly`, `Not yet`, `Absent`) feeding into **Plan the next lesson**.
+- **Voiceover**:
+  > One click builds board work, a class worksheet, and a take-home summary sheet for Tanvi. Class copy prints letter codes only, separate from the private Teacher's copy. In the Lessons tab, marking Got it, Partly, Not yet, or Absent feeds straight into tomorrow's plan.
 
-It also proposes constraints and needs. The teacher confirms them and chooses what the cloud may hear: the need, not the reason. A health condition is withheld by default.
+### 5. Offline Fallback & Return Gate (`1:32 – 1:46`) — `PREFER_IN_CLOUD` -> `ON_DEVICE`
+- **Visual**: Live offline-before-send capture (`Browser reported when you approved: offline`) recovering via on-device Gemini Nano (`Written on the device · Gemini Nano (Chrome built-in)`) with amber caution banner and deterministic Return Gate checks + clean `2 ready to accept · 13 need wording` bottom bar.
+- **Voiceover**:
+  > If school Wi-Fi drops before or mid-stream, Staffroom recovers on Gemini Nano offline with a clear caution banner, while the deterministic Return Gate still checks the output locally.
 
-For a lesson, no sentence about one pupil is sent. The teacher reads the exact text and ticks it before anything leaves.
+### 6. Inspect Proof & Chrome 158 Benchmarks (`1:46 – 2:10`)
+- **Visual**: `Inspect` drawer showing all 6 declared routes across all 3 `@firebase/ai` modes (`Zero "Not run yet"`) + `Network, as the browser records it` (Chrome Resource Timing log: `0 requests to the model host` on Scan, Guard, Check, Name the receipt, and Fit; `1 request` each on Draft and Materials) -> closing Benchmark Card (`docs/evals/2026-11-28`).
+- **Voiceover**:
+  > Inspect shows all six routes across all three modes, plus Chrome's Resource Timing log: zero model requests on scan, guard, check, naming, and fit. Across three runs on twelve invented notes with sixty labelled details total, Nano raised full catches from forty to forty-nine point three out of sixty.
 
-The cloud wrote an entry for every need. The device placed each one. It also adds what only it can know: the two boys who fight are fighting each other, so it seats them apart. Rules check each step against what the teacher confirmed. Nothing is added until the teacher accepts it.
+**Benchmark Card (on screen):**
+- **1-Pass Guard (12 invented notes · 60 details total, run 3x = 180 judgments)**: **49.3 / 60 fully withheld (148/180)** vs **40 / 60 rules alone** (`25/180 partial · 7/180 missed (2.3/60) · False holds 2.0/8 (vs 5/8) · 11/33 constraints (+40 extra) · 4.06s median`)
+- **Held-out Check**: `24 / 24 conflicts caught (4 / 24 harmless flagged)` · **Sample Scan**: `7.07s (229-231 chars, 0 cloud calls)`
+- **Offline-before-send Fallback**: `40.76s PREFER_IN_CLOUD -> ON_DEVICE stream + Return Gate`
+- **Automated Suite & Security**: `473 / 473 Vitest tests (21 files) · 0 TS errors · 0 audit vulnerabilities`
 
-Then the materials: board work, a practice sheet, a sheet written out for each need, and an exit ticket. The class copy has no names. The teacher's copy does, and stays here.
-
-After the lesson, the teacher marks who got it. That stays on the device. The next lesson plans for "pupils who have not got it yet" without the cloud learning who.
-
-Every call goes through Firebase AI Logic. The mode follows the data: raw notes only on the device, approved text in the cloud. Inspect shows the browser's own record: during the on-device guard, no request went to the model. On twelve fresh notes, the rules alone missed nine private details in sixty. With Gemini Nano, one.
-
-No on-device model? The rules and the cloud still work, and a recorded real run shows the rest. Staffroom. The cloud plans for the class. Your device knows the child.
+### 7. Outro (`2:10 – 2:22`)
+- **Visual**: Closing card with live URL (`https://staffroom-hybrid-8a71.web.app`), **Watch a recorded run** fallback callout, repo URL (`https://github.com/ALikesToCode/staffroom`), and privacy defaults (`Shared PC session-only default · Strict CSP · All pupil data invented`).
+- **Voiceover**:
+  > Staffroom: your device knows the child; the cloud only knows the need. Try the live app or click Watch a recorded run in any browser.
