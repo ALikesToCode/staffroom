@@ -304,25 +304,30 @@ export function loadLessons(): SavedLesson[] {
   }
 }
 
-/** Keep the lessons in sessionStorage by default, or localStorage only when persist is true (opted in). False when storage fails. */
+/** Keep the lessons in sessionStorage by default, or localStorage only when persist is true (opted in). Writes target first so session copies survive quota errors on opt-in. */
 export function storeLessons(lessons: SavedLesson[], persist = false): boolean {
   const target = getStorage(persist ? 'local' : 'session');
   const other = getStorage(persist ? 'session' : 'local');
+  let ok = false;
   try {
-    other?.removeItem(KEY);
-  } catch {
-    // Ignore errors clearing the unused storage tier.
-  }
-  try {
-    if (lessons.length === 0) target?.removeItem(KEY);
-    else {
-      if (!target) return false;
+    if (lessons.length === 0) {
+      target?.removeItem(KEY);
+      ok = true;
+    } else if (target) {
       target.setItem(KEY, JSON.stringify(lessons.slice(0, LESSONS_MAX)));
+      ok = true;
     }
-    return true;
   } catch {
-    return false;
+    ok = false;
   }
+  if (ok || !persist) {
+    try {
+      other?.removeItem(KEY);
+    } catch {
+      // Ignore errors clearing the unused storage tier.
+    }
+  }
+  return ok;
 }
 
 /** A stage's name without its minutes: "Starter (5 minutes)" is "Starter". */

@@ -240,7 +240,9 @@ export function App() {
   const [scanning, setScanning] = useState(false);
   const [scanPreview, setScanPreview] = useState<{ url: string; summary: string } | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [deskCleared, setDeskCleared] = useState(false);
+  const [deskCleared, setDeskCleared] = useState<'ok' | 'signout-failed' | null>(null);
+  const deskClearedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordsGenRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [nanoDiff, setNanoDiff] = useState<{ rulesOnly: number; nanoAdded: number } | null>(null);
   const [streamPreview, setStreamPreview] = useState('');
@@ -446,7 +448,9 @@ export function App() {
   }, [classList, replay]);
   useEffect(() => write(local, 'staffroom.keepCopies', keepCopies, !keepCopies), [keepCopies]);
   useEffect(() => {
-    if (!replay) write(session, LESSON_KEY, lesson, false);
+    if (replay) return;
+    const blankLesson = !lesson.klass && !lesson.subject && !lesson.topic && !lesson.lastTime && !lesson.language && lesson.minutes === NO_LESSON.minutes;
+    write(session, LESSON_KEY, lesson, blankLesson);
   }, [lesson, replay]);
   // The class is kept on this device only when explicitly opted in for a personal device.
   useEffect(() => {
@@ -466,11 +470,14 @@ export function App() {
 
   /** Read the records kept in the teacher's account. They hold no text, so there is none to show. */
   const refreshRecords = useCallback(async (user: string) => {
+    const gen = ++recordsGenRef.current;
     setRecords((r) => (r.state === 'ready' ? r : { state: 'loading' }));
     try {
       const { records: list, unreadable } = await loadReceiptCopies(user);
+      if (recordsGenRef.current !== gen) return;
       setRecords({ state: 'ready', list, unreadable });
     } catch {
+      if (recordsGenRef.current !== gen) return;
       setRecords({ state: 'failed' });
     }
   }, []);
@@ -478,7 +485,13 @@ export function App() {
   useEffect(() => {
     if (view !== 'receipts') return;
     if (uid) void refreshRecords(uid);
-    else setRecords({ state: 'idle' });
+    else {
+      recordsGenRef.current += 1;
+      setRecords({ state: 'idle' });
+    }
+    return () => {
+      recordsGenRef.current += 1;
+    };
   }, [view, uid, refreshRecords]);
 
   const currentTask = TASKS.find((t) => t.id === task)!;
@@ -1755,7 +1768,8 @@ export function App() {
   };
 
   /** Immediately wipe all notes, class lists, constraints, saved lessons, local receipts, copy-record opt-in, and the anonymous Auth session from this browser. */
-  const clearDesk = () => {
+  const clearDesk = async () => {
+    recordsGenRef.current += 1;
     forgetNote(true, true);
     setKeepClass(false);
     setKeepCopies(false);
@@ -1765,9 +1779,10 @@ export function App() {
     } catch {
       // Storage is switched off.
     }
-    void clearUserSession();
-    setDeskCleared(true);
-    setTimeout(() => setDeskCleared(false), 4000);
+    const signedOut = await clearUserSession();
+    if (deskClearedTimer.current) clearTimeout(deskClearedTimer.current);
+    setDeskCleared(signedOut ? 'ok' : 'signout-failed');
+    deskClearedTimer.current = setTimeout(() => setDeskCleared(null), signedOut ? 4000 : 8000);
   };
 
   // ---------------------------------------------------------------- the recorded run
@@ -2617,14 +2632,20 @@ export function App() {
               Install
             </button>
           )}
-          {deskCleared && (
+          {deskCleared === 'ok' && (
             <span className="pill ok" role="status">
               <i />
               Desk cleared from this browser
             </span>
           )}
+          {deskCleared === 'signout-failed' && (
+            <span className="pill warn" role="status">
+              <i />
+              Browser data cleared; sign-out failed — refresh before leaving
+            </span>
+          )}
           {!replay && !busy && (note !== '' || classList.length > 0 || lessons.length > 0 || receipts.length > 0 || stage !== 'write') && (
-            <button className="pill action" type="button" onClick={clearDesk} title="Wipe notes, class list, saved lessons, and receipts from this browser (shared-PC reset)">
+            <button className="pill action" type="button" onClick={() => void clearDesk()} title="Wipe notes, class list, saved lessons, and receipts from this browser (shared-PC reset)">
               Clear desk
             </button>
           )}

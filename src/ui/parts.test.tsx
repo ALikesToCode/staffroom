@@ -7,7 +7,7 @@ import type { Constraint } from '../core/types';
 import { App } from '../App';
 import { MaterialsCard, MATERIALS_NOTE_LOCAL, MaterialsPages } from './Materials';
 import { CopyPreview } from './PrintPreview';
-import { Drawer, NetworkSection } from './pages';
+import { Drawer, NetworkSection, Receipts } from './pages';
 import { addRequests } from '../core/network';
 import type { Materials } from '../core/materials';
 
@@ -349,5 +349,35 @@ describe('MaterialsCard offline copy and Drawer semantics', () => {
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain('aria-label="Where each step ran"');
     expect(html).toContain('Inner action');
+  });
+
+  it('keeps the Firestore receipt opt-in switch clickable while signed out when Firebase is available', () => {
+    const enabledHtml = renderToStaticMarkup(
+      <Receipts
+        receipts={[]}
+        keepCopies={false}
+        setKeepCopies={() => {}}
+        signedIn={false}
+        canKeepCopies
+        records={{ state: 'idle' }}
+        onClear={() => {}}
+      />,
+    );
+    expect(enabledHtml).toContain('Turning this on signs this browser back in anonymously.');
+    expect(enabledHtml).not.toMatch(/<input type="checkbox"[^>]*disabled/);
+
+    const disabledHtml = renderToStaticMarkup(
+      <Receipts
+        receipts={[]}
+        keepCopies={false}
+        setKeepCopies={() => {}}
+        signedIn={false}
+        canKeepCopies={false}
+        records={{ state: 'idle' }}
+        onClear={() => {}}
+      />,
+    );
+    expect(disabledHtml).toContain('Not available: no Firebase project is connected.');
+    expect(disabledHtml).toMatch(/<input type="checkbox"[^>]*disabled/);
   });
 });

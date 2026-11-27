@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Constraint, DraftItem } from './types';
 import { SAMPLE_CLASS_LIST, SAMPLE_LESSON, SAMPLE_NOTE, SAMPLE_NOTE_BASE, TASKS } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates } from './vault';
@@ -343,5 +343,63 @@ describe('the language of the plan', () => {
     expect(got.dropped).toBe(1);
     expect(got.draft.items[0].text).toBe('शिक्षक बाज़ार का चित्र दिखाते हैं।');
     expect(planWithNeeds(got.draft, got.variations)).toContain('For Need B: कक्षा में दिए गए छपे चित्रों से लिखें।');
+  });
+});
+
+describe('lesson storage isolation and failure safety', () => {
+  it('preserves sessionStorage on failed opt-in migration, and always clears localStorage on opt-out', () => {
+    const fakeStorage = () => {
+      const store = new Map<string, string>();
+      return {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          store.set(k, v);
+        },
+        removeItem: (k: string) => {
+          store.delete(k);
+        },
+        clear: () => {
+          store.clear();
+        },
+        key: (i: number) => [...store.keys()][i] ?? null,
+        get length() {
+          return store.size;
+        },
+      };
+    };
+
+    const lesson = savedLesson('l-safe', '2026-11-28T04:30:00.000Z', SAMPLE_LESSON, 'Describing a place', plan, [], constraints);
+    try {
+      const session = fakeStorage();
+      const throwingLocal = {
+        ...fakeStorage(),
+        setItem: () => {
+          throw new Error('QuotaExceededError');
+        },
+      };
+      vi.stubGlobal('sessionStorage', session);
+      vi.stubGlobal('localStorage', throwingLocal);
+
+      expect(storeLessons([lesson], false)).toBe(true);
+      expect(storeLessons([lesson], true)).toBe(false);
+      expect(loadLessons()).toHaveLength(1);
+      expect(session.getItem('staffroom.lessons.v1')).not.toBeNull();
+
+      const local = fakeStorage();
+      local.setItem('staffroom.lessons.v1', JSON.stringify([lesson]));
+      const throwingSession = {
+        ...fakeStorage(),
+        setItem: () => {
+          throw new Error('SecurityError');
+        },
+      };
+      vi.stubGlobal('sessionStorage', throwingSession);
+      vi.stubGlobal('localStorage', local);
+
+      expect(storeLessons([lesson], false)).toBe(false);
+      expect(local.getItem('staffroom.lessons.v1')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

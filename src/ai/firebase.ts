@@ -158,14 +158,15 @@ export async function ensureUser(): Promise<void> {
   }
 }
 
-/** Sign out the anonymous Firebase session on Clear desk so the next teacher on a shared PC starts clean. */
-export async function clearUserSession(): Promise<void> {
-  if (!configured) return;
+/** Sign out the anonymous Firebase session on Clear desk so the next teacher on a shared PC starts clean. Returns false if sign-out fails. */
+export async function clearUserSession(): Promise<boolean> {
+  if (!configured) return true;
   try {
     const auth = getAuth(app);
     if (auth.currentUser) await signOut(auth);
+    return true;
   } catch {
-    // Ignore Auth errors during desk reset.
+    return false;
   }
 }
 

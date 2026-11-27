@@ -11,7 +11,7 @@ In India's government and aided schools — where teachers work on shared **ICT-
 
 ## What Staffroom does
 
-Staffroom puts a privacy door between raw classroom notes and the cloud, designed for a shared school desktop (**notes, class lists, constraints, saved lessons, and text-bearing local receipts default to `sessionStorage` only**, with `localStorage` persistence strictly opt-in via *Keep this class in this browser* and a one-click **Clear desk** button that wipes `sessionStorage`, opted-in `localStorage` data (`staffroom.keptClass`, `staffroom.keepClass`, `staffroom.lessons`, `staffroom.receipts.v1`), the `staffroom.keepCopies` preference, and signs out the anonymous Firebase Auth session (`clearUserSession()`); optional count-only Firestore receipt records already written under *Keep a copy* opt-in remain in Firestore, while browser print (`Ctrl+P` / `Cmd+P`) defaults to the nameless Class copy (`class-only`) rather than rendering the private Teacher's copy):
+Staffroom puts a privacy door between raw classroom notes and the cloud, designed for a shared school desktop (**notes, class lists, constraints, saved lessons, and text-bearing local receipts default to `sessionStorage` only**, with `localStorage` persistence strictly opt-in via *Keep this class in this browser* and a one-click **Clear desk** button that wipes `sessionStorage`, opted-in `localStorage` data (`staffroom.class.v1`, `staffroom.keepClass`, `staffroom.lessons.v1`, `staffroom.receipts.v1`), the `staffroom.keepCopies` preference, and signs out the anonymous Firebase Auth session (`clearUserSession()`); optional count-only Firestore receipt records already written under *Keep a copy* opt-in remain in Firestore, while browser print (`Ctrl+P` / `Cmd+P`) defaults to the nameless Class copy (`class-only`) rather than rendering the private Teacher's copy):
 
 1. **Write or scan on the device**: Type notes (English, **Hinglish**, or **Devanagari**) or use **Scan notebook photo / Try sample notebook photo** (`public/sample-notebook.jpg`). Multimodal **Gemini Nano** checks `imageOnDeviceStatus()`, downscales on `<canvas>`, and transcribes handwritten pages locally (`~7.1s`, `229–231` chars on the sample page, `0` cloud inference calls), while `extractScannedClassList()` extracts likely student names directly from the scanned text using local proper-name heuristics.
 2. **Guard locally before anything leaves (`guardCombinedOnDevice`)**: Deterministic pattern/sensitivity rules (covering English, Hinglish, and Devanagari health/family/money phrases plus phone/STD/roll/Aadhaar patterns) run alongside a 1-pass combined Gemini Nano call (`ONLY_ON_DEVICE`). Overlapping unconfirmed Nano proposals are folded into confirmed learning needs (`isRedundantWithLearning`, including non-time `time-after`/`time-before` overlaps lacking schedule cues), and heading paragraphs are skipped in `constraintsFromCombined`. A fail-closed **Exit Gate** (`checkOutgoing` in `src/core/gate.ts` and `outgoingOf` in `src/core/needs.ts`) scans the entire assembled outgoing text (including assembled `Need` blocks) for known withheld items and patterns, alongside mandatory teacher review of any unmarked details.
@@ -55,14 +55,14 @@ Raw logs & methodology live under [`docs/evals/2026-11-28/`](docs/evals/2026-11-
 | **Multimodal Notebook Scan** (`scan`) | Single sample page (`public/sample-notebook.jpg`), Chrome 158 | — | **`~7.1s`**, `229–231` chars transcribed, **`0` cloud calls** |
 | **Offline-before-send Fallback** (`draft`) | `SAMPLE_NOTE`, Chrome 158 with CDP offline emulation before approval | — | **`40.76s`** `PREFER_IN_CLOUD -> ON_DEVICE` stream + local Return Gate check |
 
-- **Automated suite & security**: **`478/478` unit tests** (`21` Vitest files, including mid-stream drop, truncated JSON recovery, failure-safe session-only receipt isolation, and Devanagari sentence segmentation), `tsc --noEmit` (`0` errors), `pnpm audit --prod` (`0` known vulnerabilities).
+- **Automated suite & security**: **`480/480` unit tests** (`21` Vitest files, including mid-stream drop, truncated JSON recovery, failure-safe session-only receipt/lesson isolation, and Devanagari sentence segmentation), `tsc --noEmit` (`0` errors), `pnpm audit --prod` (`0` known vulnerabilities).
 
 ## Run & verify locally
 
 ```bash
 pnpm install
 pnpm dev              # http://127.0.0.1:5173
-pnpm test             # 478 tests across 21 Vitest files
+pnpm test             # 480 tests across 21 Vitest files
 pnpm typecheck        # tsc --noEmit
 pnpm build            # dist/ + service worker (including sample-notebook.jpg)
 pnpm audit

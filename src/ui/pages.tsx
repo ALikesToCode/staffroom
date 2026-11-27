@@ -595,6 +595,7 @@ export function Receipts({
   keepCopies,
   setKeepCopies,
   signedIn,
+  canKeepCopies = configured,
   records,
   onClear,
 }: {
@@ -602,6 +603,7 @@ export function Receipts({
   keepCopies: boolean;
   setKeepCopies: (v: boolean) => void;
   signedIn: boolean;
+  canKeepCopies?: boolean;
   records: Records;
   onClear: () => void;
 }) {
@@ -709,13 +711,13 @@ export function Receipts({
 
       <section className="account">
         <label className="switch">
-          <input type="checkbox" checked={keepCopies} disabled={!signedIn} onChange={(e) => setKeepCopies(e.target.checked)} />
+          <input type="checkbox" checked={keepCopies} disabled={!canKeepCopies} onChange={(e) => setKeepCopies(e.target.checked)} />
           <span />
           Keep a copy of each receipt's record (no text) in my account (Firestore).
         </label>
         <p className="hint">
           Counts only, written by this browser: your own note of a run, not proof of it to anyone else.
-          {!signedIn && (configured ? ' Sign-in is not available right now.' : ' Not available: no Firebase project is connected.')}
+          {!signedIn && (canKeepCopies ? ' Turning this on signs this browser back in anonymously.' : ' Not available: no Firebase project is connected.')}
         </p>
         {signedIn && records.state === 'loading' && <p className="hint">Looking up the records kept in your account.</p>}
         {signedIn && records.state === 'failed' && <p className="caution">The records kept in your account could not be read just now.</p>}
