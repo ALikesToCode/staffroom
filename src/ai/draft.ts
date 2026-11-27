@@ -27,7 +27,7 @@ Write plainly, in plain text with no markdown: no asterisks, no # headings. No d
  * at home or has time for: the cloud is not steered towards or away from
  * what the device then checks.
  */
-export const LESSON_SYSTEM = `You help a school teacher in India plan a practical lesson for the class, level and topic given: its stages, the minutes for each, the materials and the homework.
+export const LESSON_SYSTEM = `You help a school teacher in India plan a practical lesson for the class, level and topic given: its stages, the minutes for each, the materials and the homework. Give the lesson a clean, readable title using an em-dash, such as "Class 6 English — Describing a Place".
 
 ${LESSON_REDACTED}
 
@@ -85,18 +85,50 @@ export interface DraftResult {
 }
 
 /**
+ * Stream a response from a hybrid PREFER_IN_CLOUD model, forwarding partial text as it arrives
+ * and returning the final aggregated text and verified `inferenceSource`.
+ */
+async function streamContent(
+  model: ReturnType<typeof modelFor>,
+  prompt: string,
+  onChunk?: (accumulatedText: string) => void,
+): Promise<{ text: string; onDevice: boolean }> {
+  const streamed = await model.generateContentStream(prompt);
+  let partial = '';
+  for await (const chunk of streamed.stream) {
+    try {
+      const piece = chunk.text();
+      if (piece) {
+        partial += piece;
+        onChunk?.(partial);
+      }
+    } catch {
+      // Ignore chunks without text parts (e.g. metadata frames).
+    }
+  }
+  const finalResponse = await streamed.response;
+  const text = finalResponse.text();
+  if (text && text !== partial) onChunk?.(text);
+  return { text, onDevice: finalResponse.inferenceSource === 'on_device' };
+}
+
+/**
  * Write the draft from the redacted, teacher-approved text. The route is
  * PREFER_IN_CLOUD: the cloud model writes it, and the on-device model takes
  * over when the cloud cannot be reached.
  */
-export async function writeDraft(redacted: string, task: Task, cloudModel: string): Promise<DraftResult> {
+export async function writeDraft(
+  redacted: string,
+  task: Task,
+  cloudModel: string,
+  onProgressText?: (partialText: string) => void,
+): Promise<DraftResult> {
   const model = modelFor('draft', { system: draftSystem(task.id), schema: SCHEMA, cloudModel });
-  const result = await model.generateContent(draftPrompt(redacted, task));
-  const draft = JSON.parse(result.response.text()) as Draft;
+  const { text, onDevice } = await streamContent(model, draftPrompt(redacted, task), onProgressText);
+  const draft = JSON.parse(text) as Draft;
   if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) {
     throw new Error('The model returned an empty draft.');
   }
-  const onDevice = result.response.inferenceSource === 'on_device';
   return {
     draft: {
       title: plainText(String(draft.title ?? task.label)),
@@ -118,12 +150,16 @@ export interface MaterialsResult {
  * plan and the needs by letter. The route is the draft's, PREFER_IN_CLOUD.
  * A reply that is not whole is refused: nothing of it is shown.
  */
-export async function writeMaterials(text: string, letters: readonly string[], cloudModel: string): Promise<MaterialsResult> {
+export async function writeMaterials(
+  text: string,
+  letters: readonly string[],
+  cloudModel: string,
+  onProgressText?: (partialText: string) => void,
+): Promise<MaterialsResult> {
   const model = modelFor('draft', { system: MATERIALS_SYSTEM, schema: MATERIALS_SCHEMA, cloudModel });
-  const result = await model.generateContent(text);
-  const materials = readMaterials(plainText(result.response.text()), letters);
+  const { text: raw, onDevice } = await streamContent(model, text, onProgressText);
+  const materials = readMaterials(plainText(raw), letters);
   if (!materials) throw new Error('The materials that came back were not whole.');
-  const onDevice = result.response.inferenceSource === 'on_device';
   return { materials, where: onDevice ? 'ON_DEVICE' : 'IN_CLOUD', model: onDevice ? ON_DEVICE_MODEL : cloudModel };
 }
 

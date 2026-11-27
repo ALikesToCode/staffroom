@@ -26,7 +26,7 @@ export function CopyPreview({
       <div className="preview-sheet class-copy">
         <div className="preview-head">
           <span>Class copy · no names</span>
-          <span className="copy-badge safe">Safe to share</span>
+          <span className="copy-badge safe">No names · letter codes only</span>
         </div>
         <div className="preview-paper">
           <h4>{title}</h4>

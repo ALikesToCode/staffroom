@@ -312,7 +312,7 @@ export function acceptedPoints(points: readonly Point[]): SavedAdjustment[] {
   return points
     .filter((p) => p.state === 'accepted')
     .sort((a, b) => a.itemIndex - b.itemIndex)
-    .map((p) => ({ itemIndex: p.itemIndex, childId: p.childId, child: p.child, text: p.text, source: p.source, ...(p.need ? { need: p.need } : {}) }));
+    .map((p) => ({ itemIndex: p.itemIndex, childId: p.childId, child: p.child, text: p.text, source: p.source, ...(p.need ? { need: p.need } : {}), ...(p.pair ? { pair: true } : {}) }));
 }
 
 /** The counts a receipt keeps of the points: how many the on-device model suggested and how many were accepted. No words. */
@@ -340,7 +340,7 @@ export function byChild(stages: readonly DraftItem[], adjustments: readonly Save
 }
 
 /** In a replay: the recorded entries that answer no rule hit, shown as accepted points. */
-export function recordedPoints(list: readonly { itemIndex: number; constraintId?: string; childId?: string; child?: string; text: string; source: AdjustmentSource; need?: string }[], notes: readonly ChildNote[]): Point[] {
+export function recordedPoints(list: readonly { itemIndex: number; constraintId?: string; childId?: string; child?: string; text: string; source: AdjustmentSource; need?: string; pair?: boolean }[], notes: readonly ChildNote[]): Point[] {
   return list
     .filter((a) => a.constraintId === undefined && a.childId !== undefined)
     .map((a, i) => ({
@@ -353,6 +353,7 @@ export function recordedPoints(list: readonly { itemIndex: number; constraintId?
       state: 'accepted' as const,
       seen: true,
       ...(a.need ? { need: a.need } : {}),
+      ...(a.pair ? { pair: true } : {}),
     }));
 }
 

@@ -29,14 +29,14 @@ export function Hero({
           Plan tomorrow's lesson for the whole class. The cloud writes for each need without knowing whose it is. Your device puts it beside
           the right child.
         </p>
-        {/* Without the on-device model, the recorded run is the way to see it at work, so it is as easy to find as the invented class. */}
+        {/* Without the on-device model, the recorded run with Nano is the single primary CTA so judges feel the full architecture first. */}
         {noModel && onWatch ? (
           <div className="actions">
-            <button className="primary big" onClick={onTry}>
-              Try an invented class
-            </button>
             <button className="primary big" onClick={onWatch}>
               Watch a recorded run with Gemini Nano
+            </button>
+            <button className="secondary big" onClick={onTry}>
+              Try live (rules + cloud)
             </button>
             <button className="secondary big" onClick={onWrite}>
               Write a note

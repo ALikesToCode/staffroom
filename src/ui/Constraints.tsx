@@ -204,30 +204,44 @@ function ConstraintRow({
   activeNeed?: string | null;
   onHoverNeed?: (letter: string | null) => void;
 }) {
+  const [editingNeed, setEditingNeed] = useState(false);
   const nothingToTell = !need.typed && !need.line;
   const telling = Boolean(c.share) && c.confirmed;
   const letter = telling && need.line ? /^Need ([A-Z]{1,2}):/.exec(need.line)?.[1] : undefined;
   const traced = Boolean(letter && activeNeed === letter);
   const detail = constraintDetail(c);
+  const nanoBadge =
+    c.source === 'on-device model' ? (
+      <span className="source-badge nano">Found by Gemini Nano</span>
+    ) : c.source === 'rule' && c.alsoModel ? (
+      <span className="source-badge both">Rule + Gemini Nano</span>
+    ) : null;
   const needInput = need.typed && (
-    <label className="field">
-      {lesson ? 'The need, in your words: no name and no reason' : 'The need, in your words'}
-      <input
-        type="text"
-        defaultValue={c.need ?? ''}
-        maxLength={200}
-        disabled={!editable}
-        onBlur={(e) => actions.onNeed(c.id, e.target.value)}
-        key={lesson ? (c.need ?? '') : undefined}
-        placeholder={lesson ? (c.kind === 'health' ? 'For example: must avoid flashing or flickering light' : 'Say what such a pupil needs, not why and not who') : c.kind === 'health' ? 'For example: No flashing lights for [Student 2]' : 'Say what the school must do, not why'}
-        spellCheck={false}
-        autoComplete="off"
-      />
-    </label>
+    <div className="need-edit-box">
+      <label className="field">
+        {lesson ? 'The need, in your words: no name and no reason' : 'The need, in your words'}
+        <input
+          type="text"
+          defaultValue={c.need ?? ''}
+          maxLength={200}
+          disabled={!editable}
+          onBlur={(e) => actions.onNeed(c.id, e.target.value)}
+          key={lesson ? (c.need ?? '') : undefined}
+          placeholder={lesson ? (c.kind === 'health' ? 'For example: must avoid flashing or flickering light' : 'Say what such a pupil needs, not why and not who') : c.kind === 'health' ? 'For example: No flashing lights for [Student 2]' : 'Say what the school must do, not why'}
+          spellCheck={false}
+          autoComplete="off"
+        />
+      </label>
+      {editingNeed && (
+        <button type="button" className="link" onClick={() => setEditingNeed(false)}>
+          Done editing
+        </button>
+      )}
+    </div>
   );
   return (
     <li
-      className={['constraint', c.confirmed ? 'confirmed' : '', traced ? 'is-traced' : ''].filter(Boolean).join(' ')}
+      className={['constraint', c.confirmed ? 'confirmed' : '', c.source === 'on-device model' ? 'from-nano' : '', traced ? 'is-traced' : ''].filter(Boolean).join(' ')}
       onMouseEnter={() => letter && onHoverNeed?.(letter)}
       onMouseLeave={() => letter && onHoverNeed?.(null)}
     >
@@ -236,6 +250,7 @@ function ConstraintRow({
           <q>{c.text}</q>
           <span className="c-who">{who}</span>
           <span className="kind-chip">{kindLabel(c)}</span>
+          {nanoBadge}
         </div>
       )}
       <div className="c-controls">
@@ -262,6 +277,7 @@ function ConstraintRow({
           {lesson ? 'Tell the cloud this need (no name, no reason)' : 'Tell the cloud the need (not the reason)'}
         </label>
         {lesson && c.confirmed && <span className="kind-chip">{kindLabel(c)}</span>}
+        {lesson && c.confirmed && nanoBadge}
         <details className="c-more">
           <summary>Details</summary>
           <p>
@@ -334,6 +350,11 @@ function ConstraintRow({
             <p className="goes">
               <span className="pair-label">The cloud is told</span>
               <code className="need-line">{need.line}</code>
+              {editable && need.typed && !editingNeed && (
+                <button type="button" className="link edit-need-btn" onClick={() => setEditingNeed(true)}>
+                  Edit wording
+                </button>
+              )}
             </p>
           ) : (
             <p className="goes nothing">
@@ -349,7 +370,7 @@ function ConstraintRow({
           Send this need as worded. It has a word that may give the reason (“{need.sensitive!.join('”, “')}”).
         </label>
       )}
-      {telling && need.typed && needInput}
+      {telling && need.typed && (!lesson || !c.confirmed || !need.line || editingNeed) && needInput}
       {telling && !need.line && <p className="need-told">Nothing is typed yet, so nothing is told.</p>}
       {need.line &&
         need.issues.map((v, i) => (

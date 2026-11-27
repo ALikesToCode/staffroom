@@ -215,7 +215,7 @@ export function withLessonNeeds(text: string, needs: readonly LessonNeed[]): str
 
 /** The sentences added to the lesson's instruction: the cloud answers every listed need, in one section after the stages. */
 export const VARIATION_INSTRUCTION =
-  'If the notes list needs, the stages say nothing about them. After the stages, add one last item with the heading "For each need". Its text has an entry for every listed need, each on its own line, in exactly this form: "Need A | <stage name> | <one or two sentences: what such a pupil does in that stage instead, for the same purpose>". If the lesson already suits a need, write "Need A | none | This lesson already suits this need." A need may have two entries, for two stages. Every listed letter must appear. Do not guess who or how many.';
+  'If the notes list needs, the stages say nothing about them. After the stages, add one last item with the heading "For each need". Its text has an entry for every listed need, each on its own line, in exactly this form: "Need A | <stage name> | <one or two short, direct teacher actions starting with a verb — e.g. Give two printed picture cards in class, or Allow an oral answer instead of writing>". Never write "such a pupil", "for the same purpose", or "the pupil who". If the lesson already suits a need, write "Need A | none | This lesson already suits this need." A need may have two entries, for two stages. Every listed letter must appear. Do not guess who or how many.';
 
 /** The sentence added to the lesson's instruction for a plan in another language. The stage names and the marker stay in English so that the plan can still be read by the parser. */
 export const LANGUAGE_INSTRUCTION =

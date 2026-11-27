@@ -82,8 +82,8 @@ function contactOf(text: string): Pick<Constraint, 'who' | 'guardian' | 'away'> 
 
 /** Health conditions the rules know, with words that go against each in a step. The teacher can change the words. */
 const CONDITIONS: { re: RegExp; triggers: string[] }[] = [
-  { re: /\b(?:epilepsy|epileptic|seizures?)\b/iu, triggers: ['flashing', 'flicker', 'flickering', 'strobe', 'strobing'] },
-  { re: /\basthma(?:tic)?\b/iu, triggers: ['running', 'sprint', 'race', 'laps', 'dust', 'chalk dust', 'smoke'] },
+  { re: /(?<![\p{L}\p{N}])(?:epilepsy|epileptic|seizures?|mirgi|मिर्गी|daura|दौरा)(?![\p{L}\p{N}\p{M}])/iu, triggers: ['flashing', 'flicker', 'flickering', 'strobe', 'strobing'] },
+  { re: /(?<![\p{L}\p{N}])(?:asthma(?:tic)?|dama|दमा)(?![\p{L}\p{N}\p{M}])/iu, triggers: ['running', 'sprint', 'race', 'laps', 'dust', 'chalk dust', 'smoke'] },
 ];
 
 const ALLERGY = /\b(\p{L}+)\s+allerg(?:y|ies)\b|\ballergic\s+to\s+(\p{L}+)(?:\s+and\s+(\p{L}+))?|\ballerg(?:y|ies)\s+to\s+(\p{L}+)/iu;
@@ -135,20 +135,22 @@ const PATTERNS: { kind: ConstraintKind; re: RegExp }[] = (
     ],
     ['money', `(?:cannot|can't|can not|could not|is unable to|are unable to|is not able to|are not able to|unable to)\\s+(?:pay|afford)\\b${REST}`],
     ['money', `(?:has|have|there is)\\s+no\\s+money\\b${REST}`],
+    ['money', `(?:paise|fees|पैसे|फ़ीस)\\s+(?:nahi|नहीं)${REST}`],
     ['no-phone-internet', `(?:(?:has|have|had|there is|with)\\s+)?no\\s+${DEVICE}\\b${REST}`],
     ['no-phone-internet', `(?:does not|doesn't|do not|don't)\\s+have\\s+(?:a\\s+|an\\s+|any\\s+)?${DEVICE}\\b${REST}`],
     ['no-phone-internet', `without\\s+(?:a\\s+|an\\s+|any\\s+)?${DEVICE}\\b${REST}`],
+    ['no-phone-internet', `(?:phone|mobile|internet|फ़ोन|मोबाइल)\\s+(?:nahi|नहीं)${REST}`],
     ['contact', `(?:(?:his|her|their|the)\\s+)?(?:${ROLE_WORDS})\\b[^;,]{0,60}?${NOT_CONTACTED}${REST}`],
     ['contact', `${NOT_CONTACTED}${REST}`],
     ['contact', `${DO_NOT_CONTACT}\\b${REST}`],
     ['contact', `${LIVES_WITH}\\b`],
     ['contact', `(?:(?:his|her|their)\\s+)?(?:${ROLE_WORDS})\\s+${GONE}\\b${REST}`],
     ['contact', `${APART}\\b`],
-    ['health', `(?:(?:has|have|had|with|gets?)\\s+)?(?:epilepsy|epileptic(?:\\s+(?:fits|seizures?))?|seizures?)`],
-    ['health', `(?:(?:has|have|had|with)\\s+)?asthma(?:tic)?`],
+    ['health', `(?:(?:has|have|had|with|gets?)\\s+)?(?:epilepsy|epileptic(?:\\s+(?:fits|seizures?))?|seizures?|mirgi|मिर्गी|daura|दौरा)`],
+    ['health', `(?:(?:has|have|had|with)\\s+)?(?:asthma(?:tic)?|dama|दमा)`],
     ['health', `(?:(?:has|have|had)\\s+(?:an?\\s+)?)?(?:\\p{L}+\\s+allerg(?:y|ies)|allergic\\s+to\\s+\\p{L}+(?:\\s+and\\s+\\p{L}+)?|allerg(?:y|ies)\\s+to\\s+\\p{L}+)`],
   ] as [ConstraintKind, string][]
-).map(([kind, source]) => ({ kind, re: new RegExp(`(?<![\\p{L}\\p{N}])(?:${source})(?![\\p{L}\\p{N}])`, 'iu') }));
+).map(([kind, source]) => ({ kind, re: new RegExp(`(?<![\\p{L}\\p{N}])(?:${source})(?![\\p{L}\\p{N}\\p{M}])`, 'iu') }));
 
 const nameOf = (entities: Entity[], id: string | undefined) => entities.find((e) => e.id === id)?.surfaces[0];
 

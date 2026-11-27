@@ -5,7 +5,8 @@ import { constraintsOnDevice } from './constraints';
 import { labelReceipt } from './draft';
 import { guardOnDevice } from './guard';
 import { fitForChild, fitStep } from './fit';
-import { modelFor, onDeviceModelPresent, prepareDevice } from './routes';
+import { transcribeNotebookOnDevice } from './notebook';
+import { imageOnDeviceStatus, modelFor, onDeviceModelPresent, prepareDevice } from './routes';
 
 const note = 'Meenal reads well. She has epilepsy.';
 const vault = buildVault(note, [
@@ -30,10 +31,17 @@ describe('ONLY_ON_DEVICE routes with no on-device model', () => {
     expect(onDeviceModelPresent()).toBe(false);
   });
 
-  it('refuses to build a guard or check model', () => {
+  it('refuses to build a scan, guard, check, or fit model', () => {
+    expect(() => modelFor('scan', { system: 'x', multimodal: 'image' })).toThrow(/Nothing was sent/);
     expect(() => modelFor('guard', { system: 'x' })).toThrow(/Nothing was sent/);
     expect(() => modelFor('check', { system: 'x' })).toThrow(/Nothing was sent/);
     expect(() => modelFor('fit', { system: 'x' })).toThrow(/Nothing was sent/);
+  });
+
+  it('rejects notebook scanning without a request', async () => {
+    expect(await imageOnDeviceStatus()).toBe('unsupported');
+    await expect(transcribeNotebookOnDevice({ mimeType: 'image/jpeg', data: 'AAAA' })).rejects.toThrow(/no on-device model/);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('rejects the guard without a request', async () => {

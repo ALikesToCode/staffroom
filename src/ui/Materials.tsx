@@ -7,14 +7,15 @@ import { CloudText } from './parts';
 export const MATERIALS_NOTE = 'The cloud wrote each version for a need, by its letter. This device put the names over it. No name was sent.';
 
 /**
- * The materials of a signed lesson, on the device's side: the request as
- * it will be sent, read and ticked before it goes; then what came back,
- * with the children's names over each version for a need.
+ * The materials of a signed lesson, on the device's side: crisp 1-click generation
+ * with optional inspection of the anonymous outgoing request; then what came back,
+ * with the children's names placed over each version locally.
  */
 export function MaterialsCard({
   request,
   stopped,
   busy,
+  streamChars = 0,
   fail,
   result,
   issues,
@@ -31,6 +32,8 @@ export function MaterialsCard({
   /** What the exit gate stops in it. */
   stopped: Violation[];
   busy: boolean;
+  /** Characters streamed so far while generating materials. */
+  streamChars?: number;
   fail: string | null;
   result: Materials | null;
   /** What the return gate found in the reply. */
@@ -46,8 +49,6 @@ export function MaterialsCard({
   activeNeed?: string | null;
   onHoverNeed?: (letter: string | null) => void;
 }) {
-  const [asking, setAsking] = useState(false);
-  const [read, setRead] = useState(false);
   const [replyRead, setReplyRead] = useState(false);
   const [noNames, setNoNames] = useState(false);
   if (result) {
@@ -166,50 +167,39 @@ export function MaterialsCard({
     <article className="card materials">
       <div className="card-head">
         <h3>Materials for this lesson</h3>
+        <span className={stopped.length === 0 ? 'gate pass' : 'gate stop'}>
+          {stopped.length === 0 ? 'Exit gate: clear' : `Exit gate: ${stopped.length} stopped`}
+        </span>
       </div>
-      {!asking ? (
-        <div className="actions">
-          <button className="primary" onClick={() => setAsking(true)}>
-            Make the materials
-          </button>
-          <span className="hint">Board work, a practice sheet, a sheet written out for each need, and an exit ticket. One more request to the cloud: you read it first.</span>
+      <div className="actions">
+        <button className="primary" disabled={busy || stopped.length > 0} onClick={onSend}>
+          {busy ? (streamChars > 0 ? `Writing materials (${streamChars} chars streamed)…` : 'Writing the materials…') : 'Make the materials'}
+        </button>
+        <span className="hint">Board work, a practice sheet, a sheet written out for each need, and an exit ticket — using only your approved plan and nameless need letters.</span>
+      </div>
+      {stopped.length > 0 && (
+        <div className="caution" role="alert">
+          <p>The exit gate stopped this text. Nothing will be sent.</p>
+          <ul>
+            {stopped.map((v, i) => (
+              <li key={i}>
+                “{v.what}”: {v.why}
+              </li>
+            ))}
+          </ul>
         </div>
-      ) : (
-        <>
-          <p className="hint">The exact text that will be sent: the class plan as it stands and the needs by letter. No name is in it.</p>
-          <pre className="wire">
-            <CloudText text={request} activeNeed={activeNeed} onHoverNeed={onHoverNeed} />
-          </pre>
-          {stopped.length > 0 && (
-            <div className="caution" role="alert">
-              <p>The exit gate stopped this text. Nothing will be sent.</p>
-              <ul>
-                {stopped.map((v, i) => (
-                  <li key={i}>
-                    “{v.what}”: {v.why}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {fail && (
-            <p className="caution" role="alert">
-              {fail}
-            </p>
-          )}
-          <label className="read-it">
-            <input type="checkbox" checked={read} disabled={busy || stopped.length > 0} onChange={(e) => setRead(e.target.checked)} />I have read this text.
-          </label>
-          <div className="actions">
-            <button className="primary" disabled={!read || busy || stopped.length > 0} onClick={onSend}>
-              {busy ? 'Writing the materials…' : 'Approve and send for materials'}
-            </button>
-            <button className="link" disabled={busy} onClick={() => setAsking(false)}>
-              Not now
-            </button>
-          </div>
-        </>
       )}
+      {fail && (
+        <p className="caution" role="alert">
+          {fail}
+        </p>
+      )}
+      <details className="materials-inspect">
+        <summary>Inspect exact outgoing text (no names · {request.length.toLocaleString()} chars)</summary>
+        <pre className="wire">
+          <CloudText text={request} activeNeed={activeNeed} onHoverNeed={onHoverNeed} />
+        </pre>
+      </details>
     </article>
   );
 }

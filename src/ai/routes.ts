@@ -7,6 +7,12 @@ import { ai } from './firebase';
  */
 export const ROUTES = [
   {
+    id: 'scan',
+    job: 'Transcribe a handwritten notebook photo on this device',
+    mode: InferenceMode.ONLY_ON_DEVICE,
+    why: 'A photo of a teacher’s paper register contains names, phone numbers, and private family details. Gemini Nano reads the image locally with zero cloud fallback and zero network requests.',
+  },
+  {
     id: 'guard',
     job: 'Find names and private details in the raw note',
     mode: InferenceMode.ONLY_ON_DEVICE,
@@ -41,6 +47,7 @@ export const ROUTES = [
 export type RouteId = (typeof ROUTES)[number]['id'];
 
 const ENGLISH = [{ type: 'text' as const, languages: ['en'] }];
+const IMAGE_ENGLISH = [{ type: 'image' as const }, ...ENGLISH];
 
 interface Options {
   /** Instructions that stay the same for every request. */
@@ -49,6 +56,8 @@ interface Options {
   schema?: Record<string, unknown>;
   /** Cloud model name, from policy. */
   cloudModel?: string;
+  /** Set to 'image' when the ONLY_ON_DEVICE request includes image input. */
+  multimodal?: 'image';
 }
 
 /** True when this browser has a built-in model the SDK can call. Asks nothing of any server. */
@@ -65,11 +74,11 @@ export function onDeviceModelPresent(): boolean {
  * refuses to build the model in that case, and it gives an ONLY_ON_DEVICE
  * route no cloud parameters at all.
  */
-export function modelFor(route: RouteId, { system, schema, cloudModel }: Options): GenerativeModel {
+export function modelFor(route: RouteId, { system, schema, cloudModel, multimodal }: Options): GenerativeModel {
   const mode = ROUTES.find((r) => r.id === route)!.mode;
   const onDevice = {
     createOptions: {
-      expectedInputs: ENGLISH,
+      expectedInputs: multimodal === 'image' ? IMAGE_ENGLISH : ENGLISH,
       expectedOutputs: ENGLISH,
       initialPrompts: [{ role: 'system' as const, content: [{ type: 'text' as const, value: system }] }],
     },
@@ -108,6 +117,17 @@ export async function deviceStatus(): Promise<DeviceStatus> {
   if (!api) return 'unsupported';
   try {
     return await api.availability({ expectedInputs: ENGLISH, expectedOutputs: ENGLISH });
+  } catch {
+    return 'unavailable';
+  }
+}
+
+/** Ask Chrome whether its built-in multimodal (image + text) model can run here. This sends nothing anywhere. */
+export async function imageOnDeviceStatus(): Promise<DeviceStatus> {
+  const api = (globalThis as { LanguageModel?: PromptApi }).LanguageModel;
+  if (!api) return 'unsupported';
+  try {
+    return await api.availability({ expectedInputs: IMAGE_ENGLISH, expectedOutputs: ENGLISH });
   } catch {
     return 'unavailable';
   }

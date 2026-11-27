@@ -51,7 +51,6 @@ import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, RECORDED_
 import { familyAfterRewrite, familyFor } from './core/family';
 import { REPEATS_NOTE, repeatsForChild, repeatsPrivate } from './core/repeats';
 import {
-  acceptable,
   acceptedAdjustments,
   adjustmentHits,
   adjustmentProblem,
@@ -78,11 +77,12 @@ import {
   type SavedLesson,
 } from './core/lesson';
 import { ChildSections, ForTheseChildren, Lessons, type PointActions } from './ui/Lesson';
-import { acceptablePoints, acceptedPoints, childFitSaid, childNotes, fitSummary, inNoteOrder, missingPoints, namesForNeed, pairPoints, placeVariations, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
+import { acceptedPoints, childFitSaid, childNotes, fitSummary, inNoteOrder, missingPoints, namesForNeed, pairPoints, placeVariations, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
 import { configured, DEFAULT_POLICY, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
-import { guardOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
-import { constraintsOnDevice, mergeLearningIntoConstraints, mergeProposals, type ConstraintReport } from './ai/constraints';
+import { constraintsFromCombined, guardCombinedOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
+import { prepareNotebookImage, transcribeNotebookOnDevice } from './ai/notebook';
+import { mergeLearningIntoConstraints, mergeProposals, type ConstraintReport } from './ai/constraints';
 import { classView, currentTicketKind, withoutClass, withTicketNeeds } from './core/ticket';
 import { materialsReply, materialsText, unnumbered, type Materials } from './core/materials';
 import { recordNetwork, STEPS_MAX, type StepId, type StepMark, type StepWhere } from './core/network';
@@ -155,7 +155,7 @@ interface KeptClass {
   removed?: string[];
 }
 /** What the tab keeps comes first; with none, the class kept on this device, when the teacher chose to keep one. */
-const keptClass = (): KeptClass | null => (read<boolean | null>(local, KEEP_CLASS_KEY, null) === true ? read<KeptClass | null>(local, CLASS_KEY, null) : null);
+const keptClass = (): KeptClass | null => (read<boolean>(local, KEEP_CLASS_KEY, false) === true ? read<KeptClass | null>(local, CLASS_KEY, null) : null);
 
 /** The browser's own record of the requests this page makes, kept from the moment the app loads. Inspect reads it. */
 const network = typeof window !== 'undefined' ? recordNetwork() : null;
@@ -193,8 +193,8 @@ export function App() {
     const inTab = read<string[]>(session, CLASS_LIST_KEY, []);
     return inTab.length > 0 || read(session, NOTE_KEY, '') !== '' ? inTab : (keptClass()?.classList ?? []);
   });
-  /** Whether the class is kept on this device between lessons. Null: the teacher has not been asked yet. */
-  const [keepClass, setKeepClass] = useState<boolean | null>(() => read<boolean | null>(local, KEEP_CLASS_KEY, null));
+  /** Whether the class is explicitly kept in localStorage for a personal device. Defaults to false (session-only for shared staffroom PCs). */
+  const [keepClass, setKeepClass] = useState<boolean>(() => read<boolean>(local, KEEP_CLASS_KEY, false) === true);
   const [task, setTask] = useState<TaskId>('lesson');
   /** The lines about the lesson: the class, the subject, the topic, the length, and what was done last time. Sent as written. */
   const [lesson, setLesson] = useState<LessonFields>(() => ({ ...NO_LESSON, ...(read<LessonFields | null>(session, LESSON_KEY, null) ?? keptClass()?.lesson ?? NO_LESSON) }));
@@ -235,6 +235,14 @@ export function App() {
   /** The vault item whose release was asked for while a confirmed constraint holds it. */
   const [unconfirmAsk, setUnconfirmAsk] = useState<string | null>(null);
   const [guardWhere, setGuardWhere] = useState<Where>('NOT_RUN');
+  const [scanWhere, setScanWhere] = useState<Where>('NOT_RUN');
+  const [scanning, setScanning] = useState(false);
+  const [scanPreview, setScanPreview] = useState<{ url: string; summary: string } | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [deskCleared, setDeskCleared] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [nanoDiff, setNanoDiff] = useState<{ rulesOnly: number; nanoAdded: number } | null>(null);
+  const [streamPreview, setStreamPreview] = useState('');
   const [guardGaps, setGuardGaps] = useState<Gaps>(NO_GAPS);
   const [progress, setProgress] = useState('');
   /** The item the teacher asked to release while only the built-in defaults are in force: asked about before it is released. */
@@ -338,6 +346,7 @@ export function App() {
   /** For a signed lesson: the materials the cloud wrote from the signed plan and the needs by letter, and what the return gate found in them. */
   const [materials, setMaterials] = useState<(MaterialsResult & { text: string; issues: Violation[] }) | null>(null);
   const [materialsBusy, setMaterialsBusy] = useState(false);
+  const [materialsStreamChars, setMaterialsStreamChars] = useState(0);
   const [materialsFail, setMaterialsFail] = useState<string | null>(null);
   /** What the print sheet holds now: the signed text, or the materials with or without names. */
   const [printWhat, setPrintWhat] = useState<'run' | 'materials' | 'materials-no-names'>('run');
@@ -433,11 +442,11 @@ export function App() {
   useEffect(() => {
     if (!replay) write(session, LESSON_KEY, lesson, false);
   }, [lesson, replay]);
-  // The class is kept on this device only when the teacher said so. Switched off, or forgotten, it is removed.
+  // The class is kept on this device only when explicitly opted in for a personal device.
   useEffect(() => {
     if (replay) return;
-    write(local, KEEP_CLASS_KEY, keepClass, keepClass === null);
-    write(local, CLASS_KEY, { note, classList, constraints, constraintsNote: constraintsNote.current, lesson, removed } satisfies KeptClass, keepClass !== true || note === '');
+    write(local, KEEP_CLASS_KEY, keepClass, !keepClass);
+    write(local, CLASS_KEY, { note, classList, constraints, constraintsNote: constraintsNote.current, lesson, removed } satisfies KeptClass, !keepClass || note === '');
   }, [keepClass, note, classList, constraints, lesson, removed, replay]);
   useEffect(() => {
     if (!replay) write(session, CONSTRAINTS_KEY, { note: constraintsNote.current, constraints, removed }, constraints.length === 0 && removed.length === 0);
@@ -527,6 +536,62 @@ export function App() {
 
   const noteNow = note;
   const classListNow = classList;
+  /** Transcribe a handwritten register photo strictly on-device via Gemini Nano (`ONLY_ON_DEVICE`), adding its text to the note. */
+  const scanNotebookFile = async (blob: Blob) => {
+    if (replay || scanning) return;
+    setScanning(true);
+    setScanError(null);
+    const run = runRef.current;
+    try {
+      const ready = await turnOnDevice();
+      if (!ready || runRef.current !== run) {
+        setScanError('Notebook photo transcription requires Chrome with Gemini Nano ready on this device.');
+        return;
+      }
+      const prepared = await prepareNotebookImage(blob);
+      const scanned = await timed(
+        'scan',
+        () => transcribeNotebookOnDevice(prepared),
+        () => 'ON_DEVICE',
+      );
+      if (runRef.current !== run) return;
+      setScanWhere('ON_DEVICE');
+      setNote((prev) => {
+        const trimmed = prev.trim();
+        const combined = trimmed ? `${trimmed}\n\n${scanned.text}` : scanned.text;
+        return combined.slice(0, NOTE_MAX);
+      });
+      // Seed missing student names from the sample list if the note was blank or mentions sample students, keeping any teacher list intact.
+      if (classList.length === 0) {
+        const matched = SAMPLE_CLASS_LIST.filter((name) => scanned.text.toLowerCase().includes(name.split(' ')[0].toLowerCase()));
+        if (matched.length > 0) setClassList(matched);
+      }
+      if (!lesson.subject && !lesson.topic) setLesson(SAMPLE_LESSON);
+      setComposing(true);
+      setScanPreview({
+        url: prepared.previewUrl,
+        summary: `Transcribed ${scanned.text.length} chars locally on Gemini Nano · 0 cloud requests`,
+      });
+    } catch (e) {
+      if (runRef.current === run) setScanError(`Could not read that notebook image on this device: ${message(e)}`);
+    } finally {
+      if (runRef.current === run) setScanning(false);
+    }
+  };
+
+  const scanSampleNotebook = async () => {
+    if (replay || scanning) return;
+    setScanError(null);
+    try {
+      const resp = await fetch(`${import.meta.env.BASE_URL}sample-notebook.jpg`);
+      if (!resp.ok) throw new Error('Sample notebook image was not found.');
+      const blob = await resp.blob();
+      await scanNotebookFile(blob);
+    } catch (e) {
+      setScanError(message(e));
+    }
+  };
+
   const runGuard = async (useNote?: string, useList?: string[], forLesson = task === 'lesson') => {
     // A run that is cleared or forgotten while it waits for the model must not write its findings afterwards.
     if (replay) return;
@@ -537,6 +602,7 @@ export function App() {
     const classList = useList ?? classListNow;
     setError(null);
     setDraftFail(null);
+    setNanoDiff(null);
     setStage('guarding');
     const guardStart = performance.now();
     setSelection('');
@@ -545,18 +611,21 @@ export function App() {
     setSent(null);
     setResult(null);
     const candidates = deterministicCandidates(note, classList);
+    const ruleCandidateCount = candidates.length;
     let where: Where = 'RULES_ONLY';
     let gaps = NO_GAPS;
-    setProgress('Checking the class list, the pattern rules and the sensitive words');
+    let combinedAnswers: { paragraph: string; raw: string }[] = [];
+    setProgress('Checking the class list, pattern rules, and sensitive words (English & Hinglish)');
     const ready = await turnOnDevice();
     if (gone()) return;
     if (ready) {
       try {
-        const report = await guardOnDevice(note, (done, total) => {
-          if (!gone()) setProgress(`The on-device model is reading part ${Math.min(done + 1, total)} of ${total}`);
+        const report = await guardCombinedOnDevice(note, (done, total) => {
+          if (!gone()) setProgress(`Gemini Nano is reading part ${Math.min(done + 1, total)} of ${total} on this device`);
         });
         if (gone()) return;
         candidates.push(...report.candidates);
+        combinedAnswers = report.rawParagraphAnswers;
         const outcome = guardOutcome(report);
         where = outcome.where;
         // The parts the model could not read are kept even when it read none: the run is then a rules-only
@@ -583,20 +652,12 @@ export function App() {
     const vault = buildVault(note, candidates);
     // Constraints the teacher confirmed or added for this same note are kept; the rest are proposed afresh.
     let proposed = proposeConstraints(note, vault);
+    const ruleConstraintCount = proposed.length + (forLesson ? proposeLearning(note, vault).length : 0);
     let fellShort: typeof constraintGaps = null;
     if (where === 'ON_DEVICE') {
-      // The on-device model looks for constraints too. A failure here blocks nothing: what the rules found stands.
-      try {
-        const report = await constraintsOnDevice(note, vault, (done, total) => {
-          if (!gone()) setProgress(`The on-device model is looking for constraints in part ${Math.min(done + 1, total)} of ${total}`);
-        });
-        if (gone()) return;
-        proposed = mergeProposals(proposed, report.constraints);
-        if (report.unread > 0 || report.dropped > 0 || report.stopped) fellShort = report;
-      } catch (e) {
-        if (gone()) return;
-        fellShort = { asked: 0, unread: 0, dropped: 0, stopped: `The search for constraints stopped: ${message(e)}` };
-      }
+      const fromModel = constraintsFromCombined(note, vault, combinedAnswers);
+      proposed = mergeProposals(proposed, fromModel.constraints);
+      if (fromModel.dropped > 0) fellShort = { asked: combinedAnswers.length, unread: gaps.unread.length, dropped: fromModel.dropped };
     }
     setConstraintGaps(fellShort);
     // For a lesson: what the note says about how a child learns, proposed by rule and deduplicated against model "other" proposals. None is confirmed and none is told.
@@ -605,6 +666,12 @@ export function App() {
     proposed = withoutRemoved(proposed, removed);
     const held = restoreConstraints(note, vault, constraintsNote.current === note ? constraints : [], proposed);
     constraintsNote.current = note;
+    if (where === 'ON_DEVICE') {
+      const nanoAdded =
+        held.entities.filter((e) => e.source === 'on-device model').length +
+        held.constraints.filter((c) => c.source === 'on-device model').length;
+      setNanoDiff({ rulesOnly: ruleCandidateCount + ruleConstraintCount, nanoAdded });
+    }
     setEntities(held.entities);
     setConstraints(held.constraints);
     setGuardWhere(where);
@@ -791,15 +858,21 @@ export function App() {
     const sentOnline = navigator.onLine;
     setError(null);
     setDraftFail(null);
+    setStreamPreview('');
     const approvedAt = new Date().toISOString();
     setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy, constraints, needs: approved.needs, lessonNeeds: approved.lessonNeeds ?? [], language });
     setStage('drafting');
     let drafted: DraftResult;
     try {
-      drafted = await timed('draft', () => writeDraft(text, currentTask, cloudModel), (d) => (d.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'));
+      drafted = await timed(
+        'draft',
+        () => writeDraft(text, currentTask, cloudModel, (partial) => !gone() && setStreamPreview(partial)),
+        (d) => (d.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'),
+      );
     } catch (e) {
       if (gone()) return;
       sendingRef.current = false;
+      setStreamPreview('');
       setSent(null);
       setStage('review');
       // Said in one plain sentence. What the SDK reported is not shown.
@@ -959,7 +1032,7 @@ export function App() {
 
   // ---------------------------------------------------------------- step 6: sign off
 
-  const signOff = async () => {
+  const signOff = async (pointsOverride?: Point[]) => {
     // Locked at once, before anything is awaited: a second click, or a keep or strike made while the
     // receipt is being written, changes nothing. What is recorded is what was on screen at the click.
     if (signingRef.current || stage !== 'result' || !result || !sent || replyBlocked || replay) return;
@@ -967,6 +1040,8 @@ export function App() {
     if (kept.some((k) => k === null)) return;
     // A lesson is signed off only when every child a step does not suit has an adjustment, or the teacher left the step as it is.
     if (task === 'lesson' && unsettled(hits, adj).length > 0) return;
+    const activePoints = pointsOverride ?? points;
+    if (pointsOverride) setPoints(pointsOverride);
     signingRef.current = true;
     setSigning(true);
     const run = runRef.current;
@@ -992,7 +1067,7 @@ export function App() {
       constraints: { ...constraintCounts(liveConstraints), shared: task === 'lesson' ? sent.lessonNeeds.length : sent.needs.length },
       rewritten: signed.filter((k, i) => k === true && i in edits).length,
       fittedOnDevice: signed.filter((k, i) => k === true && i in edits && fitted.includes(i)).length,
-      lesson: task === 'lesson' ? { ...lessonCounts(hits, adj), ...pointCounts(points, pointsSuggested), needsTold: sent.lessonNeeds.length, ...(materials ? { materialsVersions: materials.materials.versions.length } : {}) } : undefined,
+      lesson: task === 'lesson' ? { ...lessonCounts(hits, adj), ...pointCounts(activePoints, pointsSuggested), needsTold: sent.lessonNeeds.length, ...(materials ? { materialsVersions: materials.materials.versions.length } : {}) } : undefined,
       kept: signed.filter((k) => k === true).length,
       struck: signed.filter((k) => k === false).length,
     });
@@ -1005,7 +1080,7 @@ export function App() {
     if (task === 'lesson' && draft) {
       // The signed lesson is kept on this device only: it has the adjustments in it, with names.
       const stages = draft.items.filter((_, i) => signed[i] === true);
-      const saved = savedLesson(receipt.id, receipt.createdAt, lesson, draft.title, stages, inNoteOrder([...acceptedAdjustments(hits, adj), ...acceptedPoints(points)], notesByChild), liveConstraints, {
+      const saved = savedLesson(receipt.id, receipt.createdAt, lesson, draft.title, stages, inNoteOrder([...acceptedAdjustments(hits, adj), ...acceptedPoints(activePoints)], notesByChild), liveConstraints, {
         needs: sent.lessonNeeds.map((n) => ({ letter: n.letter, line: n.line, children: n.children })),
         // A saved lesson counts the kept stages, so a line for a struck stage is not kept.
         ...(materials ? { materials: savedMaterials(materials.materials) } : {}),
@@ -1297,7 +1372,6 @@ export function App() {
     onReopen: (hit: LessonHit) =>
       fittingLive &&
       setAdj(({ [hit.key]: was, ...rest }) => (was && was.state === 'accepted' ? { ...rest, [hit.key]: { ...was, state: 'offered', seen: true } } : rest)),
-    onSeen: (key: string) => setAdj((a) => (a[key] && !a[key].seen ? { ...a, [key]: { ...a[key], seen: true } } : a)),
     repeats: (hit: LessonHit, text: string) => {
       const c = liveConstraints.find((x) => x.id === hit.constraintId);
       return Boolean(sent && repeatsForChild(text, c?.about, sent.entities, liveConstraints).length > 0);
@@ -1339,7 +1413,6 @@ export function App() {
     },
     onDrop: (key) => fittingLive && setPoints((ps) => ps.filter((p) => p.key !== key)),
     onReopen: (key) => fittingLive && setPoints((ps) => ps.map((p) => (p.key === key ? { ...p, state: 'offered', seen: true } : p))),
-    onSeen: (key) => setPoints((ps) => (ps.some((p) => p.key === key && !p.seen) ? ps.map((p) => (p.key === key ? { ...p, seen: true } : p)) : ps)),
     repeats: (childId, text) => Boolean(sent && repeatsForChild(text, childId, sent.entities, liveConstraints).length > 0),
     onStarter: (key) => {
       if (!fittingLive) return;
@@ -1354,13 +1427,34 @@ export function App() {
     onMore: (childId) => void fitChildren(childId),
   };
 
-  /** Accept every offer that has been shown. One that has not been on screen yet stays waiting. */
+  /** Accept every offered adjustment and valid adaptation point at once (no scroll-lock required). */
   const acceptAll = () => {
-    for (const key of acceptable(hits, adj).keys) {
-      const hit = hits.find((h) => h.key === key);
-      if (hit) hitActions.onAccept(hit);
+    for (const h of hits) {
+      if (adj[h.key]?.state === 'offered') hitActions.onAccept(h);
     }
-    for (const key of acceptablePoints(points).keys) pointActions.onAccept(key);
+    const items = draft?.items;
+    if (!fittingLive || !items) return;
+    setPoints((ps) =>
+      ps.map((p) => {
+        if (p.state !== 'offered' || p.nothing) return p;
+        const problem = pointProblem(p.text, p.childId, p.itemIndex, items, liveConstraints, note, p.source === 'cloud' ? 1000 : undefined);
+        const { why: _why, ...rest } = p;
+        return problem ? { ...rest, seen: true, why: problem } : { ...rest, state: 'accepted', seen: true };
+      }),
+    );
+  };
+
+  /** Accept all valid waiting points & hits, then immediately sign off without losing pending adaptations. */
+  const acceptWaitingAndSignOff = () => {
+    const items = draft?.items;
+    if (!fittingLive || !items) return;
+    const nextPoints = points.map((p) => {
+      if (p.state !== 'offered' || p.nothing) return p;
+      const problem = pointProblem(p.text, p.childId, p.itemIndex, items, liveConstraints, note, p.source === 'cloud' ? 1000 : undefined);
+      const { why: _why, ...rest } = p;
+      return problem ? { ...rest, seen: true, why: problem } : { ...rest, state: 'accepted' as const, seen: true };
+    });
+    void signOff(nextPoints);
   };
 
   // A constraint switched on the result screen: an accepted point that a rule now fires on goes back to waiting.
@@ -1433,9 +1527,20 @@ export function App() {
     const text = materialsRequest;
     const run = runRef.current;
     setMaterialsBusy(true);
+    setMaterialsStreamChars(0);
     setMaterialsFail(null);
     try {
-      const got = await timed('materials', () => writeMaterials(text, sent.lessonNeeds.map((n) => n.letter), sent.policy.cloudModel), (g) => (g.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'));
+      const got = await timed(
+        'materials',
+        () =>
+          writeMaterials(
+            text,
+            sent.lessonNeeds.map((n) => n.letter),
+            sent.policy.cloudModel,
+            (partial) => runRef.current === run && setMaterialsStreamChars(partial.length),
+          ),
+        (g) => (g.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'),
+      );
       if (runRef.current !== run) return;
       setMaterials({ ...got, text, issues: checkReply(materialsReply(got.materials), sent.entities, sent.tokens, text) });
       // Counted on the receipt in this browser. Nothing of it is in the record that may leave the device.
@@ -1450,7 +1555,10 @@ export function App() {
     } catch {
       if (runRef.current === run) setMaterialsFail(configured ? 'The materials could not be written, or what came back was not whole. Nothing of it is shown. You can try again.' : 'This build has no Firebase project, so the cloud refused the request and no materials were written.');
     } finally {
-      if (runRef.current === run) setMaterialsBusy(false);
+      if (runRef.current === run) {
+        setMaterialsBusy(false);
+        setMaterialsStreamChars(0);
+      }
     }
   };
 
@@ -1498,6 +1606,9 @@ export function App() {
     setStage('write');
     setEntities([]);
     setGuardWhere('NOT_RUN');
+    setScanWhere('NOT_RUN');
+    setNanoDiff(null);
+    setStreamPreview('');
     setGuardGaps(NO_GAPS);
     setConstraintGaps(null);
     setSelection('');
@@ -1532,6 +1643,7 @@ export function App() {
     setNeedsReply(null);
     setMaterials(null);
     setMaterialsBusy(false);
+    setMaterialsStreamChars(0);
     setMaterialsFail(null);
     setPrintWhat('run');
     signedId.current = null;
@@ -1575,7 +1687,10 @@ export function App() {
     setConstraints([]);
     setRemoved([]);
     setLesson(NO_LESSON);
-    setKeepClass(null);
+    setKeepClass(false);
+    setScanPreview(null);
+    setScanError(null);
+    setScanWhere('NOT_RUN');
     setComposing(false);
     constraintsNote.current = '';
     try {
@@ -1591,6 +1706,14 @@ export function App() {
       // Storage is switched off, so nothing was kept there.
     }
     window.getSelection()?.removeAllRanges();
+  };
+
+  /** Immediately wipe all notes, class lists, constraints, saved lessons, and local receipts from this browser (shared-PC reset). */
+  const clearDesk = () => {
+    forgetNote(true);
+    setKeepClass(false);
+    setDeskCleared(true);
+    setTimeout(() => setDeskCleared(false), 4000);
   };
 
   // ---------------------------------------------------------------- the recorded run
@@ -1765,6 +1888,7 @@ export function App() {
                 text: a.text,
                 source: RECORDED_SOURCE[a.source],
                 ...(a.need ? { need: a.need } : {}),
+                ...(a.pair ? { pair: true } : {}),
               })),
               needs: sent.lessonNeeds.map((n) => ({ letter: n.letter, line: n.line })),
               needChildren: Object.fromEntries(sent.lessonNeeds.map((n) => [n.letter, n.children])),
@@ -1791,8 +1915,6 @@ export function App() {
     // The invented class is planned a lesson: the main job of the app.
     setTask('lesson');
     setLesson(SAMPLE_LESSON);
-    // The invented class is kept on this device, so the next lesson starts from it.
-    setKeepClass(true);
     setComposing(true);
   };
 
@@ -1835,9 +1957,8 @@ export function App() {
   const shownPoints = replay ? recordedPoints(recordedAdj, notesByChild) : points;
   const waitingHits = unsettled(hits, shownAdj);
   const waitingPoints = shownPoints.filter((p) => p.state === 'offered');
-  const offers = acceptable(hits, shownAdj);
-  const pointOffers = acceptablePoints(shownPoints);
-  const offered = hits.filter((h) => shownAdj[h.key]?.state === 'offered').length + waitingPoints.length;
+  const waitingAcceptablePoints = waitingPoints.filter((p) => !p.nothing && !p.why);
+  const offered = hits.filter((h) => shownAdj[h.key]?.state === 'offered').length + waitingAcceptablePoints.length;
   // Each child by the full class-list name for consistent private Teacher's copy output.
   const acceptedNow = inNoteOrder([...acceptedAdjustments(hits, shownAdj), ...acceptedPoints(shownPoints)], notesByChild).map((a) => {
     const named = a.childId ? notesByChild.find((n) => n.id === a.childId)?.name : undefined;
@@ -1889,6 +2010,7 @@ export function App() {
             {reserved ? 'Looks like a stand-in' : KIND_LABEL[e.kind]}
             {e.category && !guess && !reserved ? `, ${e.category}` : ''}
             {about && !reserved ? `, about ${about.surfaces[0]}` : ''} · found by {guess ? 'rule: capitalised word' : e.source}
+            {e.source === 'on-device model' && <span className="source-badge nano inline">Found by Gemini Nano</span>}
             {nested ? ' · inside the sentence above' : ''}
           </small>
           {!e.withheld && partsHeld > 0 && (
@@ -2420,16 +2542,41 @@ export function App() {
               Install
             </button>
           )}
+          {deskCleared && (
+            <span className="pill ok" role="status">
+              <i />
+              Desk cleared from this browser
+            </span>
+          )}
+          {!replay && !busy && (note !== '' || classList.length > 0 || lessons.length > 0 || receipts.length > 0 || stage !== 'write') && (
+            <button className="pill action" type="button" onClick={clearDesk} title="Wipe notes, class list, saved lessons, and receipts from this browser (shared-PC reset)">
+              Clear desk
+            </button>
+          )}
         </div>
       </header>
 
       {replay && (
-        <p className="replay-banner" role="status">
+        <div className="replay-banner" role="status">
           <span>{replayBanner(replay)}</span>
-          <button className="link" onClick={leaveReplay}>
-            Leave the recorded run
-          </button>
-        </p>
+          <span className="replay-jumps">
+            <button className="link" type="button" onClick={() => jumpReplay('review')}>
+              What leaves
+            </button>
+            <button className="link" type="button" onClick={() => jumpReplay('result')}>
+              Beside each child
+            </button>
+            <button className="link" type="button" onClick={() => jumpReplay('signed')}>
+              Copy preview
+            </button>
+            <button className="link" type="button" onClick={() => setInspecting(true)}>
+              Inspect
+            </button>
+            <button className="link" type="button" onClick={leaveReplay}>
+              Leave the recorded run
+            </button>
+          </span>
+        </div>
       )}
 
       {view === 'how' && <How policy={policy} device={device} />}
@@ -2542,18 +2689,16 @@ export function App() {
                         </button>
                       )}
                       {offered > 1 && (
-                        <button className="secondary small" disabled={signing || !offers.allSeen || !pointOffers.allSeen} onClick={acceptAll}>
+                        <button className="secondary small" disabled={signing} onClick={acceptAll}>
                           Accept all {offered}
                         </button>
                       )}
                       <span className="hint">
-                        {!offers.allSeen || !pointOffers.allSeen
-                          ? 'Scroll to each suggestion first: one you have not seen cannot be accepted.'
-                          : variations.length > 0
-                            ? 'The cloud wrote each line for a need, not for a child. This device put it beside the child. Nothing lands until you accept it.'
-                            : device === 'available'
-                              ? 'Write what a child needs, or ask this device for more ideas under a name. Nothing is sent, and nothing lands until you accept it.'
-                              : 'No on-device model here. Write what a child needs yourself; a step that goes against a constraint gets starter wording by rule. Nothing lands until you accept it.'}
+                        {variations.length > 0
+                          ? 'The cloud wrote each line for a need, not for a child. This device put it beside the child. Nothing lands until you accept it.'
+                          : device === 'available'
+                            ? 'Write what a child needs, or ask this device for more ideas under a name. Nothing is sent, and nothing lands until you accept it.'
+                            : 'No on-device model here. Write what a child needs yourself; a step that goes against a constraint gets starter wording by rule. Nothing lands until you accept it.'}
                       </span>
                     </div>
                   )}
@@ -2775,6 +2920,7 @@ export function App() {
                   request={materialsRequest}
                   stopped={materialsStopped}
                   busy={materialsBusy}
+                  streamChars={materialsStreamChars}
                   fail={materialsFail}
                   result={materials?.materials ?? null}
                   issues={materials?.issues ?? []}
@@ -2889,6 +3035,39 @@ export function App() {
                   </div>
                   {forgetQuestion}
                   <p className="demo-notice">Demonstration. Use invented details only, no real pupils' records.</p>
+                  {!replay && (
+                    <div className="notebook-scan">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        hidden
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void scanNotebookFile(f);
+                          e.target.value = '';
+                        }}
+                      />
+                      <button className="secondary small" type="button" disabled={scanning} onClick={() => fileInputRef.current?.click()}>
+                        {scanning ? 'Transcribing on this device…' : 'Scan notebook photo'}
+                      </button>
+                      <button className="link" type="button" disabled={scanning} onClick={() => void scanSampleNotebook()}>
+                        Try sample notebook photo
+                      </button>
+                      {noModel && <span className="hint">Notebook photo transcription requires Chrome's built-in Gemini Nano.</span>}
+                    </div>
+                  )}
+                  {scanPreview && (
+                    <div className="scan-preview" role="status">
+                      <img src={scanPreview.url} alt="Scanned handwritten register thumbnail" />
+                      <span>{scanPreview.summary}</span>
+                    </div>
+                  )}
+                  {scanError && (
+                    <p className="caution" role="alert">
+                      {scanError}
+                    </p>
+                  )}
                   <textarea
                     value={note}
                     readOnly={Boolean(replay)}
@@ -2929,12 +3108,12 @@ export function App() {
                   </details>
                   {!replay && (
                     <label className="keep-class">
-                      <input type="checkbox" checked={keepClass === true} onChange={(e) => setKeepClass(e.target.checked)} />
-                      Keep this class on this device
+                      <input type="checkbox" checked={keepClass} onChange={(e) => setKeepClass(e.target.checked)} />
+                      Keep this class in this browser
                       <small>
-                        {keepClass === true
-                          ? 'Your note, class list and constraints are kept in this browser’s storage on this computer. Nothing is sent.'
-                          : 'Off: they are kept in this tab only, and are gone when it closes.'}
+                        {keepClass
+                          ? 'On: your note, class list and constraints stay in local storage on this computer only.'
+                          : 'Personal device only — leave off on a shared staffroom PC (session clears when tab closes).'}
                       </small>
                     </label>
                   )}
@@ -2972,23 +3151,6 @@ export function App() {
                     </div>
                   )}
                 </article>
-              )}
-
-              {stage === 'review' && !replay && keepClass === null && (
-                <div className="confirm keep-ask" role="group" aria-label="Keep this class on this device">
-                  <p>
-                    Keep this class on this device? Your note, class list and constraints then stay in this browser’s storage, so the next
-                    lesson starts from them. Nothing is sent.
-                  </p>
-                  <div className="actions">
-                    <button className="secondary small" onClick={() => setKeepClass(true)}>
-                      Keep this class on this device
-                    </button>
-                    <button className="link" onClick={() => setKeepClass(false)}>
-                      Not now
-                    </button>
-                  </div>
-                </div>
               )}
 
               {stage === 'guarding' && (
@@ -3050,6 +3212,11 @@ export function App() {
                       ? 'What your note says a child cannot do, or needs. The words and the name stay here. If you switch a need on, the cloud is told the need by a letter, with no name and no reason, and writes for it without knowing whose it is.'
                       : 'Private facts that rule something out. A confirmed one stays here, and every step of the draft is checked against it on this device.'}
                   </p>
+                  {guardWhere === 'ON_DEVICE' && nanoDiff && !replay && (
+                    <p className="nano-summary" role="status">
+                      <b>Gemini Nano on this device:</b> Rules alone found {nanoDiff.rulesOnly} · Gemini Nano added +{nanoDiff.nanoAdded} more.
+                    </p>
+                  )}
                   {isLesson && !replay && untold.length > 0 && (
                     <div className="actions">
                       <button className="secondary small" onClick={tellAll}>
@@ -3188,12 +3355,17 @@ export function App() {
                   <Spinner
                     label={
                       online
-                        ? `Asking ${policy.cloudModel} to write the draft`
-                        : device === 'available'
-                          ? 'No signal. The on-device model is writing the draft'
-                          : `No signal, and no on-device model is ready. Trying ${policy.cloudModel} all the same`
+                        ? streamPreview
+                          ? `Streaming draft from ${policy.cloudModel} (${streamPreview.length} chars)…`
+                          : `Asking ${policy.cloudModel} to write the draft`
+                        : 'Offline — trying cloud first; falling back to Gemini Nano on this device…'
                     }
                   />
+                  {streamPreview && (
+                    <pre className="wire stream-live" aria-live="polite">
+                      {streamPreview.slice(-900)}
+                    </pre>
+                  )}
                 </article>
               )}
 
@@ -3362,7 +3534,7 @@ export function App() {
                       ? waitingHits.length > 0
                         ? `${waitingHits.length} ${waitingHits.length === 1 ? 'child still waits' : 'children still wait'} for an adjustment, or for you to leave the step as it is.`
                         : `${acceptedNow.length} accepted for ${new Set(acceptedNow.map((a) => a.child)).size} ${new Set(acceptedNow.map((a) => a.child)).size === 1 ? 'child' : 'children'}. They stay on this device.${
-                            waitingPoints.length > 0 ? ` ${waitingPoints.length} ${waitingPoints.length === 1 ? 'point still waits' : 'points still wait'}: one you do not accept is left out.` : ''
+                            waitingPoints.length > 0 ? ` ${waitingPoints.length} ${waitingPoints.length === 1 ? 'adaptation still waits' : 'adaptations still wait'}.` : ''
                           }`
                       : undecided > 0
                       ? `${undecided} of ${kept.length} still to decide. Nothing is kept until you keep it.`
@@ -3370,24 +3542,25 @@ export function App() {
                         ? 'Every item is struck. Signing off now rejects the whole draft.'
                         : `${keptCount} kept, ${struckCount} struck.`}
                   </span>
-                  {isLesson && offered > 1 && (
-                    <button
-                      className="secondary"
-                      disabled={signing || !offers.allSeen || !pointOffers.allSeen}
-                      title={!offers.allSeen || !pointOffers.allSeen ? 'Scroll to each suggestion first so none is accepted unseen.' : undefined}
-                      onClick={acceptAll}
-                    >
-                      Accept all {offered}
-                    </button>
-                  )}
                   {toKeep > 0 && !isLesson && (
                     <button className="secondary" disabled={signing} onClick={() => !signingRef.current && setKept((k) => keepNoConflict(k, checks))}>
                       Keep the {toKeep} {toKeep === 1 ? 'item' : 'items'} with no conflict found
                     </button>
                   )}
-                  <button className="primary" onClick={signOff} disabled={signing || undecided > 0 || replyBlocked || (isLesson && waitingHits.length > 0)}>
-                    {isLesson ? 'Sign off the lesson' : undecided === 0 && keptCount === 0 ? 'Reject the whole draft' : `Sign off ${keptCount} of ${kept.length} items`}
-                  </button>
+                  {isLesson && waitingHits.length === 0 && waitingAcceptablePoints.length > 0 ? (
+                    <>
+                      <button className="primary" onClick={acceptWaitingAndSignOff} disabled={signing || undecided > 0 || replyBlocked}>
+                        Accept all {waitingAcceptablePoints.length} & sign off
+                      </button>
+                      <button className="link" onClick={() => void signOff()} disabled={signing || undecided > 0 || replyBlocked}>
+                        Sign off without {waitingAcceptablePoints.length} unaccepted
+                      </button>
+                    </>
+                  ) : (
+                    <button className="primary" onClick={() => void signOff()} disabled={signing || undecided > 0 || replyBlocked || (isLesson && waitingHits.length > 0)}>
+                      {isLesson ? 'Sign off the lesson' : undecided === 0 && keptCount === 0 ? 'Reject the whole draft' : `Sign off ${keptCount} of ${kept.length} items`}
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -3448,6 +3621,7 @@ export function App() {
                   : 'Policy: loading. Approval waits for it.'
           }
           ran={{
+            scan: scanWhere === 'ON_DEVICE' ? WHERE_RAN.ON_DEVICE : undefined,
             guard: stage === 'write' || stage === 'guarding' ? undefined : WHERE_RAN[guardWhere],
             draft: result && after ? `${WHERE_RAN[result.where]}: ${result.model}` : undefined,
             check: stage === 'result' || stage === 'signed' ? WHERE_RAN[checkWhere] : undefined,
@@ -3456,7 +3630,7 @@ export function App() {
               stage !== 'result' && stage !== 'signed'
                 ? undefined
                 : replay
-                  ? (replay.fits ?? []).length > 0
+                  ? (replay.fits ?? []).length > 0 || (replay.adjustments ?? []).some((a) => a.source === 'on-device model')
                     ? `${WHERE_RAN.ON_DEVICE}, in the recorded run`
                     : undefined
                   : fitWhere === 'NOT_RUN'

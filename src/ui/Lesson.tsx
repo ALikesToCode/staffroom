@@ -1,7 +1,7 @@
 import { MaterialsWire } from './Materials';
 import { asVersion } from '../core/materials';
 import { allGotIt, SAMPLE_TICKET, TICKET_MARK, TICKET_MARKS, type ClassRow, type Ticket } from '../core/ticket';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { DraftItem } from '../core/types';
 import {
   ADJUSTMENT_MAX,
@@ -42,7 +42,6 @@ export interface HitActions {
   onLeave: (hit: LessonHit) => void;
   /** Open a settled hit again. */
   onReopen: (hit: LessonHit) => void;
-  onSeen: (key: string) => void;
   /** True when these words repeat words of the private note about that child. */
   repeats: (hit: LessonHit, text: string) => boolean;
 }
@@ -53,20 +52,6 @@ function HitRow({ hit, adj, live, canModel, busy, said, recorded, stage, actions
   const [wrong, setWrong] = useState<string | undefined>();
   const [leaving, setLeaving] = useState(false);
   const [readWhy, setReadWhy] = useState(false);
-  const offer = useRef<HTMLDivElement>(null);
-  const waiting = adj?.state === 'offered' && !adj.seen;
-
-  // An offer counts as shown once it has been on screen.
-  useEffect(() => {
-    const el = offer.current;
-    if (!waiting || !el) return;
-    if (typeof IntersectionObserver === 'undefined') return actions.onSeen(hit.key);
-    const seen = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && actions.onSeen(hit.key), { threshold: 0.6 });
-    seen.observe(el);
-    return () => seen.disconnect();
-    // The handlers are new on every render; the offer and its key are what matter here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waiting, hit.key]);
 
   const save = () => {
     const said = actions.onSave(hit, typing ?? '');
@@ -81,7 +66,7 @@ function HitRow({ hit, adj, live, canModel, busy, said, recorded, stage, actions
         {hit.line}
       </p>
       {adj && adj.state !== 'left' && typing === null && (
-        <div className="adjustment" ref={offer}>
+        <div className="adjustment">
           <span className="adj-source">{recorded && adj.source === 'model' ? RECORDED_FIT_LABEL : SOURCE_LABEL[adj.source]}</span>
           <p>
             <b>{hit.child}:</b> {adj.text}
@@ -203,7 +188,6 @@ export interface PointActions {
   onDrop: (key: string) => void;
   /** Open an accepted point again. */
   onReopen: (key: string) => void;
-  onSeen: (key: string) => void;
   repeats: (childId: string, text: string) => boolean;
   /** Put the starter wording in place of a line a rule fires on. It still waits to be accepted. */
   onStarter: (key: string) => void;
@@ -272,21 +256,7 @@ function PointRow({
   onHoverNeed?: (letter: string | null) => void;
 }) {
   const [changing, setChanging] = useState(false);
-  const offer = useRef<HTMLDivElement>(null);
-  const waiting = point.state === 'offered' && !point.seen;
   const traced = Boolean(point.need && activeNeed === point.need);
-
-  // A point counts as shown once it has been on screen.
-  useEffect(() => {
-    const el = offer.current;
-    if (!waiting || !el) return;
-    if (typeof IntersectionObserver === 'undefined') return actions.onSeen(point.key);
-    const seen = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && actions.onSeen(point.key), { threshold: 0.6 });
-    seen.observe(el);
-    return () => seen.disconnect();
-    // The handlers are new on every render; the point and its key are what matter here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waiting, point.key]);
 
   return (
     <li
@@ -297,7 +267,6 @@ function PointRow({
       {!changing && (
         <div
           className="adjustment"
-          ref={offer}
           tabIndex={point.need ? 0 : undefined}
           onFocus={() => point.need && onHoverNeed?.(point.need)}
           onBlur={() => point.need && onHoverNeed?.(null)}

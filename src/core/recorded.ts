@@ -40,6 +40,8 @@ export interface RecordedAdjustment {
   constraintId?: string;
   /** The letter of the need the cloud wrote it for. */
   need?: string;
+  /** True for a seating/pairing line this device wrote by rule for two classmates. */
+  pair?: boolean;
   text: string;
   source: RecordedSource;
 }
@@ -222,6 +224,7 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
           (a.constraintId !== undefined || a.childId !== undefined) &&
           optional(a.stage, (x) => str(x) && x.length <= FIELD_MAX) &&
           optional(a.need, (x) => str(x) && /^[A-Z]{1,2}\d*$/.test(x)) &&
+          optional(a.pair, (x) => typeof x === 'boolean') &&
           str(a.text) && a.text.trim().length > 0 && a.text.length <= ADJUSTMENT_MAX && Object.values(RECORDED_SOURCE).includes(a.source as RecordedSource),
       );
     if (!fine) return undefined;
@@ -311,6 +314,7 @@ export function asRecordedRun(data: unknown): RecordedRun | undefined {
             ...(a.childId !== undefined ? { childId: a.childId } : {}),
             ...(a.constraintId !== undefined ? { constraintId: a.constraintId } : {}),
             ...(a.need !== undefined ? { need: a.need } : {}),
+            ...(a.pair ? { pair: true } : {}),
             text: a.text,
             source: a.source,
           })),

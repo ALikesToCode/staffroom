@@ -1,1023 +1,1070 @@
 {
- "recordedAt": "2026-11-27T01:01:03.167Z",
- "chrome": "Chrome 158.0.0.0",
- "task": "lesson",
- "note": "Class 6B, week of 16 November. Notes for myself.\n\nAarav Sharma has missed four days this month. His mother Sunita told me on the phone (98765 43210) that his father lost his job at the mill and the family cannot pay for anything extra this term; Aarav now helps at the family tea stall before school. He is bright in maths but has not handed in homework for two weeks.\n\nMeenal reads well aloud but freezes in written tests. She needs extra writing practice, and the remedial writing club meets after the last bell. She told me she has epilepsy and is afraid of having a seizure in the exam hall. Her roll no. 6B/23. She walks six kilometres home to Rampur Kalan and has to leave school at the last bell to reach home before dark.\n\nKabir and Ishaan fight most days during group work. Kabir's parents are separating and he is staying with his grandmother. Ishaan finishes early and gets bored.\n\nTanvi is far ahead in reading. She could help others, but she is shy. Her family does not have a smartphone or an internet connection.",
- "classList": [
-  "Aarav Sharma",
-  "Diya Sharma",
-  "Meenal Joshi",
-  "Kabir Qureshi",
-  "Tanvi Rao",
-  "Ishaan Verma"
- ],
- "entities": [
-  {
-   "id": "student-1",
-   "kind": "student",
-   "token": "[Student 1]",
-   "surfaces": [
+  "recordedAt": "2026-11-27T19:47:41.160Z",
+  "chrome": "Chrome 158.0.0.0",
+  "task": "lesson",
+  "note": "Class 6B, week of 16 November. Notes for myself.\n\nAarav Sharma has missed four days this month. His mother Sunita told me on the phone (98765 43210) that his father lost his job at the mill and the family cannot pay for anything extra this term; Aarav now helps at the family tea stall before school. He is bright in maths but has not handed in homework for two weeks.\n\nMeenal reads well aloud but freezes in written tests. She needs extra writing practice, and the remedial writing club meets after the last bell. She told me she has epilepsy and is afraid of having a seizure in the exam hall. Her roll no. 6B/23. She walks six kilometres home to Rampur Kalan and has to leave school at the last bell to reach home before dark.\n\nKabir and Ishaan fight most days during group work. Kabir's parents are separating and he is staying with his grandmother. Ishaan finishes early and gets bored.\n\nTanvi is far ahead in reading. She could help others, but she is shy. Her family does not have a smartphone or an internet connection. She takes the 3:40 local bus home right after the last period because her mother cooks in two homes until evening.",
+  "classList": [
     "Aarav Sharma",
-    "Aarav"
-   ],
-   "source": "class list",
-   "withheld": true
-  },
-  {
-   "id": "student-2",
-   "kind": "student",
-   "token": "[Student 2]",
-   "surfaces": [
+    "Diya Sharma",
     "Meenal Joshi",
-    "Meenal",
-    "Joshi"
-   ],
-   "source": "class list",
-   "withheld": true
-  },
-  {
-   "id": "student-3",
-   "kind": "student",
-   "token": "[Student 3]",
-   "surfaces": [
     "Kabir Qureshi",
-    "Qureshi",
-    "Kabir"
-   ],
-   "source": "class list",
-   "withheld": true
-  },
-  {
-   "id": "student-4",
-   "kind": "student",
-   "token": "[Student 4]",
-   "surfaces": [
     "Tanvi Rao",
-    "Tanvi",
-    "Rao"
-   ],
-   "source": "class list",
-   "withheld": true
-  },
-  {
-   "id": "student-5",
-   "kind": "student",
-   "token": "[Student 5]",
-   "surfaces": [
-    "Ishaan Verma",
-    "Ishaan",
-    "Verma"
-   ],
-   "source": "class list",
-   "withheld": true
-  },
-  {
-   "id": "contact-1",
-   "kind": "contact",
-   "token": "[Contact 1]",
-   "surfaces": [
-    "98765 43210"
-   ],
-   "source": "rule",
-   "withheld": true
-  },
-  {
-   "id": "id-1",
-   "kind": "id",
-   "token": "[ID 1]",
-   "surfaces": [
-    "roll no. 6B/23"
-   ],
-   "source": "rule",
-   "withheld": true
-  },
-  {
-   "id": "adult-1",
-   "kind": "adult",
-   "token": "[Adult 1]",
-   "surfaces": [
-    "Sunita"
-   ],
-   "source": "on-device model",
-   "withheld": true
-  },
-  {
-   "id": "place-1",
-   "kind": "place",
-   "token": "[Place 1]",
-   "surfaces": [
-    "mill"
-   ],
-   "source": "on-device model",
-   "withheld": true
-  },
-  {
-   "id": "place-2",
-   "kind": "place",
-   "token": "[Place 2]",
-   "surfaces": [
-    "family tea stall"
-   ],
-   "source": "on-device model",
-   "withheld": true
-  },
-  {
-   "id": "place-3",
-   "kind": "place",
-   "token": "[Place 3]",
-   "surfaces": [
-    "Rampur Kalan"
-   ],
-   "source": "on-device model",
-   "withheld": true
-  },
-  {
-   "id": "private-1",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "His mother Sunita told me on the phone (98765 43210) that his father lost his job at the mill and the family cannot pay for anything extra this term; Aarav now helps at the family tea stall before school"
-   ],
-   "source": "rule",
-   "withheld": true,
-   "category": "family",
-   "at": 96,
-   "about": "student-1"
-  },
-  {
-   "id": "private-2",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "She told me she has epilepsy and is afraid of having a seizure in the exam hall"
-   ],
-   "source": "rule",
-   "withheld": true,
-   "category": "health",
-   "at": 515,
-   "about": "student-2"
-  },
-  {
-   "id": "private-3",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "Kabir's parents are separating and he is staying with his grandmother"
-   ],
-   "source": "rule",
-   "withheld": true,
-   "category": "family",
-   "at": 783,
-   "about": "student-3"
-  },
-  {
-   "id": "private-4",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "his father lost his job at the mill"
-   ],
-   "source": "on-device model",
-   "withheld": true,
-   "category": "money",
-   "at": 154,
-   "about": "student-1"
-  },
-  {
-   "id": "private-5",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "the family cannot pay for anything extra this term"
-   ],
-   "source": "on-device model",
-   "withheld": true,
-   "category": "money",
-   "at": 194,
-   "about": "student-1"
-  },
-  {
-   "id": "private-6",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "Aarav now helps at the family tea stall before school"
-   ],
-   "source": "on-device model",
-   "withheld": true,
-   "category": "money",
-   "at": 246,
-   "about": "student-1"
-  },
-  {
-   "id": "private-7",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "She told me she has epilepsy"
-   ],
-   "source": "on-device model",
-   "withheld": true,
-   "category": "health",
-   "at": 515,
-   "about": "student-2"
-  },
-  {
-   "id": "private-8",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "is afraid of having a seizure in the exam hall"
-   ],
-   "source": "on-device model",
-   "withheld": true,
-   "category": "health",
-   "at": 548,
-   "about": "student-2"
-  },
-  {
-   "id": "private-9",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "She walks six kilometres home"
-   ],
-   "source": "on-device model",
-   "withheld": true,
-   "category": "family",
-   "at": 616,
-   "about": "student-2"
-  },
-  {
-   "id": "private-10",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "has to leave school at the last bell to reach home before dark"
-   ],
-   "source": "on-device model",
-   "withheld": true,
-   "category": "family",
-   "at": 666,
-   "about": "student-2"
-  },
-  {
-   "id": "private-11",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "Her family does not have a smartphone or an internet connection."
-   ],
-   "source": "on-device model",
-   "withheld": true,
-   "category": "family",
-   "at": 963,
-   "about": "student-4"
-  },
-  {
-   "id": "private-12",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "has missed four days this month"
-   ],
-   "source": "teacher",
-   "withheld": true,
-   "span": {
-    "start": 63,
-    "end": 94
-   },
-   "at": 63,
-   "about": "student-1"
-  },
-  {
-   "id": "private-13",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "has not handed in homework for two weeks"
-   ],
-   "source": "teacher",
-   "withheld": true,
-   "span": {
-    "start": 327,
-    "end": 367
-   },
-   "at": 327,
-   "about": "student-1"
-  },
-  {
-   "id": "private-14",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "freezes in written tests"
-   ],
-   "source": "teacher",
-   "withheld": true,
-   "span": {
-    "start": 398,
-    "end": 422
-   },
-   "at": 398,
-   "about": "student-2"
-  },
-  {
-   "id": "private-15",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "the remedial writing club meets after the last bell."
-   ],
-   "source": "teacher",
-   "withheld": true,
-   "span": {
-    "start": 462,
-    "end": 514
-   },
-   "at": 462,
-   "about": "student-2"
-  },
-  {
-   "id": "private-16",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "Kabir and Ishaan fight most days during group work."
-   ],
-   "source": "teacher",
-   "withheld": true,
-   "span": {
-    "start": 731,
-    "end": 782
-   },
-   "at": 731
-  },
-  {
-   "id": "private-17",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "Ishaan finishes early and gets bored."
-   ],
-   "source": "teacher",
-   "withheld": true,
-   "span": {
-    "start": 854,
-    "end": 891
-   },
-   "at": 854,
-   "about": "student-5"
-  },
-  {
-   "id": "private-18",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "is far ahead in reading"
-   ],
-   "source": "teacher",
-   "withheld": true,
-   "span": {
-    "start": 899,
-    "end": 922
-   },
-   "at": 899,
-   "about": "student-4"
-  },
-  {
-   "id": "private-19",
-   "kind": "private",
-   "token": "[withheld]",
-   "surfaces": [
-    "is shy"
-   ],
-   "source": "teacher",
-   "withheld": true,
-   "span": {
-    "start": 955,
-    "end": 961
-   },
-   "at": 955,
-   "about": "student-4"
-  }
- ],
- "constraints": [
-  {
-   "id": "learn-63-missed-student-1",
-   "kind": "learning",
-   "learn": "missed",
-   "text": "has missed four days this month",
-   "at": 63,
-   "about": "student-1",
-   "aboutName": "Aarav Sharma",
-   "need": "has missed recent lessons",
-   "source": "rule",
-   "confirmed": true,
-   "detailId": "private-12",
-   "share": true
-  },
-  {
-   "id": "model-67-days-away",
-   "kind": "days-away",
-   "text": "missed four days this month",
-   "at": 67,
-   "days": [],
-   "source": "on-device model",
-   "confirmed": true,
-   "about": "student-1",
-   "aboutName": "Aarav Sharma",
-   "detailId": "private-12"
-  },
-  {
-   "id": "rule-205-money",
-   "kind": "money",
-   "text": "cannot pay for anything extra this term",
-   "at": 205,
-   "source": "rule",
-   "confirmed": true,
-   "about": "student-1",
-   "aboutName": "Aarav Sharma",
-   "alsoModel": true,
-   "detailId": "private-1",
-   "share": true
-  },
-  {
-   "id": "rule-252-time-before",
-   "kind": "time-before",
-   "text": "now helps at the family tea stall before school",
-   "at": 252,
-   "source": "rule",
-   "confirmed": true,
-   "about": "student-1",
-   "aboutName": "Aarav Sharma",
-   "alsoModel": true,
-   "detailId": "private-1",
-   "share": true
-  },
-  {
-   "id": "model-327-other",
-   "kind": "other",
-   "text": "has not handed in homework for two weeks",
-   "at": 327,
-   "source": "on-device model",
-   "confirmed": true,
-   "about": "student-1",
-   "aboutName": "Aarav Sharma",
-   "detailId": "private-13"
-  },
-  {
-   "id": "learn-327-homework-student-1",
-   "kind": "learning",
-   "learn": "homework",
-   "text": "has not handed in homework for two weeks",
-   "at": 327,
-   "about": "student-1",
-   "aboutName": "Aarav Sharma",
-   "need": "has not handed in recent homework",
-   "source": "rule",
-   "confirmed": true,
-   "detailId": "private-13",
-   "share": true
-  },
-  {
-   "id": "learn-398-tests-student-2",
-   "kind": "learning",
-   "learn": "tests",
-   "text": "freezes in written tests",
-   "at": 398,
-   "about": "student-2",
-   "aboutName": "Meenal Joshi",
-   "need": "finds written tests hard; can answer aloud",
-   "source": "rule",
-   "confirmed": true,
-   "detailId": "private-14",
-   "share": true
-  },
-  {
-   "id": "rule-531-health",
-   "kind": "health",
-   "text": "has epilepsy",
-   "at": 531,
-   "triggers": [
-    "flashing",
-    "flicker",
-    "flickering",
-    "strobe",
-    "strobing"
-   ],
-   "source": "rule",
-   "confirmed": true,
-   "about": "student-2",
-   "aboutName": "Meenal Joshi",
-   "alsoModel": true,
-   "detailId": "private-2"
-  },
-  {
-   "id": "rule-666-time-after",
-   "kind": "time-after",
-   "text": "has to leave school at the last bell to reach home before dark",
-   "at": 666,
-   "source": "rule",
-   "confirmed": true,
-   "about": "student-2",
-   "aboutName": "Meenal Joshi",
-   "alsoModel": true,
-   "detailId": "private-10",
-   "share": true
-  },
-  {
-   "id": "model-731-other",
-   "kind": "other",
-   "text": "Kabir and Ishaan fight most days during group work.",
-   "at": 731,
-   "source": "on-device model",
-   "confirmed": true,
-   "detailId": "private-16"
-  },
-  {
-   "id": "learn-748-group-student-3",
-   "kind": "learning",
-   "learn": "group",
-   "text": "fight most days during group work",
-   "at": 748,
-   "about": "student-3",
-   "aboutName": "Kabir Qureshi",
-   "need": "works better apart from one classmate",
-   "source": "rule",
-   "confirmed": true,
-   "detailId": "private-16",
-   "share": true
-  },
-  {
-   "id": "learn-748-group-student-5",
-   "kind": "learning",
-   "learn": "group",
-   "text": "fight most days during group work",
-   "at": 748,
-   "about": "student-5",
-   "aboutName": "Ishaan Verma",
-   "need": "works better apart from one classmate",
-   "source": "rule",
-   "confirmed": true,
-   "detailId": "private-16",
-   "share": true
-  },
-  {
-   "id": "rule-824-contact",
-   "kind": "contact",
-   "text": "staying with his grandmother",
-   "at": 824,
-   "guardian": "grandmother",
-   "source": "rule",
-   "confirmed": true,
-   "about": "student-3",
-   "aboutName": "Kabir Qureshi",
-   "who": "parents",
-   "away": true,
-   "alsoModel": true,
-   "detailId": "private-3"
-  },
-  {
-   "id": "model-854-other",
-   "kind": "other",
-   "text": "Ishaan finishes early and gets bored.",
-   "at": 854,
-   "source": "on-device model",
-   "confirmed": true,
-   "about": "student-5",
-   "aboutName": "Ishaan Verma",
-   "detailId": "private-17"
-  },
-  {
-   "id": "learn-861-early-student-5",
-   "kind": "learning",
-   "learn": "early",
-   "text": "finishes early and gets bored",
-   "at": 861,
-   "about": "student-5",
-   "aboutName": "Ishaan Verma",
-   "need": "finishes early and needs more to do",
-   "source": "rule",
-   "confirmed": true,
-   "detailId": "private-17",
-   "share": true
-  },
-  {
-   "id": "learn-899-reads-above-student-4",
-   "kind": "learning",
-   "learn": "reads-above",
-   "text": "is far ahead in reading",
-   "at": 899,
-   "about": "student-4",
-   "aboutName": "Tanvi Rao",
-   "need": "reads above the level of the class",
-   "source": "rule",
-   "confirmed": true,
-   "detailId": "private-18",
-   "share": true
-  },
-  {
-   "id": "learn-955-shy-student-4",
-   "kind": "learning",
-   "learn": "shy",
-   "text": "is shy",
-   "at": 955,
-   "about": "student-4",
-   "aboutName": "Tanvi Rao",
-   "need": "needs time before speaking in front of the class",
-   "source": "rule",
-   "confirmed": true,
-   "detailId": "private-19",
-   "share": true
-  },
-  {
-   "id": "rule-974-no-phone-internet",
-   "kind": "no-phone-internet",
-   "text": "does not have a smartphone or an internet connection",
-   "at": 974,
-   "source": "rule",
-   "confirmed": true,
-   "about": "student-4",
-   "aboutName": "Tanvi Rao",
-   "alsoModel": true,
-   "detailId": "private-11",
-   "share": true
-  }
- ],
- "outgoing": "Class 6B, week of 16 November. Notes for myself.\n\nNeeds in this class (no names and no reasons are given; a need may be one pupil's or several):\nNeed A: cannot stay after the last bell\nNeed B: no phone or internet at home\nNeed C: nothing that has to be bought or brought from home\nNeed D: cannot come before the first bell\nNeed F: finds written tests hard; can answer aloud\nNeed G: finishes early and needs more to do\nNeed H: has missed recent lessons\nNeed I: works better apart from one classmate\nNeed M: has not handed in recent homework\nNeed N: needs time before speaking in front of the class\nNeed O: reads above the level of the class\nUnder \"For each need\", give an entry for every one of these letters: A, B, C, D, F, G, H, I, M, N, O.\n\nLesson\nClass: Class 6\nSubject: English\nTopic: Writing a short description of a place\nLength: 40 minutes",
- "policy": {
-  "cloudModel": "gemini-3.5-flash-lite",
-  "lockedKinds": [
-   "contact",
-   "id"
+    "Ishaan Verma"
   ],
-  "origin": "remote",
-  "from": "school policy (Remote Config)"
- },
- "draft": {
-  "title": "Writing a short description of a place",
-  "items": [
-   {
-    "heading": "Starter (5 minutes)",
-    "text": "The teacher introduces the topic of writing a short description of a place. The pupils think about a familiar place and share one descriptive word. Materials needed are the blackboard and chalk."
-   },
-   {
-    "heading": "Teach (10 minutes)",
-    "text": "The teacher explains how to structure a short description using sensory details. The pupils listen and note down key adjectives on their paper. Materials needed are notebooks and pens."
-   },
-   {
-    "heading": "Practise (15 minutes)",
-    "text": "The teacher guides the class to write a short paragraph describing the school courtyard. The pupils write their descriptions independently using the taught structure. Materials needed are paper and pens."
-   },
-   {
-    "heading": "Check (10 minutes)",
-    "text": "The teacher invites volunteers to read their descriptions aloud to the class. The pupils listen and offer positive feedback. Materials needed are the written paragraphs."
-   },
-   {
-    "heading": "Homework (0 minutes)",
-    "text": "Write a short description of your room at home in five sentences."
-   }
-  ]
- },
- "checks": [
-  {
-   "verdict": "fits",
-   "reason": "Checked 3 steps against these details. No conflict found.",
-   "by": "none",
-   "rules": 18
-  },
-  {
-   "verdict": "fits",
-   "reason": "Checked 3 steps against these details. No conflict found.",
-   "by": "none",
-   "rules": 18
-  },
-  {
-   "verdict": "unsure",
-   "reason": "Meenal freezes in written tests.",
-   "by": "model",
-   "modelSaid": "conflict",
-   "rules": 18
-  },
-  {
-   "verdict": "fits",
-   "reason": "Checked 3 steps against these details. No conflict found.",
-   "by": "none",
-   "rules": 18
-  },
-  {
-   "verdict": "fits",
-   "reason": "The advice doesn't ask Aarav to do anything that his situation rules out.",
-   "by": "none",
-   "rules": 18
-  }
- ],
- "where": {
-  "guard": "ON_DEVICE",
-  "draft": "IN_CLOUD",
-  "check": "ON_DEVICE"
- },
- "draftModel": "gemini-3.5-flash-lite",
- "lesson": {
-  "klass": "Class 6",
-  "subject": "English",
-  "topic": "Writing a short description of a place",
-  "minutes": 40,
-  "lastTime": ""
- },
- "adjustments": [
-  {
-   "itemIndex": 1,
-   "stage": "Teach",
-   "childId": "student-1",
-   "text": "Such a pupil reviews a summary sheet of the previous lesson before starting, for the same purpose.",
-   "source": "cloud, for a need you approved",
-   "need": "H"
-  },
-  {
-   "itemIndex": 3,
-   "stage": "Check",
-   "childId": "student-2",
-   "text": "Such a pupil dictates their description to a partner instead of writing it, for the same purpose.",
-   "source": "cloud, for a need you approved",
-   "need": "F"
-  },
-  {
-   "itemIndex": 2,
-   "stage": "Practise",
-   "childId": "student-3",
-   "text": "Such a pupil sits at a separate desk to write their description, for the same purpose.",
-   "source": "cloud, for a need you approved",
-   "need": "I"
-  },
-  {
-   "itemIndex": 2,
-   "stage": "Practise",
-   "childId": "student-3",
-   "text": "Seat Kabir and Ishaan apart.",
-   "source": "rule starter"
-  },
-  {
-   "itemIndex": 2,
-   "stage": "Practise",
-   "childId": "student-5",
-   "text": "Such a pupil writes a second description of a different place, for the same purpose.",
-   "source": "cloud, for a need you approved",
-   "need": "G"
-  },
-  {
-   "itemIndex": 2,
-   "stage": "Practise",
-   "childId": "student-5",
-   "text": "Such a pupil sits at a separate desk to write their description, for the same purpose.",
-   "source": "cloud, for a need you approved",
-   "need": "I"
-  },
-  {
-   "itemIndex": 2,
-   "stage": "Practise",
-   "childId": "student-5",
-   "text": "Seat Kabir and Ishaan apart.",
-   "source": "rule starter"
-  },
-  {
-   "itemIndex": 2,
-   "stage": "Practise",
-   "childId": "student-4",
-   "text": "Such a pupil writes an extended description with advanced vocabulary, for the same purpose.",
-   "source": "cloud, for a need you approved",
-   "need": "O"
-  },
-  {
-   "itemIndex": 3,
-   "stage": "Check",
-   "childId": "student-4",
-   "text": "Such a pupil shares their description in a small group instead of in front of the whole class, for the same purpose.",
-   "source": "cloud, for a need you approved",
-   "need": "N"
-  }
- ],
- "needs": [
-  {
-   "letter": "A",
-   "line": "cannot stay after the last bell"
-  },
-  {
-   "letter": "B",
-   "line": "no phone or internet at home"
-  },
-  {
-   "letter": "C",
-   "line": "nothing that has to be bought or brought from home"
-  },
-  {
-   "letter": "D",
-   "line": "cannot come before the first bell"
-  },
-  {
-   "letter": "F",
-   "line": "finds written tests hard; can answer aloud"
-  },
-  {
-   "letter": "G",
-   "line": "finishes early and needs more to do"
-  },
-  {
-   "letter": "H",
-   "line": "has missed recent lessons"
-  },
-  {
-   "letter": "I",
-   "line": "works better apart from one classmate"
-  },
-  {
-   "letter": "M",
-   "line": "has not handed in recent homework"
-  },
-  {
-   "letter": "N",
-   "line": "needs time before speaking in front of the class"
-  },
-  {
-   "letter": "O",
-   "line": "reads above the level of the class"
-  }
- ],
- "needChildren": {
-  "A": [
-   "student-2"
+  "entities": [
+    {
+      "id": "student-1",
+      "kind": "student",
+      "token": "[Student 1]",
+      "surfaces": [
+        "Aarav Sharma",
+        "Aarav"
+      ],
+      "source": "class list",
+      "withheld": true
+    },
+    {
+      "id": "student-2",
+      "kind": "student",
+      "token": "[Student 2]",
+      "surfaces": [
+        "Meenal Joshi",
+        "Meenal",
+        "Joshi"
+      ],
+      "source": "class list",
+      "withheld": true
+    },
+    {
+      "id": "student-3",
+      "kind": "student",
+      "token": "[Student 3]",
+      "surfaces": [
+        "Kabir Qureshi",
+        "Qureshi",
+        "Kabir"
+      ],
+      "source": "class list",
+      "withheld": true
+    },
+    {
+      "id": "student-4",
+      "kind": "student",
+      "token": "[Student 4]",
+      "surfaces": [
+        "Tanvi Rao",
+        "Tanvi",
+        "Rao"
+      ],
+      "source": "class list",
+      "withheld": true
+    },
+    {
+      "id": "student-5",
+      "kind": "student",
+      "token": "[Student 5]",
+      "surfaces": [
+        "Ishaan Verma",
+        "Ishaan",
+        "Verma"
+      ],
+      "source": "class list",
+      "withheld": true
+    },
+    {
+      "id": "contact-1",
+      "kind": "contact",
+      "token": "[Contact 1]",
+      "surfaces": [
+        "98765 43210"
+      ],
+      "source": "rule",
+      "withheld": true
+    },
+    {
+      "id": "id-1",
+      "kind": "id",
+      "token": "[ID 1]",
+      "surfaces": [
+        "roll no. 6B/23"
+      ],
+      "source": "rule",
+      "withheld": true
+    },
+    {
+      "id": "adult-1",
+      "kind": "adult",
+      "token": "[Adult 1]",
+      "surfaces": [
+        "Sunita"
+      ],
+      "source": "on-device model",
+      "withheld": true
+    },
+    {
+      "id": "place-1",
+      "kind": "place",
+      "token": "[Place 1]",
+      "surfaces": [
+        "Rampur Kalan"
+      ],
+      "source": "on-device model",
+      "withheld": true
+    },
+    {
+      "id": "private-1",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "His mother Sunita told me on the phone (98765 43210) that his father lost his job at the mill and the family cannot pay for anything extra this term; Aarav now helps at the family tea stall before school"
+      ],
+      "source": "rule",
+      "withheld": true,
+      "category": "family",
+      "at": 96,
+      "about": "student-1"
+    },
+    {
+      "id": "private-2",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "She told me she has epilepsy and is afraid of having a seizure in the exam hall"
+      ],
+      "source": "rule",
+      "withheld": true,
+      "category": "health",
+      "at": 515,
+      "about": "student-2"
+    },
+    {
+      "id": "private-3",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "Kabir's parents are separating and he is staying with his grandmother"
+      ],
+      "source": "rule",
+      "withheld": true,
+      "category": "family",
+      "at": 783,
+      "about": "student-3"
+    },
+    {
+      "id": "private-4",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "his father lost his job at the mill and the family cannot pay for anything extra this term"
+      ],
+      "source": "on-device model",
+      "withheld": true,
+      "category": "money",
+      "at": 154,
+      "about": "student-1"
+    },
+    {
+      "id": "private-5",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "She told me she has epilepsy and is afraid of having a seizure in the exam hall."
+      ],
+      "source": "on-device model",
+      "withheld": true,
+      "category": "health",
+      "at": 515,
+      "about": "student-2"
+    },
+    {
+      "id": "private-6",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "Kabir's parents are separating"
+      ],
+      "source": "on-device model",
+      "withheld": true,
+      "category": "family",
+      "at": 783,
+      "about": "student-3"
+    },
+    {
+      "id": "private-7",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "he is staying with his grandmother"
+      ],
+      "source": "on-device model",
+      "withheld": true,
+      "category": "family",
+      "at": 818,
+      "about": "student-3"
+    },
+    {
+      "id": "private-8",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "family does not have a smartphone or an internet connection"
+      ],
+      "source": "on-device model",
+      "withheld": true,
+      "category": "money",
+      "at": 967,
+      "about": "student-4"
+    },
+    {
+      "id": "private-9",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "her mother cooks in two homes until evening"
+      ],
+      "source": "on-device model",
+      "withheld": true,
+      "category": "family",
+      "at": 1098,
+      "about": "student-4"
+    },
+    {
+      "id": "private-10",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "has missed four days this month"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 63,
+        "end": 94
+      },
+      "at": 63,
+      "about": "student-1"
+    },
+    {
+      "id": "private-11",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "has not handed in homework for two weeks"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 327,
+        "end": 367
+      },
+      "at": 327,
+      "about": "student-1"
+    },
+    {
+      "id": "private-12",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "freezes in written tests"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 398,
+        "end": 422
+      },
+      "at": 398,
+      "about": "student-2"
+    },
+    {
+      "id": "private-13",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "walks six kilometres home to Rampur Kalan"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 620,
+        "end": 661
+      },
+      "at": 620,
+      "about": "student-2"
+    },
+    {
+      "id": "private-14",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "has to leave school at the last bell to reach home before dark"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 666,
+        "end": 728
+      },
+      "at": 666,
+      "about": "student-2"
+    },
+    {
+      "id": "private-15",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "fight most days during group work"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 748,
+        "end": 781
+      },
+      "at": 748
+    },
+    {
+      "id": "private-16",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "finishes early and gets bored"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 861,
+        "end": 890
+      },
+      "at": 861,
+      "about": "student-5"
+    },
+    {
+      "id": "private-17",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "is far ahead in reading"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 899,
+        "end": 922
+      },
+      "at": 899,
+      "about": "student-4"
+    },
+    {
+      "id": "private-18",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "is shy"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 955,
+        "end": 961
+      },
+      "at": 955,
+      "about": "student-4"
+    },
+    {
+      "id": "private-19",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "She takes the 3:40 local bus home right after the last period"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 1028,
+        "end": 1089
+      },
+      "at": 1028,
+      "about": "student-4"
+    },
+    {
+      "id": "private-20",
+      "kind": "private",
+      "token": "[withheld]",
+      "surfaces": [
+        "because her mother cooks in two homes until evening"
+      ],
+      "source": "teacher",
+      "withheld": true,
+      "span": {
+        "start": 1090,
+        "end": 1141
+      },
+      "at": 1090,
+      "about": "student-4"
+    }
   ],
-  "B": [
-   "student-4"
+  "constraints": [
+    {
+      "id": "learn-63-missed-student-1",
+      "kind": "learning",
+      "learn": "missed",
+      "text": "has missed four days this month",
+      "at": 63,
+      "about": "student-1",
+      "aboutName": "Aarav Sharma",
+      "need": "has missed recent lessons",
+      "source": "rule",
+      "confirmed": true,
+      "detailId": "private-10",
+      "share": true
+    },
+    {
+      "id": "rule-205-money",
+      "kind": "money",
+      "text": "cannot pay for anything extra this term",
+      "at": 205,
+      "source": "rule",
+      "confirmed": true,
+      "about": "student-1",
+      "aboutName": "Aarav Sharma",
+      "detailId": "private-1",
+      "share": true
+    },
+    {
+      "id": "rule-252-time-before",
+      "kind": "time-before",
+      "text": "now helps at the family tea stall before school",
+      "at": 252,
+      "source": "rule",
+      "confirmed": true,
+      "about": "student-1",
+      "aboutName": "Aarav Sharma",
+      "alsoModel": true,
+      "detailId": "private-1",
+      "share": true
+    },
+    {
+      "id": "learn-327-homework-student-1",
+      "kind": "learning",
+      "learn": "homework",
+      "text": "has not handed in homework for two weeks",
+      "at": 327,
+      "about": "student-1",
+      "aboutName": "Aarav Sharma",
+      "need": "has not handed in recent homework",
+      "source": "rule",
+      "confirmed": true,
+      "alsoModel": true,
+      "detailId": "private-11",
+      "share": true
+    },
+    {
+      "id": "learn-398-tests-student-2",
+      "kind": "learning",
+      "learn": "tests",
+      "text": "freezes in written tests",
+      "at": 398,
+      "about": "student-2",
+      "aboutName": "Meenal Joshi",
+      "need": "finds written tests hard; can answer aloud",
+      "source": "rule",
+      "confirmed": true,
+      "detailId": "private-12",
+      "share": true
+    },
+    {
+      "id": "rule-531-health",
+      "kind": "health",
+      "text": "has epilepsy",
+      "at": 531,
+      "triggers": [
+        "flashing",
+        "flicker",
+        "flickering",
+        "strobe",
+        "strobing"
+      ],
+      "source": "rule",
+      "confirmed": true,
+      "about": "student-2",
+      "aboutName": "Meenal Joshi",
+      "detailId": "private-5"
+    },
+    {
+      "id": "model-620-other",
+      "kind": "other",
+      "text": "walks six kilometres home to Rampur Kalan",
+      "at": 620,
+      "source": "on-device model",
+      "confirmed": true,
+      "about": "student-2",
+      "aboutName": "Meenal Joshi",
+      "detailId": "private-13"
+    },
+    {
+      "id": "rule-666-time-after",
+      "kind": "time-after",
+      "text": "has to leave school at the last bell to reach home before dark",
+      "at": 666,
+      "source": "rule",
+      "confirmed": true,
+      "about": "student-2",
+      "aboutName": "Meenal Joshi",
+      "alsoModel": true,
+      "detailId": "private-14",
+      "share": true
+    },
+    {
+      "id": "learn-748-group-student-3",
+      "kind": "learning",
+      "learn": "group",
+      "text": "fight most days during group work",
+      "at": 748,
+      "about": "student-3",
+      "aboutName": "Kabir Qureshi",
+      "need": "works better apart from one classmate",
+      "source": "rule",
+      "confirmed": true,
+      "detailId": "private-15",
+      "share": true
+    },
+    {
+      "id": "learn-748-group-student-5",
+      "kind": "learning",
+      "learn": "group",
+      "text": "fight most days during group work",
+      "at": 748,
+      "about": "student-5",
+      "aboutName": "Ishaan Verma",
+      "need": "works better apart from one classmate",
+      "source": "rule",
+      "confirmed": true,
+      "detailId": "private-15",
+      "share": true
+    },
+    {
+      "id": "model-783-other",
+      "kind": "other",
+      "text": "Kabir's parents are separating",
+      "at": 783,
+      "source": "on-device model",
+      "confirmed": true,
+      "about": "student-3",
+      "aboutName": "Kabir Qureshi",
+      "detailId": "private-3"
+    },
+    {
+      "id": "rule-824-contact",
+      "kind": "contact",
+      "text": "staying with his grandmother",
+      "at": 824,
+      "guardian": "grandmother",
+      "source": "rule",
+      "confirmed": true,
+      "about": "student-3",
+      "aboutName": "Kabir Qureshi",
+      "who": "parents",
+      "away": true,
+      "alsoModel": true,
+      "detailId": "private-3"
+    },
+    {
+      "id": "learn-861-early-student-5",
+      "kind": "learning",
+      "learn": "early",
+      "text": "finishes early and gets bored",
+      "at": 861,
+      "about": "student-5",
+      "aboutName": "Ishaan Verma",
+      "need": "finishes early and needs more to do",
+      "source": "rule",
+      "confirmed": true,
+      "detailId": "private-16",
+      "share": true
+    },
+    {
+      "id": "learn-899-reads-above-student-4",
+      "kind": "learning",
+      "learn": "reads-above",
+      "text": "is far ahead in reading",
+      "at": 899,
+      "about": "student-4",
+      "aboutName": "Tanvi Rao",
+      "need": "reads above the level of the class",
+      "source": "rule",
+      "confirmed": true,
+      "detailId": "private-17",
+      "share": true
+    },
+    {
+      "id": "learn-955-shy-student-4",
+      "kind": "learning",
+      "learn": "shy",
+      "text": "is shy",
+      "at": 955,
+      "about": "student-4",
+      "aboutName": "Tanvi Rao",
+      "need": "needs time before speaking in front of the class",
+      "source": "rule",
+      "confirmed": true,
+      "detailId": "private-18",
+      "share": true
+    },
+    {
+      "id": "rule-974-no-phone-internet",
+      "kind": "no-phone-internet",
+      "text": "does not have a smartphone or an internet connection",
+      "at": 974,
+      "source": "rule",
+      "confirmed": true,
+      "about": "student-4",
+      "aboutName": "Tanvi Rao",
+      "detailId": "private-8",
+      "share": true
+    },
+    {
+      "id": "model-1028-time-after",
+      "kind": "time-after",
+      "text": "She takes the 3:40 local bus home right after the last period",
+      "at": 1028,
+      "source": "on-device model",
+      "confirmed": true,
+      "about": "student-4",
+      "aboutName": "Tanvi Rao",
+      "detailId": "private-19",
+      "share": true
+    },
+    {
+      "id": "model-1090-other",
+      "kind": "other",
+      "text": "because her mother cooks in two homes until evening",
+      "at": 1090,
+      "source": "on-device model",
+      "confirmed": true,
+      "about": "student-4",
+      "aboutName": "Tanvi Rao",
+      "detailId": "private-20"
+    }
   ],
-  "C": [
-   "student-1"
-  ],
-  "D": [
-   "student-1"
-  ],
-  "F": [
-   "student-2"
-  ],
-  "G": [
-   "student-5"
-  ],
-  "H": [
-   "student-1"
-  ],
-  "I": [
-   "student-3",
-   "student-5"
-  ],
-  "M": [
-   "student-1"
-  ],
-  "N": [
-   "student-4"
-  ],
-  "O": [
-   "student-4"
-  ]
- },
- "needOutcomes": {
-  "A": "already suits",
-  "B": "already suits",
-  "C": "already suits",
-  "D": "already suits",
-  "F": "for a stage",
-  "G": "for a stage",
-  "H": "for a stage",
-  "I": "for a stage",
-  "M": "already suits",
-  "N": "for a stage",
-  "O": "for a stage"
- },
- "variations": [
-  {
-   "itemIndex": 1,
-   "need": "H",
-   "text": "Such a pupil reviews a summary sheet of the previous lesson before starting, for the same purpose."
+  "outgoing": "Class 6B, week of 16 November. Notes for myself.\n\nNeeds in this class (no names and no reasons are given; a need may be one pupil's or several):\nNeed A: cannot stay after the last bell\nNeed B: no phone or internet at home\nNeed C: nothing that has to be bought or brought from home\nNeed D: cannot come before the first bell\nNeed F: finds written tests hard; can answer aloud\nNeed G: finishes early and needs more to do\nNeed H: has missed recent lessons\nNeed I: works better apart from one classmate\nNeed M: has not handed in recent homework\nNeed N: needs time before speaking in front of the class\nNeed O: reads above the level of the class\nUnder \"For each need\", give an entry for every one of these letters: A, B, C, D, F, G, H, I, M, N, O.\n\nLesson\nClass: Class 6\nSubject: English\nTopic: Writing a short description of a place\nLength: 40 minutes",
+  "policy": {
+    "cloudModel": "gemini-3.5-flash-lite",
+    "lockedKinds": [
+      "contact",
+      "id"
+    ],
+    "origin": "remote",
+    "from": "school policy (Remote Config)"
   },
-  {
-   "itemIndex": 2,
-   "need": "G",
-   "text": "Such a pupil writes a second description of a different place, for the same purpose."
-  },
-  {
-   "itemIndex": 2,
-   "need": "I",
-   "text": "Such a pupil sits at a separate desk to write their description, for the same purpose."
-  },
-  {
-   "itemIndex": 2,
-   "need": "O",
-   "text": "Such a pupil writes an extended description with advanced vocabulary, for the same purpose."
-  },
-  {
-   "itemIndex": 3,
-   "need": "F",
-   "text": "Such a pupil dictates their description to a partner instead of writing it, for the same purpose."
-  },
-  {
-   "itemIndex": 3,
-   "need": "N",
-   "text": "Such a pupil shares their description in a small group instead of in front of the whole class, for the same purpose."
-  }
- ],
- "materials": {
-  "board": [
-   "Writing a Short Description of a Place",
-   "1. Choose a familiar place",
-   "2. Use sensory details (sight, sound, smell, touch)",
-   "3. Structure: Introduction, Details, Conclusion",
-   "Example: The courtyard is bright and noisy."
-  ],
-  "sheet": [
-   "Write a short paragraph describing the school courtyard.",
-   "Introduction: Name the place and general feel.",
-   "Detail 1: What can you see?",
-   "Detail 2: What can you hear?",
-   "Detail 3: What can you smell or touch?",
-   "Conclusion: A final sentence about how it makes you feel."
-  ],
-  "versions": [
-   {
-    "need": "F",
-    "note": "Dictates description to a partner instead of writing.",
+  "draft": {
+    "title": "Class 6 English — Writing a short description of a place",
     "items": [
-     "Tell your partner your description of the school courtyard.",
-     "Include sights, sounds, and feelings in your spoken description.",
-     "Listen to your partner's description and help them improve it."
+      {
+        "heading": "Starter (5 minutes)",
+        "text": "The teacher asks the class to name different places in their town and writes ideas on the board. The pupils call out names of local places like parks and markets. The materials needed are the blackboard and chalk."
+      },
+      {
+        "heading": "Teach (10 minutes)",
+        "text": "The teacher explains how to write a short description using sensory words for sights and sounds. The pupils listen and note down helpful adjectives on their paper. The materials needed are notebooks and pens."
+      },
+      {
+        "heading": "Practise (15 minutes)",
+        "text": "The teacher guides the class to write a four-sentence paragraph describing a familiar local place. The pupils write their paragraphs individually in their notebooks. The materials needed are notebooks and pens."
+      },
+      {
+        "heading": "Check (10 minutes)",
+        "text": "The teacher invites pupils to read out their descriptions and provides feedback to the class. The pupils read their sentences aloud and check their own work. The materials needed are the written paragraphs."
+      },
+      {
+        "heading": "Homework (0 minutes)",
+        "text": "The teacher assigns the task to write three sentences describing a room in their home. The pupils note down the homework task in their notebooks. The materials needed are notebooks."
+      }
     ]
-   },
-   {
-    "need": "G",
-    "note": "Writes a second description of a different place.",
-    "items": [
-     "Complete the first description of the school courtyard.",
-     "Now write a second description of a busy train station.",
-     "Use sensory details and the taught structure for both places."
-    ]
-   },
-   {
-    "need": "H",
-    "note": "Reviews a summary sheet of the previous lesson before starting.",
-    "items": [
-     "Recap: A descriptive paragraph paints a picture with words.",
-     "Recap: Adjectives describe nouns (e.g., loud, bright, cold).",
-     "Recap: Always organize your writing with a clear beginning and end."
-    ]
-   },
-   {
-    "need": "I",
-    "note": "Sits at a separate desk to write the description.",
-    "items": [
-     "Move to the designated quiet desk.",
-     "Write your short paragraph describing the school courtyard independently.",
-     "Use the structure on the board to guide your sentences."
-    ]
-   },
-   {
-    "need": "N",
-    "note": "Shares description in a small group instead of the whole class.",
-    "items": [
-     "Write your short paragraph describing the school courtyard.",
-     "Join your assigned small group of three peers.",
-     "Read your description aloud to your small group and listen to theirs."
-    ]
-   },
-   {
-    "need": "O",
-    "note": "Writes an extended description with advanced vocabulary.",
-    "items": [
-     "Write an extended paragraph describing the school courtyard.",
-     "Incorporate advanced vocabulary and figurative language.",
-     "Challenge yourself to use at least three complex sentences."
-    ]
-   }
+  },
+  "checks": [
+    {
+      "verdict": "fits",
+      "reason": "Checked 3 steps against these details. No conflict found.",
+      "by": "none",
+      "rules": 18
+    },
+    {
+      "verdict": "fits",
+      "reason": "Checked 3 steps against these details. No conflict found.",
+      "by": "none",
+      "rules": 18
+    },
+    {
+      "verdict": "fits",
+      "reason": "Checked 3 steps against these details. No conflict found.",
+      "by": "none",
+      "rules": 18
+    },
+    {
+      "verdict": "fits",
+      "reason": "Checked 3 steps against these details. No conflict found.",
+      "by": "none",
+      "rules": 18
+    },
+    {
+      "verdict": "unsure",
+      "reason": "Aarav has not handed in homework for two weeks, so the advice to check homework cannot be done exactly as written without requiring him to do something he hasn't done.",
+      "by": "model",
+      "modelSaid": "conflict",
+      "rules": 18
+    }
   ],
-  "ticket": [
-   {
-    "question": "What type of details should you include when describing a place?",
-    "answer": "Sensory details (sight, sound, smell, touch)"
-   },
-   {
-    "question": "Why do we use adjectives in a description?",
-    "answer": "To describe nouns and make the writing more vivid"
-   },
-   {
-    "question": "What place are we describing today?",
-    "answer": "The school courtyard"
-   }
+  "where": {
+    "guard": "ON_DEVICE",
+    "draft": "IN_CLOUD",
+    "check": "ON_DEVICE"
+  },
+  "draftModel": "gemini-3.5-flash-lite",
+  "lesson": {
+    "klass": "Class 6",
+    "subject": "English",
+    "topic": "Writing a short description of a place",
+    "minutes": 40,
+    "lastTime": ""
+  },
+  "adjustments": [
+    {
+      "itemIndex": 0,
+      "stage": "Starter",
+      "childId": "student-1",
+      "text": "Ask Aarav to name a place in town, acknowledging his recent absence without placing undue pressure.",
+      "source": "on-device model"
+    },
+    {
+      "itemIndex": 1,
+      "stage": "Teach",
+      "childId": "student-1",
+      "text": "Provide a quick recap of previous descriptive words before starting.",
+      "source": "cloud, for a need you approved",
+      "need": "H"
+    },
+    {
+      "itemIndex": 2,
+      "stage": "Practise",
+      "childId": "student-1",
+      "text": "Guide Aarav to write his paragraph, offering assistance with sensory words if needed, given his recent disengagement with homework.",
+      "source": "on-device model"
+    },
+    {
+      "itemIndex": 4,
+      "stage": "Homework",
+      "childId": "student-1",
+      "text": "Give a reminder note to complete the task.",
+      "source": "cloud, for a need you approved",
+      "need": "M"
+    },
+    {
+      "itemIndex": 3,
+      "stage": "Check",
+      "childId": "student-2",
+      "text": "Allow an oral answer instead of writing.",
+      "source": "cloud, for a need you approved",
+      "need": "F"
+    },
+    {
+      "itemIndex": 2,
+      "stage": "Practise",
+      "childId": "student-3",
+      "text": "Seat apart from the specified classmate.",
+      "source": "cloud, for a need you approved",
+      "need": "I"
+    },
+    {
+      "itemIndex": 2,
+      "stage": "Practise",
+      "childId": "student-3",
+      "text": "Seat Kabir and Ishaan apart.",
+      "source": "rule starter",
+      "pair": true
+    },
+    {
+      "itemIndex": 2,
+      "stage": "Practise",
+      "childId": "student-5",
+      "text": "Provide an extra challenge to write a longer paragraph.",
+      "source": "cloud, for a need you approved",
+      "need": "G"
+    },
+    {
+      "itemIndex": 2,
+      "stage": "Practise",
+      "childId": "student-5",
+      "text": "Seat apart from the specified classmate.",
+      "source": "cloud, for a need you approved",
+      "need": "I"
+    },
+    {
+      "itemIndex": 2,
+      "stage": "Practise",
+      "childId": "student-5",
+      "text": "Seat Kabir and Ishaan apart.",
+      "source": "rule starter",
+      "pair": true
+    },
+    {
+      "itemIndex": 2,
+      "stage": "Practise",
+      "childId": "student-4",
+      "text": "Provide an advanced vocabulary list for use.",
+      "source": "cloud, for a need you approved",
+      "need": "O"
+    },
+    {
+      "itemIndex": 3,
+      "stage": "Check",
+      "childId": "student-4",
+      "text": "Allow time to prepare before speaking in front of the class.",
+      "source": "cloud, for a need you approved",
+      "need": "N"
+    }
   ],
-  "same": [
-   "A",
-   "B",
-   "C",
-   "D",
-   "M"
+  "needs": [
+    {
+      "letter": "A",
+      "line": "cannot stay after the last bell"
+    },
+    {
+      "letter": "B",
+      "line": "no phone or internet at home"
+    },
+    {
+      "letter": "C",
+      "line": "nothing that has to be bought or brought from home"
+    },
+    {
+      "letter": "D",
+      "line": "cannot come before the first bell"
+    },
+    {
+      "letter": "F",
+      "line": "finds written tests hard; can answer aloud"
+    },
+    {
+      "letter": "G",
+      "line": "finishes early and needs more to do"
+    },
+    {
+      "letter": "H",
+      "line": "has missed recent lessons"
+    },
+    {
+      "letter": "I",
+      "line": "works better apart from one classmate"
+    },
+    {
+      "letter": "M",
+      "line": "has not handed in recent homework"
+    },
+    {
+      "letter": "N",
+      "line": "needs time before speaking in front of the class"
+    },
+    {
+      "letter": "O",
+      "line": "reads above the level of the class"
+    }
   ],
-  "missing": []
- }
+  "needChildren": {
+    "A": [
+      "student-2",
+      "student-4"
+    ],
+    "B": [
+      "student-4"
+    ],
+    "C": [
+      "student-1"
+    ],
+    "D": [
+      "student-1"
+    ],
+    "F": [
+      "student-2"
+    ],
+    "G": [
+      "student-5"
+    ],
+    "H": [
+      "student-1"
+    ],
+    "I": [
+      "student-3",
+      "student-5"
+    ],
+    "M": [
+      "student-1"
+    ],
+    "N": [
+      "student-4"
+    ],
+    "O": [
+      "student-4"
+    ]
+  },
+  "needOutcomes": {
+    "A": "already suits",
+    "B": "already suits",
+    "C": "already suits",
+    "D": "already suits",
+    "F": "for a stage",
+    "G": "for a stage",
+    "H": "for a stage",
+    "I": "for a stage",
+    "M": "for a stage",
+    "N": "for a stage",
+    "O": "for a stage"
+  },
+  "variations": [
+    {
+      "itemIndex": 1,
+      "need": "H",
+      "text": "Provide a quick recap of previous descriptive words before starting."
+    },
+    {
+      "itemIndex": 2,
+      "need": "G",
+      "text": "Provide an extra challenge to write a longer paragraph."
+    },
+    {
+      "itemIndex": 2,
+      "need": "I",
+      "text": "Seat apart from the specified classmate."
+    },
+    {
+      "itemIndex": 2,
+      "need": "O",
+      "text": "Provide an advanced vocabulary list for use."
+    },
+    {
+      "itemIndex": 3,
+      "need": "F",
+      "text": "Allow an oral answer instead of writing."
+    },
+    {
+      "itemIndex": 3,
+      "need": "N",
+      "text": "Allow time to prepare before speaking in front of the class."
+    },
+    {
+      "itemIndex": 4,
+      "need": "M",
+      "text": "Give a reminder note to complete the task."
+    }
+  ],
+  "materials": {
+    "board": [
+      "Local Places in Our Town",
+      "Park",
+      "Market",
+      "School",
+      "Library",
+      "Sensory Words: Sights and Sounds",
+      "Use adjectives to describe places",
+      "Write a four-sentence paragraph"
+    ],
+    "sheet": [
+      "Name the local place you are describing.",
+      "Write one sentence about what you can see.",
+      "Write one sentence about what you can hear.",
+      "Write one sentence about how the place feels.",
+      "Write one sentence about your overall feeling here."
+    ],
+    "versions": [
+      {
+        "need": "F",
+        "note": "Allow the pupil to give their answers aloud instead of writing them on paper.",
+        "items": [
+          "Tell the teacher the name of your chosen local place.",
+          "Say aloud one sentence about what you see there.",
+          "Say aloud one sentence about what you hear there.",
+          "Say aloud one sentence about how the place feels."
+        ]
+      },
+      {
+        "need": "G",
+        "note": "Provide this extension task for the pupil to write a longer paragraph.",
+        "items": [
+          "Write the standard four-sentence paragraph describing your local place.",
+          "Add two extra sentences describing the smells and tastes of the place.",
+          "Conclude with a final sentence explaining why you like this place."
+        ]
+      },
+      {
+        "need": "H",
+        "note": "Provide this quick recap card before starting the main practice.",
+        "items": [
+          "Recap: Descriptive words tell us about sights and sounds.",
+          "Sight words: bright, dark, tall, crowded, green.",
+          "Sound words: loud, quiet, bustling, noisy, silent.",
+          "Use these words to help build your sentences."
+        ]
+      },
+      {
+        "need": "I",
+        "note": "Ensure this pupil is seated at a separate desk away from the specified classmate.",
+        "items": [
+          "Name the local place you are describing.",
+          "Write one sentence about what you can see.",
+          "Write one sentence about what you can hear.",
+          "Write one sentence about how the place feels.",
+          "Write one sentence about your overall feeling here."
+        ]
+      },
+      {
+        "need": "M",
+        "note": "Give this reminder note for the homework task.",
+        "items": [
+          "Homework Reminder:",
+          "Write three sentences describing a room in your home.",
+          "Bring your completed sentences to the next lesson."
+        ]
+      },
+      {
+        "need": "N",
+        "note": "Allow extra preparation time before the pupil speaks in front of the class.",
+        "items": [
+          "Write down your sentences clearly in your notebook.",
+          "Practice reading your sentences quietly to yourself twice.",
+          "Wait for your turn and take a deep breath before reading aloud."
+        ]
+      },
+      {
+        "need": "O",
+        "note": "Provide this advanced vocabulary list to use during the writing task.",
+        "items": [
+          "Advanced Vocabulary List:",
+          "Sights: vibrant, desolate, picturesque, bustling, luminous.",
+          "Sounds: harmonious, deafening, murmuring, resonant, tranquil.",
+          "Feelings: invigorating, melancholic, serene, nostalgic, chaotic."
+        ]
+      }
+    ],
+    "ticket": [
+      {
+        "question": "What kind of words should you use to describe sights and sounds?",
+        "answer": "Adjectives or sensory words"
+      },
+      {
+        "question": "How many sentences should your main paragraph have?",
+        "answer": "Four sentences"
+      },
+      {
+        "question": "What is the topic of the homework task?",
+        "answer": "Three sentences describing a room in your home"
+      }
+    ],
+    "same": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ],
+    "missing": []
+  }
 }

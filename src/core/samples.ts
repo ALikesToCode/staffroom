@@ -25,8 +25,8 @@ Kabir and Ishaan fight most days during group work. Kabir's parents are separati
 
 Tanvi is far ahead in reading. She could help others, but she is shy.`;
 
-/** The sample note of the app: the base note and one more invented fact, so that ordinary homework meets a constraint. */
-export const SAMPLE_NOTE = `${SAMPLE_NOTE_BASE} Her family does not have a smartphone or an internet connection.`;
+/** The sample note of the app: the base note and extra invented facts (smartphone limit + rules-invisible details for Gemini Nano). */
+export const SAMPLE_NOTE = `${SAMPLE_NOTE_BASE} Her family does not have a smartphone or an internet connection. She takes the 3:40 local bus home right after the last period because her mother cooks in two homes until evening.`;
 
 /** The lesson the invented class is planned: nothing in it is private. */
 export const SAMPLE_LESSON = { klass: 'Class 6', subject: 'English', topic: 'Writing a short description of a place', minutes: 40, lastTime: '' };

@@ -337,11 +337,11 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
             <code>Gemini Nano in Chrome + plain rules</code>
           </div>
           <div className="arch-steps">
-            <div className="arch-step">
+              <div className="arch-step">
               <b>
-                <span className="n">1</span> Guard
+                <span className="n">1</span> Scan & Guard
               </b>
-              <p>Finds names, places, and private details; swaps them for stand-ins. Proposes constraints and needs.</p>
+              <p>Transcribes handwritten register photos locally, finds names & private facts (incl. Hinglish/Devanagari), swaps stand-ins.</p>
               <code>ONLY_ON_DEVICE</code>
             </div>
             <div className="arch-step">
@@ -487,7 +487,7 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
         </li>
       </ul>
       <h3>Measured with Gemini Nano</h3>
-      <p className="hint">Measured on 26 and 27 November 2026 in Chrome 158 with Gemini Nano on invented class notes (docs/evals/).</p>
+      <p className="hint">Measured on 26–28 November 2026 in Chrome 158 with Gemini Nano on invented class notes (docs/evals/).</p>
       <table className="routes">
         <thead>
           <tr>
@@ -498,7 +498,11 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
         <tbody>
           <tr>
             <td>Guard on 12 fresh invented notes (60 private details, 3 runs each)</td>
-            <td>Rules alone missed 9 of 60 per run (0 of 19 hard details in full); rules + Gemini Nano missed 1 of 60 (8 of 19 hard details in full, 10 in part).</td>
+            <td>Rules alone hid 40/60 in full and missed 9; rules + 1-pass combined Gemini Nano hid 49.3/60 on average (148/180, median 4.06s) and cut misses to 2.3/60, with 2/8 harmless held (vs 5/8).</td>
+          </tr>
+          <tr>
+            <td>Multimodal scan &amp; offline draft fallback (28 Nov, Chrome 158)</td>
+            <td>Local notebook photo OCR transcribed 231 chars in 7.1s with 0 cloud requests; offline PREFER_IN_CLOUD draft fallback streamed on Gemini Nano in 40.8s with caution notice.</td>
           </tr>
           <tr>
             <td>Check on 16 unseen held-out cases (3 runs each)</td>
@@ -514,7 +518,7 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
           </tr>
           <tr>
             <td>Why Nano reads instead of writes</td>
-            <td>Nano learning-need proposals passed checks 3 of 36 times; per-child rewrites repeated note words 17 of 43 times. Rules carry learning needs; Nano guards and checks.</td>
+            <td>Rule-based learning needs replaced the removed Nano proposer (which passed 3/36 times); per-child rewrites repeated note words 17/43 times, so Nano focuses on OCR, guarding, checking, and optional on-request fits.</td>
           </tr>
         </tbody>
       </table>

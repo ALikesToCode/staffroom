@@ -173,13 +173,13 @@ describe('the lesson as the first job', () => {
     expect(renderToStaticMarkup(<Stepper step={3} />)).toContain(STEPS[3]);
   });
 
-  it('without the on-device model, offers the recorded run as plainly as the invented class', async () => {
+  it('without the on-device model, promotes the recorded run with Gemini Nano as the single primary CTA', async () => {
     const { Hero } = await import('./Hero');
     const buttons = (html: string) => [...html.matchAll(/<button class="([^"]+)"[^>]*>([^<]+)<\/button>/g)].map((m) => [m[1], m[2]]);
     const without = renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} onWatch={() => {}} noModel />);
     expect(buttons(without)).toEqual([
-      ['primary big', 'Try an invented class'],
       ['primary big', 'Watch a recorded run with Gemini Nano'],
+      ['secondary big', 'Try live (rules + cloud)'],
       ['secondary big', 'Write a note'],
     ]);
     expect(without).toContain('This browser has no on-device model');

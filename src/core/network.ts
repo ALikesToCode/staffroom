@@ -43,14 +43,22 @@ export function hostLabel(host: string): string {
 }
 
 /** The model steps the app times. */
-export type StepId = 'guard' | 'draft' | 'check' | 'fit' | 'label' | 'materials';
-export const STEP_NAME: Record<StepId, string> = { guard: 'Guard', draft: 'Draft', check: 'Check', fit: 'Fit', label: 'Name the receipt', materials: 'Materials' };
+export type StepId = 'scan' | 'guard' | 'draft' | 'check' | 'fit' | 'label' | 'materials';
+export const STEP_NAME: Record<StepId, string> = {
+  scan: 'Scan notebook',
+  guard: 'Guard',
+  draft: 'Draft',
+  check: 'Check',
+  fit: 'Fit',
+  label: 'Name the receipt',
+  materials: 'Materials',
+};
 
 /** Where a step ran, as the app knows it once the step is over. */
 export type StepWhere = 'ON_DEVICE' | 'IN_CLOUD' | 'RULES_ONLY' | 'NONE';
 const WHERE_SAID: Record<StepWhere, string> = { ON_DEVICE: 'on this device', IN_CLOUD: 'in the cloud', RULES_ONLY: 'rules only, no model', NONE: 'no model answered' };
-/** Where a step runs when the app has not said: the three on-device routes, and the draft's route, which prefers the cloud. */
-const ROUTE_WHERE: Partial<Record<StepId, StepWhere>> = { guard: 'ON_DEVICE', check: 'ON_DEVICE', fit: 'ON_DEVICE', draft: 'IN_CLOUD', materials: 'IN_CLOUD' };
+/** Where a step runs when the app has not said: the on-device routes, and the draft's route, which prefers the cloud. */
+const ROUTE_WHERE: Partial<Record<StepId, StepWhere>> = { scan: 'ON_DEVICE', guard: 'ON_DEVICE', check: 'ON_DEVICE', fit: 'ON_DEVICE', draft: 'IN_CLOUD', materials: 'IN_CLOUD' };
 
 /** One model step: when it started and ended, on the clock of `performance.now()`. */
 export interface StepMark {

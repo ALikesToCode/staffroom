@@ -1,7 +1,7 @@
 import type { ItemCheck, Verdict } from '../core/types';
 import { checkItems, detailsFor, onDeviceAsk } from '../ai/check';
 import { paragraphs } from '../ai/guard';
-import { deviceStatus, modelFor, prepareDevice } from '../ai/routes';
+import { deviceStatus, prepareDevice } from '../ai/routes';
 import { combineChecks, ruleCheckItem } from '../core/conflicts';
 import { CASES, prepare, totals, type EvalCase, type EvalRow } from './cases';
 import { prepareFull } from './full';
@@ -10,8 +10,7 @@ import { runRuleSet } from './rules';
 import { FIT_CASES, FIT_CHILD_CASES, fitRow, fitTotals, lessonFitCases, lessonFitRow, lessonFitTotals, type FitRow, type LessonFitRow } from './fit';
 import { FIT_CHILD_SYSTEM, FIT_LESSON_SYSTEM, fitLessonSchema, onDeviceFit } from '../ai/fit';
 import { runLessonSet } from './lesson';
-import { LEARNING_CASES, learningVault, runLearningRules, runNeedsSet, runTicketSet } from './needs';
-import { LEARNING_SCHEMA, LEARNING_SYSTEM, readLearningAnswer } from '../ai/learning';
+import { LEARNING_CASES, runLearningRules, runNeedsSet, runTicketSet } from './needs';
 import { guardOnDevice } from '../ai/guard';
 import { constraintsOnDevice } from '../ai/constraints';
 import { GUARD_CASES, guardNote, guardTotals, scoreGuard, type GuardDevice, type GuardMode, type GuardRow } from './guard';
@@ -34,7 +33,7 @@ const runs = Math.max(1, Math.min(20, Number(params.get('runs')) || 1));
  * ?set=fit: fourteen steps in conflict, each rewritten by the on-device model for the child, and eight steps of a lesson for which it says what one child does instead.
  * ?set=lesson: five whole lesson plans against the sample class, rule layer only, no model.
  * ?set=needs: five lesson replies with lines for needs, placed beside the children of the sample class. Plain code, no model.
- * ?set=learning: twelve paragraphs for the proposer of learning needs: the rule, and the on-device model where there is one.
+ * ?set=learning: twelve paragraphs for the proposer of learning needs, by rule (plain code, no model).
  * ?set=guard: twelve fresh notes through the guard, rules only and with the on-device model, three runs unless ?runs= says.
  * No set: the 24 single-fact cases.
  */
@@ -50,7 +49,7 @@ const SET_NAME: Record<typeof set, string> = {
   fit: '14 steps in conflict rewritten, and 8 steps of a lesson fitted to one child, by the on-device model',
   lesson: '5 lesson plans against the sample class, rule layer only, no model',
   needs: '5 lesson replies with lines for needs, placed beside the children of the sample class, plain code, no model',
-  learning: '12 paragraphs for the proposer of learning needs, by rule and by the on-device model',
+  learning: '12 paragraphs for the rule-based learning-need proposer (no model)',
   guard: '12 fresh notes through the guard, rules only and with the on-device model',
 };
 /** The guard set runs each note three times unless the address says otherwise. */
@@ -359,43 +358,13 @@ function runNeeds() {
   document.body.dataset.state = 'done';
 }
 
-/** Twelve paragraphs for the proposer of learning needs. The rule runs anywhere; the on-device model is asked only where there is one. Its lines are for a person to read. */
-async function runLearning() {
+/** Twelve paragraphs for the rule-based proposer of learning needs. Plain code, no model. */
+function runLearning() {
   const byRule = runLearningRules();
-  const device = await deviceStatus();
-  const model = device === 'available' ? modelFor('guard', { system: LEARNING_SYSTEM, schema: LEARNING_SCHEMA }) : null;
   const rows: unknown[] = [];
-  let kept = 0;
-  let dropped = 0;
-  let unread = 0;
   for (const [i, c] of LEARNING_CASES.entries()) {
-    status.textContent = `Paragraph ${i + 1} of ${LEARNING_CASES.length} (${c.id})`;
     const rule = byRule.rows[i];
-    let said = 'not asked: no on-device model here';
-    let needs: { quote: string; need: string }[] = [];
-    let ms = 0;
-    if (model) {
-      const began = performance.now();
-      try {
-        const result = await model.generateContent(`Paragraph:\n${c.paragraph}`);
-        if (result.response.inferenceSource !== 'on_device') throw new Error('the answer did not come from the device');
-        const reading = readLearningAnswer(c.paragraph, c.paragraph, result.response.text(), learningVault(c));
-        if (!reading) {
-          unread++;
-          said = 'the answer could not be read';
-        } else {
-          kept += reading.needs.length;
-          dropped += reading.dropped;
-          needs = reading.needs.map((n) => ({ quote: n.text, need: n.need ?? '' }));
-          said = `${needs.map((n) => `“${n.quote}” -> ${n.need}`).join('; ') || 'no needs'}${reading.dropped > 0 ? ` (left out: ${reading.dropped})` : ''}`;
-        }
-      } catch (e) {
-        unread++;
-        said = `failed: ${e instanceof Error ? e.message : String(e)}`;
-      }
-      ms = Math.round(performance.now() - began);
-    }
-    rows.push({ id: c.id, paragraph: c.paragraph, expected: rule.expected, byRule: rule.found, ruleRight: rule.right, byModel: needs, modelSaid: said, rating: null, ms });
+    rows.push({ id: c.id, paragraph: c.paragraph, expected: rule.expected, byRule: rule.found, ruleRight: rule.right });
     const tr = table.insertRow();
     cell(tr, '1');
     cell(tr, c.id);
@@ -403,11 +372,11 @@ async function runLearning() {
     cell(tr, 'the learning needs in it');
     cell(tr, rule.expected.join(', ') || 'none');
     cell(tr, `rule: ${rule.found.join(', ') || 'none'}`, rule.right ? 'right' : 'wrong');
-    cell(tr, `on-device model: ${said}`);
-    cell(tr, String(ms));
+    cell(tr, 'rule only (on-device model proposer removed after 3/36 eval)');
+    cell(tr, '0');
   }
-  const totals = { cases: byRule.cases, ruleRight: byRule.right, model: model ? { needsKept: kept, leftOut: dropped, unread } : null };
-  status.textContent = `Done (${SET_NAME.learning}). By rule: ${byRule.right} of ${byRule.cases} paragraphs with exactly the labelled kinds. ${model ? `On-device model: ${kept} needs kept, ${dropped} left out (quote not in the paragraph, or a line that is too long or does not pass the gate), ${unread} paragraphs unread. Its lines are not rated here.` : 'The on-device model was not asked: this browser has none.'}`;
+  const totals = { cases: byRule.cases, ruleRight: byRule.right };
+  status.textContent = `Done (${SET_NAME.learning}). By rule: ${byRule.right} of ${byRule.cases} paragraphs with exactly the labelled kinds.`;
   json.textContent = JSON.stringify({ done: true, at: new Date().toISOString(), userAgent: navigator.userAgent, set, totals, rows }, null, 2);
   document.body.dataset.state = 'done';
 }

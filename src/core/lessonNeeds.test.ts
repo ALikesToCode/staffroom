@@ -125,7 +125,7 @@ describe('the needs a lesson is told', () => {
     expect(note).not.toMatch(/\b(?:he|she|his|her)\b|\[withheld\]|\[Place|\[ID|\[Adult|\[Contact/i);
     // The class-level sentences of the note are still sent.
     expect(note.trim()).toBe('Class 6B, week of 16 November. Notes for myself.');
-    expect(going.notSent).toBe(14);
+    expect(going.notSent).toBe(15);
     for (const n of going.lessonNeeds!) expect(going.text).toContain(`\n${needLabel(n)}\n`);
     expect(going.tokens).toEqual([]);
     expect(going.violations).toEqual([]);
@@ -197,7 +197,8 @@ describe('what the cloud wrote for a need', () => {
 
   it('asks the cloud for a line only where a stage needs one, and not to guess who', () => {
     expect(VARIATION_INSTRUCTION).toContain('one last item with the heading "For each need"');
-    expect(VARIATION_INSTRUCTION).toContain('"Need A | <stage name> | <one or two sentences: what such a pupil does in that stage instead, for the same purpose>"');
+    expect(VARIATION_INSTRUCTION).toContain('"Need A | <stage name> | <one or two short, direct teacher actions starting with a verb');
+    expect(VARIATION_INSTRUCTION).toContain('Never write "such a pupil", "for the same purpose", or "the pupil who".');
     expect(VARIATION_INSTRUCTION).toContain('"Need A | none | This lesson already suits this need."');
     expect(VARIATION_INSTRUCTION).toContain('Every listed letter must appear.');
     expect(needsAsk(['A', 'B'])).toBe('Under "For each need", give an entry for every one of these letters: A, B.');

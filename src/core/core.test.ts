@@ -639,6 +639,24 @@ describe('guard helpers', () => {
     expect(reading?.partial).toBe(1);
   });
 
+  it('skips bare generic place nouns while keeping named places and private quotes mentioning home', () => {
+    const samplePara = 'Meenal walks home to Rampur Kalan; her mother cooks in two homes and she was absent from school.';
+    const reading = readGuardAnswer(
+      samplePara,
+      JSON.stringify({
+        people: [{ name: 'Meenal', role: 'student' }],
+        places: ['home', 'two homes', 'school', 'classroom', 'Rampur Kalan'],
+        private: [{ quote: 'her mother cooks in two homes', category: 'money', about: 'Meenal' }],
+      }),
+    );
+    expect(reading?.dropped).toBe(0);
+    expect(reading?.candidates.map((c) => [c.kind, c.text])).toEqual([
+      ['student', 'Meenal'],
+      ['place', 'Rampur Kalan'],
+      ['private', 'her mother cooks in two homes'],
+    ]);
+  });
+
   it('reports an answer it cannot read, or that lacks a list, instead of treating it as empty', () => {
     expect(readGuardAnswer(para, '{"people": [')).toBeUndefined();
     expect(readGuardAnswer(para, 'null')).toBeUndefined();
@@ -1860,6 +1878,13 @@ describe('sensitive words, second round', () => {
   it('leaves the ordinary word "fits" alone, and the sample note as it was', () => {
     expect(findSensitive('This plan fits the class. The desk fits by the door.')).toEqual([]);
     expect(findSensitive(SAMPLE_NOTE)).toHaveLength(3);
+  });
+
+  it('withholds sentences containing Hinglish or Devanagari sensitive terms', () => {
+    const hinglish = findSensitive('Aarav ke ghar karz aur paise nahi hain. Meenal ko mirgi aati hai.');
+    expect(hinglish.map((h) => h.category)).toEqual(['family', 'health']);
+    const devanagari = findSensitive('रवि को मिर्गी आती है। माता-पिता का तलाक हो गया। मारपीट की शिकायत थी।');
+    expect(devanagari.map((h) => h.category)).toEqual(['health', 'family', 'safety']);
   });
 });
 

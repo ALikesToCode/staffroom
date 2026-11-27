@@ -1,4 +1,7 @@
+import { CONSTRAINT_KINDS } from '../core/constraints';
+import type { Constraint, Entity } from '../core/types';
 import { widenToWords, type Candidate } from '../core/vault';
+import { readConstraintAnswer, studentParagraphs } from './constraints';
 import { modelFor } from './routes';
 
 const SYSTEM = `You protect a teacher's private notes about children. You read one paragraph and list what must not leave the teacher's device. Copy every name and phrase exactly as written in the paragraph. Never paraphrase. Never add anything that is not in the paragraph.
@@ -137,6 +140,8 @@ export interface ParagraphReading {
   partial: number;
 }
 
+const GENERIC_PLACE = /^(?:(?:the|a|an|two|my|his|her|their|our)\s+)?(?:home|homes|school|classroom|class|exam hall)$/i;
+
 /**
  * Turn the model's answer for one paragraph into candidates. Returns
  * undefined when the answer cannot be read, or lacks any of its three
@@ -178,7 +183,7 @@ export function readGuardAnswer(paragraph: string, raw: string): ParagraphReadin
       dropped++;
       continue;
     }
-    if (/^(class|grade|std|standard|section)\b/i.test(place)) continue;
+    if (/^(class|grade|std|standard|section)\b/i.test(place) || GENERIC_PLACE.test(place.trim())) continue;
     const text = widenToWords(paragraph, place);
     if (!text) {
       dropped++;
@@ -326,4 +331,78 @@ export async function guardOnDevice(
     },
     onProgress,
   );
+}
+
+/**
+ * Read the raw note AND propose constraints in one ON_DEVICE pass per paragraph.
+ * Cuts Guard latency nearly in half compared to running two separate passes.
+ */
+const COMBINED_SYSTEM = `${SYSTEM}
+
+constraints: also list each fact in the paragraph that limits what a child can do or what the school can ask of the family. For each give student (child's name), kind ("time-after" cannot stay after school, "time-before" cannot come before school, "days-away" away on some days, "money" family cannot pay, "no-phone-internet", "contact" adult not to contact, "health", "other"), and quote (exact words copied verbatim from the paragraph).`;
+
+const COMBINED_SCHEMA = {
+  type: 'object',
+  properties: {
+    ...SCHEMA.properties,
+    constraints: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          student: { type: 'string' },
+          kind: { type: 'string', enum: CONSTRAINT_KINDS },
+          quote: { type: 'string' },
+        },
+        required: ['student', 'kind', 'quote'],
+      },
+    },
+  },
+  required: [...SCHEMA.required, 'constraints'],
+};
+
+export interface CombinedGuardReport extends GuardReport {
+  rawParagraphAnswers: { paragraph: string; raw: string }[];
+}
+
+export async function guardCombinedOnDevice(
+  note: string,
+  onProgress: (done: number, total: number) => void,
+): Promise<CombinedGuardReport> {
+  const model = modelFor('guard', { system: COMBINED_SYSTEM, schema: COMBINED_SCHEMA });
+  const parts = paragraphs(note);
+  const rawParagraphAnswers: { paragraph: string; raw: string }[] = [];
+  const report = await readChunks(
+    parts,
+    async (chunk) => {
+      const result = await model.generateContent(`Paragraph:\n${chunk}`);
+      const onDevice = result.response.inferenceSource === 'on_device';
+      const text = onDevice ? result.response.text() : '';
+      if (onDevice) rawParagraphAnswers.push({ paragraph: chunk, raw: text });
+      return { text, onDevice };
+    },
+    onProgress,
+  );
+  return { ...report, rawParagraphAnswers };
+}
+
+/** Extract constraints from saved combined-guard paragraph answers once the vault is built. */
+export function constraintsFromCombined(
+  note: string,
+  entities: Entity[],
+  rawParagraphAnswers: readonly { paragraph: string; raw: string }[],
+): { constraints: Constraint[]; dropped: number } {
+  const allowed = new Set(studentParagraphs(note, entities));
+  const constraints: Constraint[] = [];
+  let dropped = 0;
+  for (const { paragraph, raw } of rawParagraphAnswers) {
+    if (!allowed.has(paragraph)) continue;
+    const reading = readConstraintAnswer(note, paragraph, raw, entities);
+    if (!reading) continue;
+    dropped += reading.dropped;
+    for (const c of reading.constraints) {
+      if (!constraints.some((x) => x.id === c.id)) constraints.push(c);
+    }
+  }
+  return { constraints, dropped };
 }

@@ -215,6 +215,8 @@ const SENSITIVE: { category: string; terms: string[] }[] = [
       'gets fits', 'get fits', 'getting fits', 'has fits', 'have fits', 'had fits', 'having fits',
       'cancer', 'hiv', 'tb', 'depression', 'depressed', 'anxiety', 'self-harm', 'self harm', 'suicide', 'suicidal',
       'autism', 'autistic', 'dyslexia', 'dyslexic',
+      // Hinglish and Devanagari health terms common in Indian staffroom notes.
+      'mirgi', 'मिर्गी', 'daura', 'दौरा', 'dama', 'दमा', 'dawai', 'दवाई', 'bimar', 'बीमार', 'bimari', 'बीमारी', 'aspatal', 'अस्पताल',
     ],
   },
   {
@@ -224,9 +226,11 @@ const SENSITIVE: { category: string; terms: string[] }[] = [
       'stepfather', 'stepmother', 'step-father', 'step-mother', 'step father', 'step mother', 'lost his job', 'lost her job',
       'unemployed', 'debt', 'alcohol', 'alcoholic', 'drinks', 'drinking', 'drunk', 'abuse', 'abused', 'violence',
       'homeless', 'hungry',
+      // Hinglish and Devanagari family/financial hardship terms.
+      'talaq', 'तलाक', 'karz', 'कर्ज़', 'कर्ज', 'paise nahi', 'पैसे नहीं', 'fees nahi', 'फ़ीस नहीं', 'naukri chali', 'नौकरी चली', 'sharab', 'शराब',
     ],
   },
-  { category: 'safety', terms: ['jail', 'jailed', 'prison', 'police', 'arrested', 'beats', 'beaten', 'beating', 'hits', 'bullied'] },
+  { category: 'safety', terms: ['jail', 'jailed', 'prison', 'police', 'arrested', 'beats', 'beaten', 'beating', 'hits', 'bullied', 'marpeet', 'मारपीट', 'pitai', 'पिटाई'] },
   { category: 'identity', terms: ['caste', 'religion', 'dalit', 'sc/st', 'muslim', 'hindu', 'christian', 'sikh'] },
 ];
 
@@ -248,7 +252,7 @@ export interface Sentence {
   end: number;
 }
 
-/** Split text into sentences, without the closing punctuation. A line break also ends a sentence. */
+/** Split text into sentences, without the closing punctuation. A line break or Devanagari danda also ends a sentence. */
 export function sentences(text: string): Sentence[] {
   const out: Sentence[] = [];
   let from = 0;
@@ -256,11 +260,11 @@ export function sentences(text: string): Sentence[] {
     let start = from;
     let end = to;
     while (start < end && /\s/.test(text[start])) start++;
-    while (end > start && /[\s.!?]/.test(text[end - 1])) end--;
+    while (end > start && /[\s.!?।॥]/.test(text[end - 1])) end--;
     if (end > start) out.push({ text: text.slice(start, end), start, end });
     from = to;
   };
-  for (const m of text.matchAll(/[.!?]+(?=\s|$)|\n+/g)) {
+  for (const m of text.matchAll(/(?:[.!?]+(?=\s|$)|[।॥]+(?:\s+|$)|\n+)/g)) {
     if (m[0] === '.') {
       const word = /[\p{L}]+$/u.exec(text.slice(from, m.index))?.[0].toLowerCase();
       if (word && ABBREVIATIONS.has(word)) continue;

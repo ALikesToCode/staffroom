@@ -232,6 +232,8 @@ export interface SavedAdjustment {
   source: AdjustmentSource;
   /** The letter of the need the cloud wrote it for, when it did. */
   need?: string;
+  /** True for a line this device wrote by rule about two children together. */
+  pair?: boolean;
 }
 
 /** A signed lesson. Kept in this browser only: it has names in it and is never sent. */

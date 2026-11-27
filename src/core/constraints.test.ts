@@ -424,3 +424,22 @@ describe('a proposal the teacher removed', () => {
     expect(removedKey({ kind: 'money', text: '  Cannot  pay ' })).toBe(removedKey({ kind: 'money', text: 'cannot pay' }));
   });
 });
+
+describe('Hinglish and Devanagari constraints', () => {
+  it('detects Romanized Hinglish and Devanagari money, phone, and health constraints', () => {
+    const note = 'Meenal ko mirgi aati hai. Aarav ke paise nahi hain. Tanvi ke ghar फ़ोन नहीं है.';
+    const entities = buildVault(note, deterministicCandidates(note, ['Meenal Joshi', 'Aarav Sharma', 'Tanvi Rao']));
+    const found = proposeConstraints(note, entities);
+    expect(found.map((c) => [c.kind, c.aboutName, c.text])).toEqual([
+      ['health', 'Meenal Joshi', 'mirgi'],
+      ['money', 'Aarav Sharma', 'paise nahi hain'],
+      ['no-phone-internet', 'Tanvi Rao', 'फ़ोन नहीं है'],
+    ]);
+    expect(found[0].triggers).toContain('flashing');
+
+    const hiHealth = 'राजू को मिर्गी के दौरे आते हैं।';
+    const hiEntities = buildVault(hiHealth, deterministicCandidates(hiHealth, ['राजू']));
+    const hiFound = proposeConstraints(hiHealth, hiEntities);
+    expect(hiFound.some((c) => c.kind === 'health' && (c.triggers ?? []).includes('flashing'))).toBe(true);
+  });
+});
