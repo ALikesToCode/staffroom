@@ -1,6 +1,6 @@
 # Raw results, 27 November 2026
 
-`guard.json` is what [`eval.html?set=guard&runs=3`](../../../eval.html) printed, unchanged: headless Chrome 158 on Linux with Gemini Nano, run at 00:48 UTC on the code at 4eec64c. The twelve invented notes and their labels are in [`src/eval/guard.ts`](../../../src/eval/guard.ts); the labels were committed (e4590b6, fac37c9) before any run. Each note ran three times through the guard's own steps, once with the rules alone and once with the rules and the on-device model.
+`guard.json` is what [`eval.html?set=guard&runs=3`](../../../eval.html) printed, unchanged: headless Chrome 158 on Linux with Gemini Nano, run at 00:48 UTC on the code at e44f205. The twelve invented notes and their labels are in [`src/eval/guard.ts`](../../../src/eval/guard.ts); the labels were committed (e4590b6, fac37c9) before any run. Each note ran three times through the guard's own steps, once with the rules alone and once with the rules and the on-device model.
 
 | Per run, 12 notes | Rules alone | Rules and Gemini Nano |
 |---|---|---|
