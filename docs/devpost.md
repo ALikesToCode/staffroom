@@ -33,7 +33,7 @@ Designed for a shared **school ICT-lab or staffroom desktop** with Chrome Built-
 
 ## How Firebase AI Logic is used
 
-All model access goes through `modelFor()` in [`src/ai/routes.ts`](../src/ai/routes.ts) using the `@firebase/ai` client SDK:
+All model access goes through `modelFor()` in [`src/ai/routes.ts`](../src/ai/routes.ts) using the `@firebase/ai` client SDK across all three Firebase AI Logic hybrid modes (`ONLY_ON_DEVICE`, `PREFER_IN_CLOUD`, and `PREFER_ON_DEVICE`):
 
 | Route | Mode | Input | Role & guardrails |
 |---|---|---|---|
@@ -42,7 +42,7 @@ All model access goes through `modelFor()` in [`src/ai/routes.ts`](../src/ai/rou
 | `draft` | `PREFER_IN_CLOUD` | Gate-approved text only | Streams (`generateContentStream`) class lesson & materials from Remote Config model (`gemini-3.5-flash-lite`) with automatic local Gemini Nano fallback offline. |
 | `check` | `ONLY_ON_DEVICE` | Single step + one constraint | Compares one draft step against one local constraint (`no-conflict` / `conflict` / `unclear`), paired with deterministic rule checks. |
 | `fit` | `ONLY_ON_DEVICE` | Step / child note + stages | Rewrites conflicting step (`fitForChild`) or suggests child-specific stage adjustments (`fitLessonForChild` via **More ideas from this device**), rule-checked before offering. |
-| `label` | `ONLY_ON_DEVICE` | Anonymous receipt summary | Short local receipt label (`FALLBACK` deterministic label if unavailable; never blocks sign-off). |
+| `label` | `PREFER_ON_DEVICE` | Anonymous receipt summary | Short receipt label; runs on-device when Gemini Nano is ready and can fall back to the cloud on redacted receipt metadata (or deterministic fallback if offline/unconfigured; never blocks sign-off). |
 
 Security & verification in **Inspect**: shows live route enforcement alongside browser **Resource Timing** entries (`performance.getEntriesByType('resource')`) filtered to network origin calls matching Google/Firebase endpoints for that page load (clearly noted as browser network timing observation alongside code route assertions: `0` cloud inference calls occur during `scan` and `guard`). Firebase Hosting serves strict headers (`Content-Security-Policy`, `X-Frame-Options: DENY`, `Permissions-Policy`).
 
