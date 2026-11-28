@@ -1,6 +1,6 @@
-# Staffroom: Video Script (`v10` — `staffroom-demo-v10.mp4`)
+# Staffroom: Video Script (`v11` — `staffroom-demo-v11.mp4`)
 
-- **Total duration**: `169.74s` (`2m 49.74s`, strictly under `2:55` and Devpost's `3:00` limit), `1920x1080` `30fps` H.264/AAC (NVENC), zoomed 2x DPI Chrome 158 captures + live streaming frames, fixed top-right mode badge (`On this device · Gemini Nano` / `In the cloud · Gemini Flash-Lite`), visible pointer click rings, Maya 2 (`Nivedita`) narration with `0.50s` inter-shot pauses, burned-in captions + [`staffroom-demo-v10.srt`](file:///home/mysterious/Videos/staffroom-demo-v10.srt).
+- **Total duration**: `169.74s` (`2m 49.74s`, strictly under `2:55` and Devpost's `3:00` limit), `1920x1080` `30fps` H.264/AAC (NVENC), zoomed 2x DPI Chrome 158 captures + live streaming frames, strict device/cloud corner badge synchronization (zero pupil names ever shown under the cloud badge), pre-click states before scan and guard, on-device check verification, `WRITTEN ON THIS COMPUTER` offline lane header, and all 6 routes in `How it ran (Inspect)`, Maya 2 (`Nivedita`) narration with `0.50s` inter-shot pauses, burned-in captions + [`staffroom-demo-v11.srt`](file:///home/mysterious/Videos/staffroom-demo-v11.srt).
 
 ## Shot list & voiceover (`p01`–`p09`)
 

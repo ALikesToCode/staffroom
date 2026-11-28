@@ -44,7 +44,7 @@ Raw logs & methodology live under [`docs/evals/2026-11-28/`](docs/evals/2026-11-
 
 - **Hardware today**: On-device Nano features require desktop Chrome 158+ meeting [Prompt API requirements](https://developer.chrome.com/docs/ai/prompt-api) (`>= 22 GB` free storage and `> 4 GB` VRAM or `16 GB` RAM + `4+` cores). Older lab PCs and phones run deterministic privacy rules with clear notices and cloud drafting, or can replay the Chrome + Nano run via **Watch a recorded run**.
 - **API tier**: The public demo uses the free Gemini Developer API tier ([terms](https://ai.google.dev/gemini-api/terms)), where Google may use submitted prompts and outputs to improve its products; only approved redacted needs are sent. Schools must use a paid tier.
-- **Language scope**: Rules, pronoun filters, and Layer A lesson checks cover English, Hinglish, and Devanagari Hindi; Gemini Nano semantic step checking (`check`) runs in English only (Hindi drafts show a rule-only caution). Screens are in English with short Hindi labels on main action buttons.
+- **Language scope**: Rules, pronoun filters, and Layer A lesson checks cover English, Hinglish, and Devanagari Hindi; Gemini Nano semantic step checking (`check`) runs in English only (Hindi drafts show a rule-only caution). The screens are in English, with a short Hindi line under some of the main buttons.
 - **Invented data only**: No teacher has used this in a classroom yet. Every pupil, note, and notebook photo is invented.
 
 ## Details

@@ -74,7 +74,7 @@ All of this ran in Chrome 158 with Gemini Nano on one machine, on invented notes
 
 **Getting a small model to write a full lesson offline.** Asked for free text, Gemini Nano dropped needs or timed out. A strict JSON schema, plus a tidy-up step in plain code, got every need in the sample class accounted for.
 
-**Writing for a teacher, not for a developer.** The first version spoke in mode names and gates. The teachers I work with would have closed it. Every screen now has one large button, says where the work is happening in ordinary words, and keeps the technical detail one tap away for anyone who wants it.
+**Writing for a teacher, not for a developer.** The first version spoke in mode names and gates. The teachers I work with would have closed it. The screens now say where the work is happening in ordinary words, the main actions are large buttons, and the mode names sit beside them in small type for anyone who wants to check.
 
 **Designing for a computer that is not yours.** Many teachers share a computer at school. Notes, class lists, saved lessons and local records live only in the browser tab unless the teacher turns on keeping the class in this browser, so closing the tab removes them. One button, Clear desk, wipes everything and signs out. The default print is the copy without names.
 
@@ -84,12 +84,12 @@ I started by asking which model was big enough for each task. The better questio
 
 ## Limits
 
-- **It needs a capable computer today.** Chrome's Prompt API requires at least 22 GB of free disk space on the profile volume and either a graphics card with more than 4 GB of video memory or 16 GB of RAM with four or more CPU cores. Most lab PCs in Indian government schools do not have that, and the teachers I build for plan on a phone, which cannot run it yet. On those devices Staffroom still tells the teacher clearly that no on-device model ran, withholds known names and numbers by rule, and requires her to check and approve every word before sending to the cloud — but there is no notebook photo scan, no on-device semantic check, and no offline lesson. Today it fits a teacher with a recent laptop.
+- **It needs a capable computer today.** Chrome's Prompt API requires at least 22 GB of free disk space on the profile volume and either a graphics card with more than 4 GB of video memory or 16 GB of RAM with four or more CPU cores. Most lab PCs in Indian government schools do not have that, and the teachers I build for plan on a phone, which cannot run it yet. On those devices Staffroom still tells the teacher clearly that no on-device model ran, withholds known names and numbers by rule, and requires her to check and approve every word before sending to the cloud. But there is no notebook photo scan, no on-device semantic check, and no offline lesson. Today it fits a teacher with a recent laptop.
 - **The demo's cloud is the free Gemini Developer API.** Under Google's Unpaid Services terms, Google may use submitted text to improve its products and human reviewers may read it, and Google tells developers not to send personal or sensitive data there. Only the approved text without names goes out; a school should use a paid tier, where prompts are not used for training.
 - **The teacher can tick the box without reading.** The app keeps the outgoing text short and shows it beside what was held back. It cannot make her read it.
 - **A letter is not anonymity inside the classroom.** The cloud cannot tell whose need it is. Classmates looking at a printed sheet sometimes can.
 - No teacher has used this in a classroom yet. Every pupil, note and photo is invented.
-- Gemini Nano checks lessons written in English. Lessons in Hindi are checked by rules. The screens are in English with short Hindi labels on main buttons.
+- Gemini Nano checks lessons written in English. Lessons in Hindi are checked by rules. The screens are in English, with a short Hindi line under some of the main buttons.
 
 ## What's next
 
