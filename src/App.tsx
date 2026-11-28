@@ -2557,14 +2557,22 @@ export function App() {
             </div>
 
             {/* ------------------------------------------------ the cloud */}
-            <section className="lane cloud" aria-label="Sent to the cloud">
-              <h2 className="lane-title">
-                <span>Sent to the cloud</span>
-                <RouteChip route="draft" where={result && stage !== 'review' ? result.where : undefined} />
-                <button className="inspect-btn" onClick={() => setInspecting(true)}>
-                  How it ran
-                </button>
-              </h2>
+            {(() => {
+              const offlineLane =
+                stage !== 'write' &&
+                stage !== 'guarding' &&
+                stage !== 'review' &&
+                (result?.where === 'ON_DEVICE' || (stage === 'drafting' && (draftFallback || !online)));
+              const rightLaneTitle = offlineLane ? 'Written on this computer' : 'Sent to the cloud';
+              return (
+                <section className="lane cloud" aria-label={rightLaneTitle}>
+                  <h2 className="lane-title">
+                    <span>{rightLaneTitle}</span>
+                    <RouteChip route="draft" where={result && stage !== 'review' ? result.where : undefined} />
+                    <button className="inspect-btn" onClick={() => setInspecting(true)}>
+                      How it ran
+                    </button>
+                  </h2>
 
               {(editing || stage === 'guarding') && (
                 <article className="card ghost">
@@ -2612,6 +2620,8 @@ export function App() {
                 sent={sent}
               />
             </section>
+              );
+            })()}
           </div>
 
           {/* ------------------------------------------------ the action bar: always in reach at the foot of the window */}
