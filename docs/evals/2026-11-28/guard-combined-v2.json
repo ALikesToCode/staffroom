@@ -1,0 +1,1831 @@
+{
+  "when": "2026-11-28T05:14:14.816Z",
+  "model": "Gemini Nano (Chrome 158 Built-in AI)",
+  "method": "guardCombinedOnDevice + constraintsFromCombined (1-pass per paragraph)",
+  "totalsRules": {
+    "runs": 36,
+    "details": 180,
+    "caught": 138,
+    "partly": 30,
+    "missed": 12,
+    "notEasy": {
+      "caught": 18,
+      "partly": 27,
+      "missed": 12
+    },
+    "easy": {
+      "caught": 120,
+      "partly": 3,
+      "missed": 0
+    },
+    "harmless": 24,
+    "harmlessHeld": 9,
+    "constraintsLabelled": 33,
+    "constraintsMatched": 3,
+    "constraintsExtra": 0,
+    "unreadParts": 0,
+    "failures": 0,
+    "medianMs": 2
+  },
+  "totalsCombinedAll36": {
+    "runs": 36,
+    "details": 180,
+    "caught": 153,
+    "partly": 21,
+    "missed": 6,
+    "notEasy": {
+      "caught": 30,
+      "partly": 21,
+      "missed": 6
+    },
+    "easy": {
+      "caught": 123,
+      "partly": 0,
+      "missed": 0
+    },
+    "harmless": 24,
+    "harmlessHeld": 0,
+    "constraintsLabelled": 33,
+    "constraintsMatched": 12,
+    "constraintsExtra": 19,
+    "unreadParts": 0,
+    "failures": 0,
+    "medianMs": 3806
+  },
+  "perRunTotals": [
+    {
+      "run": 1,
+      "caught": 51,
+      "partly": 7,
+      "missed": 2,
+      "harmlessHeld": 0,
+      "constraintsMatched": 4,
+      "constraintsExtra": 5,
+      "medianMs": 3987
+    },
+    {
+      "run": 2,
+      "caught": 51,
+      "partly": 7,
+      "missed": 2,
+      "harmlessHeld": 0,
+      "constraintsMatched": 3,
+      "constraintsExtra": 7,
+      "medianMs": 3917
+    },
+    {
+      "run": 3,
+      "caught": 51,
+      "partly": 7,
+      "missed": 2,
+      "harmlessHeld": 0,
+      "constraintsMatched": 5,
+      "constraintsExtra": 7,
+      "medianMs": 3723
+    }
+  ],
+  "rows": [
+    {
+      "run": 1,
+      "id": "floods",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 14,
+      "caught": [
+        "Sneha",
+        "Arjun",
+        "Her father lost his shop in the floods",
+        "the family has moved in with relatives in Kottayam",
+        "Kottayam"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "floods",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 8230,
+      "caught": [
+        "Sneha",
+        "Arjun",
+        "Her father lost his shop in the floods",
+        "the family has moved in with relatives in Kottayam",
+        "Kottayam"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "late-bus",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 3,
+      "caught": [
+        "Hemant",
+        "Kavya",
+        "Chandpur"
+      ],
+      "partly": [
+        "takes the only bus to Chandpur, which leaves at 3:40, right after the last period"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "time-after"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "late-bus",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 4394,
+      "caught": [
+        "Hemant",
+        "Kavya",
+        "Chandpur"
+      ],
+      "partly": [
+        "takes the only bus to Chandpur, which leaves at 3:40, right after the last period"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "time-after"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "other"
+      ]
+    },
+    {
+      "run": 1,
+      "id": "clinic",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 3,
+      "caught": [
+        "Fatima",
+        "Om",
+        "She gets tired easily and sometimes rests her head on the desk"
+      ],
+      "partly": [
+        "goes to the clinic in Sector 9 every Tuesday with her mother",
+        "Sector 9"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "days-away",
+        "health"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "clinic",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 2754,
+      "caught": [
+        "Fatima",
+        "Om",
+        "Sector 9",
+        "She gets tired easily and sometimes rests her head on the desk"
+      ],
+      "partly": [
+        "goes to the clinic in Sector 9 every Tuesday with her mother"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "days-away"
+      ],
+      "constraintsMissed": [
+        "health"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "easy-ones",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 5,
+      "caught": [
+        "Devansh",
+        "Tenzin",
+        "Bhavna",
+        "Devansh's parents divorced last year and he now lives with his mother and stepfather",
+        "98200 11456",
+        "Tenzin has asthma and keeps an inhaler in her bag",
+        "roll no. 7C/14"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "health"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "easy-ones",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 5131,
+      "caught": [
+        "Devansh",
+        "Tenzin",
+        "Bhavna",
+        "Devansh's parents divorced last year and he now lives with his mother and stepfather",
+        "98200 11456",
+        "Tenzin has asthma and keeps an inhaler in her bag",
+        "roll no. 7C/14"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "health"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "contact"
+      ]
+    },
+    {
+      "run": 1,
+      "id": "fees",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "Lakshmi",
+        "Pranav",
+        "has not paid the exam fee yet",
+        "her mother works as a cook in two houses and is paid at the end of the month"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "money"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "fees",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3987,
+      "caught": [
+        "Lakshmi",
+        "Pranav",
+        "has not paid the exam fee yet",
+        "her mother works as a cook in two houses and is paid at the end of the month"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "money"
+      ],
+      "constraintsExtra": [
+        "no-phone-internet"
+      ]
+    },
+    {
+      "run": 1,
+      "id": "one-phone",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 3,
+      "caught": [
+        "Gurpreet",
+        "Siddharth",
+        "Lucknow"
+      ],
+      "partly": [
+        "She can only do online homework on Sundays, when he is at home"
+      ],
+      "missed": [
+        "family shares one old phone, and her brother takes it to work all day"
+      ],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "no-phone-internet"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "one-phone",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 2555,
+      "caught": [
+        "Gurpreet",
+        "Siddharth",
+        "Lucknow"
+      ],
+      "partly": [],
+      "missed": [
+        "family shares one old phone, and her brother takes it to work all day",
+        "She can only do online homework on Sundays, when he is at home"
+      ],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "no-phone-internet"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "dialysis",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 5,
+      "caught": [
+        "Karthik",
+        "Joseph",
+        "leaves at lunch on Fridays to take his grandfather for dialysis at the government hospital",
+        "Venkat"
+      ],
+      "partly": [
+        "His uncle Venkat signs his diary now"
+      ],
+      "missed": [],
+      "harmlessHeld": [
+        "the Harry Potter books in Malayalam"
+      ],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "days-away",
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "dialysis",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 2919,
+      "caught": [
+        "Karthik",
+        "Joseph",
+        "leaves at lunch on Fridays to take his grandfather for dialysis at the government hospital",
+        "Venkat"
+      ],
+      "partly": [
+        "His uncle Venkat signs his diary now"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "days-away",
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "curriculum",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "Priyanka",
+        "Rahul",
+        "Shruti",
+        "AIIMS"
+      ],
+      "partly": [
+        "her uncle, a doctor at AIIMS"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "curriculum",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 2209,
+      "caught": [
+        "Priyanka",
+        "Rahul",
+        "Shruti",
+        "AIIMS"
+      ],
+      "partly": [
+        "her uncle, a doctor at AIIMS"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "hostel",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 7,
+      "caught": [
+        "Yusuf",
+        "Al-Noor",
+        "Malerkotla",
+        "0161 245 7788",
+        "He often comes to class without breakfast because the mess opens late"
+      ],
+      "partly": [
+        "stays at the Al-Noor hostel during the week and goes home to Malerkotla only on Saturday evenings",
+        "Mr Qadri"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "hostel",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3950,
+      "caught": [
+        "Yusuf",
+        "Al-Noor",
+        "Malerkotla",
+        "Mr Qadri",
+        "0161 245 7788",
+        "He often comes to class without breakfast because the mess opens late"
+      ],
+      "partly": [
+        "stays at the Al-Noor hostel during the week and goes home to Malerkotla only on Saturday evenings"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "no-capitals",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 1,
+      "caught": [
+        "ananya",
+        "jaspreet"
+      ],
+      "partly": [
+        "ananya cries some mornings at the gate"
+      ],
+      "missed": [
+        "roshni",
+        "dubai",
+        "their father moved to dubai for work in june"
+      ],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "no-capitals",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 4228,
+      "caught": [
+        "ananya",
+        "jaspreet",
+        "roshni",
+        "dubai",
+        "ananya cries some mornings at the gate"
+      ],
+      "partly": [
+        "their father moved to dubai for work in june"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": [
+        "days-away"
+      ]
+    },
+    {
+      "run": 1,
+      "id": "caste",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 4,
+      "caught": [
+        "Manish",
+        "Zainab",
+        "Tejas",
+        "some boys called Manish names about his caste during the match"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [
+        "Republic Day",
+        "PE kit"
+      ],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "caste",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 2791,
+      "caught": [
+        "Manish",
+        "Zainab",
+        "Tejas",
+        "some boys called Manish names about his caste during the match"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "mandi",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "Vikas",
+        "Azadpur"
+      ],
+      "partly": [
+        "helps his father unload vegetables at Azadpur mandi from five in the morning"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "time-before"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 1,
+      "id": "mandi",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 4433,
+      "caught": [
+        "Vikas",
+        "Azadpur"
+      ],
+      "partly": [
+        "helps his father unload vegetables at Azadpur mandi from five in the morning"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "time-before"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "other"
+      ]
+    },
+    {
+      "run": 2,
+      "id": "floods",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 3,
+      "caught": [
+        "Sneha",
+        "Arjun",
+        "Her father lost his shop in the floods",
+        "the family has moved in with relatives in Kottayam",
+        "Kottayam"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "floods",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 4620,
+      "caught": [
+        "Sneha",
+        "Arjun",
+        "Her father lost his shop in the floods",
+        "the family has moved in with relatives in Kottayam",
+        "Kottayam"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "no-phone-internet"
+      ]
+    },
+    {
+      "run": 2,
+      "id": "late-bus",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "Hemant",
+        "Kavya",
+        "Chandpur"
+      ],
+      "partly": [
+        "takes the only bus to Chandpur, which leaves at 3:40, right after the last period"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "time-after"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "late-bus",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3110,
+      "caught": [
+        "Hemant",
+        "Kavya",
+        "Chandpur"
+      ],
+      "partly": [
+        "takes the only bus to Chandpur, which leaves at 3:40, right after the last period"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "time-after"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "other"
+      ]
+    },
+    {
+      "run": 2,
+      "id": "clinic",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 3,
+      "caught": [
+        "Fatima",
+        "Om",
+        "She gets tired easily and sometimes rests her head on the desk"
+      ],
+      "partly": [
+        "goes to the clinic in Sector 9 every Tuesday with her mother",
+        "Sector 9"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "days-away",
+        "health"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "clinic",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 4108,
+      "caught": [
+        "Fatima",
+        "Om",
+        "Sector 9",
+        "She gets tired easily and sometimes rests her head on the desk"
+      ],
+      "partly": [
+        "goes to the clinic in Sector 9 every Tuesday with her mother"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "days-away",
+        "health"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "easy-ones",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 4,
+      "caught": [
+        "Devansh",
+        "Tenzin",
+        "Bhavna",
+        "Devansh's parents divorced last year and he now lives with his mother and stepfather",
+        "98200 11456",
+        "Tenzin has asthma and keeps an inhaler in her bag",
+        "roll no. 7C/14"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "health"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "easy-ones",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 6089,
+      "caught": [
+        "Devansh",
+        "Tenzin",
+        "Bhavna",
+        "Devansh's parents divorced last year and he now lives with his mother and stepfather",
+        "98200 11456",
+        "Tenzin has asthma and keeps an inhaler in her bag",
+        "roll no. 7C/14"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "health"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "contact"
+      ]
+    },
+    {
+      "run": 2,
+      "id": "fees",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "Lakshmi",
+        "Pranav",
+        "has not paid the exam fee yet",
+        "her mother works as a cook in two houses and is paid at the end of the month"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "money"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "fees",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3917,
+      "caught": [
+        "Lakshmi",
+        "Pranav",
+        "has not paid the exam fee yet",
+        "her mother works as a cook in two houses and is paid at the end of the month"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "money"
+      ],
+      "constraintsExtra": [
+        "no-phone-internet"
+      ]
+    },
+    {
+      "run": 2,
+      "id": "one-phone",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 3,
+      "caught": [
+        "Gurpreet",
+        "Siddharth",
+        "Lucknow"
+      ],
+      "partly": [
+        "She can only do online homework on Sundays, when he is at home"
+      ],
+      "missed": [
+        "family shares one old phone, and her brother takes it to work all day"
+      ],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "no-phone-internet"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "one-phone",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3382,
+      "caught": [
+        "Gurpreet",
+        "Siddharth",
+        "Lucknow"
+      ],
+      "partly": [],
+      "missed": [
+        "family shares one old phone, and her brother takes it to work all day",
+        "She can only do online homework on Sundays, when he is at home"
+      ],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "no-phone-internet"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "dialysis",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 5,
+      "caught": [
+        "Karthik",
+        "Joseph",
+        "leaves at lunch on Fridays to take his grandfather for dialysis at the government hospital",
+        "Venkat"
+      ],
+      "partly": [
+        "His uncle Venkat signs his diary now"
+      ],
+      "missed": [],
+      "harmlessHeld": [
+        "the Harry Potter books in Malayalam"
+      ],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "days-away",
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "dialysis",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 2936,
+      "caught": [
+        "Karthik",
+        "Joseph",
+        "leaves at lunch on Fridays to take his grandfather for dialysis at the government hospital",
+        "Venkat"
+      ],
+      "partly": [
+        "His uncle Venkat signs his diary now"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "days-away",
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "curriculum",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 0,
+      "caught": [
+        "Priyanka",
+        "Rahul",
+        "Shruti",
+        "AIIMS"
+      ],
+      "partly": [
+        "her uncle, a doctor at AIIMS"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "curriculum",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 2113,
+      "caught": [
+        "Priyanka",
+        "Rahul",
+        "Shruti",
+        "AIIMS"
+      ],
+      "partly": [
+        "her uncle, a doctor at AIIMS"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "hostel",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 0,
+      "caught": [
+        "Yusuf",
+        "Al-Noor",
+        "Malerkotla",
+        "0161 245 7788",
+        "He often comes to class without breakfast because the mess opens late"
+      ],
+      "partly": [
+        "stays at the Al-Noor hostel during the week and goes home to Malerkotla only on Saturday evenings",
+        "Mr Qadri"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "hostel",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3379,
+      "caught": [
+        "Yusuf",
+        "Al-Noor",
+        "Malerkotla",
+        "Mr Qadri",
+        "0161 245 7788",
+        "He often comes to class without breakfast because the mess opens late"
+      ],
+      "partly": [
+        "stays at the Al-Noor hostel during the week and goes home to Malerkotla only on Saturday evenings"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "no-capitals",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 0,
+      "caught": [
+        "ananya",
+        "jaspreet"
+      ],
+      "partly": [
+        "ananya cries some mornings at the gate"
+      ],
+      "missed": [
+        "roshni",
+        "dubai",
+        "their father moved to dubai for work in june"
+      ],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "no-capitals",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 4927,
+      "caught": [
+        "ananya",
+        "jaspreet",
+        "roshni",
+        "dubai",
+        "ananya cries some mornings at the gate"
+      ],
+      "partly": [
+        "their father moved to dubai for work in june"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": [
+        "days-away"
+      ]
+    },
+    {
+      "run": 2,
+      "id": "caste",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 0,
+      "caught": [
+        "Manish",
+        "Zainab",
+        "Tejas",
+        "some boys called Manish names about his caste during the match"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [
+        "Republic Day",
+        "PE kit"
+      ],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "caste",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3317,
+      "caught": [
+        "Manish",
+        "Zainab",
+        "Tejas",
+        "some boys called Manish names about his caste during the match"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "other"
+      ]
+    },
+    {
+      "run": 2,
+      "id": "mandi",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 0,
+      "caught": [
+        "Vikas",
+        "Azadpur"
+      ],
+      "partly": [
+        "helps his father unload vegetables at Azadpur mandi from five in the morning"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "time-before"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 2,
+      "id": "mandi",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 4313,
+      "caught": [
+        "Vikas",
+        "Azadpur"
+      ],
+      "partly": [
+        "helps his father unload vegetables at Azadpur mandi from five in the morning"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "time-before"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "other"
+      ]
+    },
+    {
+      "run": 3,
+      "id": "floods",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 0,
+      "caught": [
+        "Sneha",
+        "Arjun",
+        "Her father lost his shop in the floods",
+        "the family has moved in with relatives in Kottayam",
+        "Kottayam"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "floods",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3806,
+      "caught": [
+        "Sneha",
+        "Arjun",
+        "Her father lost his shop in the floods",
+        "the family has moved in with relatives in Kottayam",
+        "Kottayam"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "no-phone-internet"
+      ]
+    },
+    {
+      "run": 3,
+      "id": "late-bus",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "Hemant",
+        "Kavya",
+        "Chandpur"
+      ],
+      "partly": [
+        "takes the only bus to Chandpur, which leaves at 3:40, right after the last period"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "time-after"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "late-bus",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3723,
+      "caught": [
+        "Hemant",
+        "Kavya",
+        "Chandpur"
+      ],
+      "partly": [
+        "takes the only bus to Chandpur, which leaves at 3:40, right after the last period"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "time-after"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "other"
+      ]
+    },
+    {
+      "run": 3,
+      "id": "clinic",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 3,
+      "caught": [
+        "Fatima",
+        "Om",
+        "She gets tired easily and sometimes rests her head on the desk"
+      ],
+      "partly": [
+        "goes to the clinic in Sector 9 every Tuesday with her mother",
+        "Sector 9"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "days-away",
+        "health"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "clinic",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 2971,
+      "caught": [
+        "Fatima",
+        "Om",
+        "Sector 9",
+        "She gets tired easily and sometimes rests her head on the desk"
+      ],
+      "partly": [
+        "goes to the clinic in Sector 9 every Tuesday with her mother"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "days-away"
+      ],
+      "constraintsMissed": [
+        "health"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "easy-ones",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 4,
+      "caught": [
+        "Devansh",
+        "Tenzin",
+        "Bhavna",
+        "Devansh's parents divorced last year and he now lives with his mother and stepfather",
+        "98200 11456",
+        "Tenzin has asthma and keeps an inhaler in her bag",
+        "roll no. 7C/14"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "health"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "easy-ones",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 8337,
+      "caught": [
+        "Devansh",
+        "Tenzin",
+        "Bhavna",
+        "Devansh's parents divorced last year and he now lives with his mother and stepfather",
+        "98200 11456",
+        "Tenzin has asthma and keeps an inhaler in her bag",
+        "roll no. 7C/14"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "health"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "other"
+      ]
+    },
+    {
+      "run": 3,
+      "id": "fees",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "Lakshmi",
+        "Pranav",
+        "has not paid the exam fee yet",
+        "her mother works as a cook in two houses and is paid at the end of the month"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "money"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "fees",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3904,
+      "caught": [
+        "Lakshmi",
+        "Pranav",
+        "has not paid the exam fee yet",
+        "her mother works as a cook in two houses and is paid at the end of the month"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "money"
+      ],
+      "constraintsExtra": [
+        "no-phone-internet"
+      ]
+    },
+    {
+      "run": 3,
+      "id": "one-phone",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "Gurpreet",
+        "Siddharth",
+        "Lucknow"
+      ],
+      "partly": [
+        "She can only do online homework on Sundays, when he is at home"
+      ],
+      "missed": [
+        "family shares one old phone, and her brother takes it to work all day"
+      ],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "no-phone-internet"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "one-phone",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 2512,
+      "caught": [
+        "Gurpreet",
+        "Siddharth",
+        "Lucknow"
+      ],
+      "partly": [],
+      "missed": [
+        "family shares one old phone, and her brother takes it to work all day",
+        "She can only do online homework on Sundays, when he is at home"
+      ],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "no-phone-internet"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "dialysis",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 0,
+      "caught": [
+        "Karthik",
+        "Joseph",
+        "leaves at lunch on Fridays to take his grandfather for dialysis at the government hospital",
+        "Venkat"
+      ],
+      "partly": [
+        "His uncle Venkat signs his diary now"
+      ],
+      "missed": [],
+      "harmlessHeld": [
+        "the Harry Potter books in Malayalam"
+      ],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "days-away",
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "dialysis",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3390,
+      "caught": [
+        "Karthik",
+        "Joseph",
+        "leaves at lunch on Fridays to take his grandfather for dialysis at the government hospital",
+        "Venkat"
+      ],
+      "partly": [
+        "His uncle Venkat signs his diary now"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "days-away"
+      ],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "curriculum",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "Priyanka",
+        "Rahul",
+        "Shruti",
+        "AIIMS"
+      ],
+      "partly": [
+        "her uncle, a doctor at AIIMS"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "curriculum",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3400,
+      "caught": [
+        "Priyanka",
+        "Rahul",
+        "Shruti",
+        "AIIMS"
+      ],
+      "partly": [
+        "her uncle, a doctor at AIIMS"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "other"
+      ]
+    },
+    {
+      "run": 3,
+      "id": "hostel",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 5,
+      "caught": [
+        "Yusuf",
+        "Al-Noor",
+        "Malerkotla",
+        "0161 245 7788",
+        "He often comes to class without breakfast because the mess opens late"
+      ],
+      "partly": [
+        "stays at the Al-Noor hostel during the week and goes home to Malerkotla only on Saturday evenings",
+        "Mr Qadri"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "hostel",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 3417,
+      "caught": [
+        "Yusuf",
+        "Al-Noor",
+        "Malerkotla",
+        "Mr Qadri",
+        "0161 245 7788",
+        "He often comes to class without breakfast because the mess opens late"
+      ],
+      "partly": [
+        "stays at the Al-Noor hostel during the week and goes home to Malerkotla only on Saturday evenings"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "no-capitals",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "ananya",
+        "jaspreet"
+      ],
+      "partly": [
+        "ananya cries some mornings at the gate"
+      ],
+      "missed": [
+        "roshni",
+        "dubai",
+        "their father moved to dubai for work in june"
+      ],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "no-capitals",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 4071,
+      "caught": [
+        "ananya",
+        "jaspreet",
+        "roshni",
+        "dubai",
+        "ananya cries some mornings at the gate"
+      ],
+      "partly": [
+        "their father moved to dubai for work in june"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "contact"
+      ],
+      "constraintsExtra": [
+        "days-away"
+      ]
+    },
+    {
+      "run": 3,
+      "id": "caste",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 4,
+      "caught": [
+        "Manish",
+        "Zainab",
+        "Tejas",
+        "some boys called Manish names about his caste during the match"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [
+        "Republic Day",
+        "PE kit"
+      ],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "caste",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 2667,
+      "caught": [
+        "Manish",
+        "Zainab",
+        "Tejas",
+        "some boys called Manish names about his caste during the match"
+      ],
+      "partly": [],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "mandi",
+      "mode": "rules",
+      "where": "RULES_ONLY",
+      "unread": 0,
+      "ms": 2,
+      "caught": [
+        "Vikas",
+        "Azadpur"
+      ],
+      "partly": [
+        "helps his father unload vegetables at Azadpur mandi from five in the morning"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [],
+      "constraintsMissed": [
+        "time-before"
+      ],
+      "constraintsExtra": []
+    },
+    {
+      "run": 3,
+      "id": "mandi",
+      "mode": "model",
+      "where": "ON_DEVICE",
+      "unread": 0,
+      "ms": 4259,
+      "caught": [
+        "Vikas",
+        "Azadpur"
+      ],
+      "partly": [
+        "helps his father unload vegetables at Azadpur mandi from five in the morning"
+      ],
+      "missed": [],
+      "harmlessHeld": [],
+      "constraintsMatched": [
+        "time-before"
+      ],
+      "constraintsMissed": [],
+      "constraintsExtra": [
+        "other"
+      ]
+    }
+  ]
+}

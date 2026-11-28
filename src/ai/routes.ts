@@ -52,8 +52,12 @@ const IMAGE_ENGLISH = [{ type: 'image' as const }, ...ENGLISH];
 interface Options {
   /** Instructions that stay the same for every request. */
   system: string;
+  /** Optional compact system instruction when a hybrid cloud route falls back on-device. */
+  onDeviceSystem?: string;
   /** JSON schema the answer must follow. Omit for plain text. */
   schema?: Record<string, unknown>;
+  /** Optional compact JSON schema for on-device fallback of a hybrid cloud route. */
+  onDeviceSchema?: Record<string, unknown>;
   /** Cloud model name, from policy. */
   cloudModel?: string;
   /** Set to 'image' when the ONLY_ON_DEVICE request includes image input. */
@@ -85,9 +89,13 @@ function buildOnDeviceParams({ system, schema, multimodal }: Options) {
   };
 }
 
-export function modelFor(route: RouteId, { system, schema, cloudModel, multimodal }: Options): GenerativeModel {
+export function modelFor(route: RouteId, { system, onDeviceSystem, schema, onDeviceSchema, cloudModel, multimodal }: Options): GenerativeModel {
   const mode = ROUTES.find((r) => r.id === route)!.mode;
-  const onDevice = buildOnDeviceParams({ system, schema, multimodal });
+  const onDevice = buildOnDeviceParams({
+    system: mode === InferenceMode.ONLY_ON_DEVICE ? system : (onDeviceSystem ?? system),
+    schema: mode === InferenceMode.ONLY_ON_DEVICE ? schema : (onDeviceSchema ?? schema),
+    multimodal,
+  });
   if (mode === InferenceMode.ONLY_ON_DEVICE) {
     if (!onDeviceModelPresent()) {
       throw new Error('This browser has no on-device model, so the request was not started. Nothing was sent.');

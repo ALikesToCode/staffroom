@@ -1,0 +1,39 @@
+{
+  "done": true,
+  "at": "2026-11-28T05:15:05.928Z",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+  "set": "scale35",
+  "rules": {
+    "students": 35,
+    "noteChars": 2177,
+    "where": "RULES_ONLY",
+    "paragraphs": 16,
+    "unread": [],
+    "dropped": 0,
+    "partial": 0,
+    "entitiesHeld": 50,
+    "nanoAdded": 0,
+    "constraintsProposed": 11,
+    "learningProposed": 1,
+    "exitGateViolations": [],
+    "leakedTokens": [],
+    "ms": 0
+  },
+  "model": {
+    "students": 35,
+    "noteChars": 2177,
+    "where": "ON_DEVICE",
+    "paragraphs": 16,
+    "unread": [],
+    "dropped": 0,
+    "partial": 0,
+    "entitiesHeld": 67,
+    "nanoAdded": 17,
+    "constraintsProposed": 11,
+    "learningProposed": 1,
+    "exitGateViolations": [],
+    "leakedTokens": [],
+    "ms": 50319,
+    "combinedConstraints": 19
+  }
+}

@@ -46,8 +46,15 @@ export function languageLine(language: string): string {
   return /^hindi$/i.test(language.trim()) ? 'Hindi, in Devanagari script (हिन्दी, देवनागरी लिपि में)' : language;
 }
 
+/** Languages for which Layer A deterministic conflict rules run locally (English, or Hindi in Devanagari). */
+export function ruleSupportedLanguage(language: string): boolean {
+  const clean = language.trim().toLowerCase();
+  return clean === '' || clean === 'english' || clean === 'hindi';
+}
+
 /** Said once when the text is not in English. The rules are word lists in English; nothing here claims a model read the text either. */
 export const NOT_ENGLISH = 'The rules read English only, so they have not checked this text. Read it yourself.';
+export const HINDI_RULE_ONLY = 'Checked by Hindi rules on this device; the on-device model checks English drafts only. Read the Hindi text yourself too.';
 export const NOT_CHECKED_BY_RULE = 'Not checked by rule';
 
 /** The line that asks for messages home in a language. */

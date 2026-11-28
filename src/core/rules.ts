@@ -215,6 +215,7 @@ const SENSITIVE: { category: string; terms: string[] }[] = [
       'gets fits', 'get fits', 'getting fits', 'has fits', 'have fits', 'had fits', 'having fits',
       'cancer', 'hiv', 'tb', 'depression', 'depressed', 'anxiety', 'self-harm', 'self harm', 'suicide', 'suicidal',
       'autism', 'autistic', 'dyslexia', 'dyslexic',
+      'gets tired easily', 'tires easily', 'rests her head', 'rests his head', 'faints', 'fainted', 'dizzy',
       // Hinglish and Devanagari health terms common in Indian staffroom notes.
       'mirgi', 'मिर्गी', 'daura', 'दौरा', 'dama', 'दमा', 'dawai', 'दवाई', 'bimar', 'बीमार', 'bimari', 'बीमारी', 'aspatal', 'अस्पताल',
     ],
@@ -224,10 +225,12 @@ const SENSITIVE: { category: string; terms: string[] }[] = [
     terms: [
       'separating', 'separated', 'divorce', 'divorced', 'died', 'death', 'passed away', 'orphan',
       'stepfather', 'stepmother', 'step-father', 'step-mother', 'step father', 'step mother', 'lost his job', 'lost her job',
+      'lost his shop', 'lost her shop', 'closed his shop', 'closed her shop',
+      'unpaid fee', 'not paid the exam fee', 'not paid the school fee', 'not paid fees', 'fees pending', 'fee due', 'fees due',
       'unemployed', 'debt', 'alcohol', 'alcoholic', 'drinks', 'drinking', 'drunk', 'abuse', 'abused', 'violence',
-      'homeless', 'hungry',
+      'homeless', 'hungry', 'without breakfast', 'empty stomach', 'no tiffin', 'bina khana', 'भूखा',
       // Hinglish and Devanagari family/financial hardship terms.
-      'talaq', 'तलाक', 'karz', 'कर्ज़', 'कर्ज', 'paise nahi', 'पैसे नहीं', 'fees nahi', 'फ़ीस नहीं', 'naukri chali', 'नौकरी चली', 'sharab', 'शराब',
+      'talaq', 'तलाक', 'निधन', 'देहांत', 'karz', 'कर्ज़', 'कर्ज', 'paise nahi', 'पैसे नहीं', 'fees nahi', 'फ़ीस नहीं', 'naukri chali', 'नौकरी चली', 'sharab', 'शराब',
     ],
   },
   { category: 'safety', terms: ['jail', 'jailed', 'prison', 'police', 'arrested', 'beats', 'beaten', 'beating', 'hits', 'bullied', 'marpeet', 'मारपीट', 'pitai', 'पिटाई'] },
@@ -279,12 +282,22 @@ export interface SensitiveHit extends Sentence {
   category: string;
 }
 
+const CURRICULUM_CONTEXT_RE =
+  /\b(?:chapter|lesson|topic|essay|paragraph|poster|chart|diagram|project|story|poem|speech|debate|assembly|exhibition|quiz|unit|textbook)\s+(?:on|about|regarding|covering)\b|\b(?:making|preparing|writing|drawing|reading|studying|revising)\s+(?:a|an|the)\s+(?:poster|project|essay|chapter|story|poem|speech|chart)\b/i;
+
+const PERSONAL_CUE_RE =
+  /\b(?:self-harm|self\s+harm|suicide|suicidal|pregnant|pregnancy|diagnosed|suffers?|suffering|admitted|took\s+to|rushed\s+to|in\s+hospital|at\s+the\s+hospital|misses\s+(?:school|class)|absent|cannot|can't|afraid|scared|struggles?|faints?|fainted|dizzy|tired|inhaler|tablets?|medicine|medication|doctor|clinic|check-?up|therapy\s+for|counsell?(?:or|ing)\s+for|has\s+(?:epilepsy|asthma|diabetes|autism|dyslexia|adhd|an?\s+allerg|cancer|depression|anxiety)|(?:his|her|their)\s+(?:mother|father|parent|sister|brother|grandmother|grandfather))\b/i;
+
 /** Every sentence that contains a word from the sensitive list, whole. No model is involved. */
 export function findSensitive(text: string): SensitiveHit[] {
   const hits: SensitiveHit[] = [];
   for (const sentence of sentences(text)) {
-    const group = SENSITIVE_RE.find((g) => g.re.test(sentence.text));
-    if (group) hits.push({ ...sentence, category: group.category });
+    for (const group of SENSITIVE_RE) {
+      if (!group.re.test(sentence.text)) continue;
+      if (group.category === 'health' && CURRICULUM_CONTEXT_RE.test(sentence.text) && !PERSONAL_CUE_RE.test(sentence.text)) continue;
+      hits.push({ ...sentence, category: group.category });
+      break;
+    }
   }
   return hits;
 }

@@ -316,11 +316,11 @@ describe('the guard set: the run and the score, with fake guard output', () => {
   const fake = {
     id: 'fake',
     classList: ['Asha Rao'],
-    note: 'Asha lives near Rampur and her father lost his shop. Asha won the Science Fair. The class sings.',
+    note: 'Asha lives near Rampur and her family struggles after the harvest. Asha won the Science Fair. The class sings.',
     details: [
       { text: 'Asha', kind: 'name' as const, easy: true },
       { text: 'Rampur', kind: 'place' as const, easy: false },
-      { text: 'her father lost his shop', kind: 'private' as const, easy: false },
+      { text: 'her family struggles after the harvest', kind: 'private' as const, easy: false },
     ],
     harmless: ['Science Fair', 'The class sings'],
     constraints: ['money' as const, 'time-after' as const],
@@ -331,7 +331,7 @@ describe('the guard set: the run and the score, with fake guard output', () => {
     const { buildVault } = await import('../core/vault');
     const entities = buildVault(fake.note, [
       { kind: 'student', text: 'Asha Rao', source: 'class list' },
-      { kind: 'private', text: 'father lost his shop', source: 'on-device model' },
+      { kind: 'private', text: 'family struggles after the harvest', source: 'on-device model' },
       { kind: 'place', text: 'Science Fair', source: 'on-device model' },
     ]);
     const constraints = [
@@ -341,7 +341,7 @@ describe('the guard set: the run and the score, with fake guard output', () => {
     ] satisfies import('../core/types').Constraint[];
     expect(scoreGuard(fake, { entities, constraints })).toEqual({
       caught: ['Asha'],
-      partly: ['her father lost his shop'],
+      partly: ['her family struggles after the harvest'],
       missed: ['Rampur'],
       harmlessHeld: ['Science Fair'],
       constraintsMatched: ['money'],
@@ -350,7 +350,7 @@ describe('the guard set: the run and the score, with fake guard output', () => {
       constraintsExtra: ['health'],
     });
     // With nothing held back, every detail is missed and no harmless span is held.
-    expect(scoreGuard(fake, { entities: [], constraints: [] })).toMatchObject({ caught: [], partly: [], missed: ['Asha', 'Rampur', 'her father lost his shop'], harmlessHeld: [] });
+    expect(scoreGuard(fake, { entities: [], constraints: [] })).toMatchObject({ caught: [], partly: [], missed: ['Asha', 'Rampur', 'her family struggles after the harvest'], harmlessHeld: [] });
   });
 
   it('runs the guard as the app does: with no device the capitalised-word rule; with it the model, and no such rule', async () => {
@@ -360,12 +360,12 @@ describe('the guard set: the run and the score, with fake guard output', () => {
     // The capitalised-word rule holds back Rampur, and the harmless Science Fair with it.
     expect(scoreGuard(fake, rules)).toMatchObject({ caught: ['Asha', 'Rampur'], harmlessHeld: ['Science Fair'] });
     const device = {
-      guard: async () => ({ candidates: [{ kind: 'private' as const, text: 'her father lost his shop', source: 'on-device model' as const }], total: 1, unread: [], dropped: 0, partial: 0 }),
-      constraints: async () => ({ constraints: [{ id: 'd', kind: 'money' as const, text: 'her father lost his shop', source: 'on-device model' as const, confirmed: false }], asked: 1, unread: 0, dropped: 0 }),
+      guard: async () => ({ candidates: [{ kind: 'private' as const, text: 'her family struggles after the harvest', source: 'on-device model' as const }], total: 1, unread: [], dropped: 0, partial: 0 }),
+      constraints: async () => ({ constraints: [{ id: 'd', kind: 'money' as const, text: 'her family struggles after the harvest', source: 'on-device model' as const, confirmed: false }], asked: 1, unread: 0, dropped: 0 }),
     };
     const model = await guardNote(fake, device);
     expect(model.where).toBe('ON_DEVICE');
-    expect(scoreGuard(fake, model)).toMatchObject({ caught: ['Asha', 'her father lost his shop'], missed: ['Rampur'], harmlessHeld: [], constraintsMatched: ['money'] });
+    expect(scoreGuard(fake, model)).toMatchObject({ caught: ['Asha', 'her family struggles after the harvest'], missed: ['Rampur'], harmlessHeld: [], constraintsMatched: ['money'] });
     // A model that read nothing leaves a rules-only run; one that throws is counted, and the rules stand.
     expect((await guardNote(fake, { ...device, guard: async () => ({ candidates: [], total: 1, unread: [0], dropped: 0, partial: 0 }) })).where).toBe('RULES_ONLY');
     const broke = await guardNote(fake, { ...device, guard: async () => Promise.reject(new Error('no answer')) });
@@ -383,5 +383,19 @@ describe('the guard set: the run and the score, with fake guard output', () => {
     const rows = [row('rules', ['Sneha', 'Arjun'], 10), row('model', ['Sneha', 'Arjun', 'Her father lost his shop in the floods'], 300)];
     expect(guardTotals(rows, 'rules')).toMatchObject({ runs: 1, details: 5, caught: 2, missed: 3, easy: { caught: 2 }, notEasy: { caught: 0, missed: 2 }, medianMs: 10 });
     expect(guardTotals(rows, 'model')).toMatchObject({ caught: 3, notEasy: { caught: 1 }, medianMs: 300 });
+  });
+});
+
+describe('scale35 full-class privacy stress benchmark', () => {
+  it('withholds all 35 pupil names, contacts, IDs, and sensitive phrases with zero exit-gate leaks in rules mode', async () => {
+    const { buildScale35Fixture, scoreScale35 } = await import('./scale35');
+    const fixture = buildScale35Fixture();
+    expect(fixture.classList).toHaveLength(35);
+    expect(fixture.note.length).toBeLessThanOrEqual(8000);
+    const scored = scoreScale35(fixture, [], 'RULES_ONLY', [], 0, 0, 12, 14);
+    expect(scored.students).toBe(35);
+    expect(scored.exitGateViolations).toEqual([]);
+    expect(scored.leakedTokens).toEqual([]);
+    expect(scored.constraintsProposed).toBeGreaterThanOrEqual(7);
   });
 });

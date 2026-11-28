@@ -8,6 +8,8 @@ import { App } from '../App';
 import { MaterialsCard, MATERIALS_NOTE_LOCAL, MaterialsPages } from './Materials';
 import { CopyPreview } from './PrintPreview';
 import { Drawer, NetworkSection, Receipts } from './pages';
+import { AppHeader } from './AppHeader';
+import { ReviewCard } from './ReviewCard';
 import { addRequests } from '../core/network';
 import type { Materials } from '../core/materials';
 
@@ -379,5 +381,77 @@ describe('MaterialsCard offline copy and Drawer semantics', () => {
     );
     expect(disabledHtml).toContain('Not available: no Firebase project is connected.');
     expect(disabledHtml).toMatch(/<input type="checkbox"[^>]*disabled/);
+  });
+});
+
+describe('AppHeader and ReviewCard', () => {
+  it('renders the persistent sign-out failure pill with Retry sign-out action and the ok reset pill', () => {
+    const failedHtml = renderToStaticMarkup(
+      <AppHeader
+        landing={false}
+        view="desk"
+        setView={() => {}}
+        lessonsCount={0}
+        receiptsCount={0}
+        device="available"
+        download={null}
+        onTurnOnDevice={() => {}}
+        online
+        configured
+        install={null}
+        deskCleared="signout-failed"
+        onRetrySignOut={() => {}}
+        canClearDesk={false}
+        onClearDesk={() => {}}
+      />,
+    );
+    expect(failedHtml).toContain('Browser data cleared; sign-out failed — close this browser or');
+    expect(failedHtml).toContain('inline-retry');
+    expect(failedHtml).toContain('Retry sign-out');
+
+    const okHtml = renderToStaticMarkup(
+      <AppHeader
+        landing={false}
+        view="desk"
+        setView={() => {}}
+        lessonsCount={1}
+        receiptsCount={2}
+        device="available"
+        download={null}
+        onTurnOnDevice={() => {}}
+        online
+        configured
+        install={null}
+        deskCleared="ok"
+        onRetrySignOut={() => {}}
+        canClearDesk
+        onClearDesk={() => {}}
+      />,
+    );
+    expect(okHtml).toContain('Desk cleared from this browser');
+    expect(okHtml).toContain('Clear desk');
+  });
+
+  it('shows the honest Exit gate label and calm unanchored phrase caution inside ReviewCard', () => {
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        violations={[]}
+        nothingWithheld={false}
+        partOfNote={false}
+        guardWhere="ON_DEVICE"
+        guardGaps={{ unread: [], dropped: 2, partial: 0 }}
+        notePartsCount={1}
+        replay={false}
+        taskLabel="Class lesson"
+        outgoing="[Student 1] reads well."
+        isLesson
+        activeNeed={null}
+        onHoverNeed={() => {}}
+        notSentCount={0}
+      />,
+    );
+    expect(html).toContain('Exit gate: 0 known names/IDs · Review required');
+    expect(html).toContain('unanchored phrases (often paraphrases rather than exact words in your note)');
+    expect(html).not.toContain('so they were not withheld');
   });
 });

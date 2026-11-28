@@ -1,22 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Constraint, ConstraintKind, DraftItem, Entity, ItemCheck, Kind, LabelWhere, Receipt, TaskId, Where } from './core/types';
 import { SAMPLE_CLASS_LIST, SAMPLE_LESSON, SAMPLE_NOTE, TASKS } from './core/samples';
-import {
-  addByTeacher,
-  applyLocks,
-  bracketDraft,
-  buildVault,
-  CAPITALISED,
-  deterministicCandidates,
-  insidePrivate,
-  possibleNameCandidates,
-  RESERVED,
-  restore,
-  segment,
-  TOKEN_RE,
-} from './core/vault';
+import { addByTeacher, applyLocks, bracketDraft, buildVault, deterministicCandidates, insidePrivate, possibleNameCandidates, RESERVED, restore, TOKEN_RE } from './core/vault';
 import { checkOutgoing, checkReply, safeTitle, type Violation } from './core/gate';
-import { LANGUAGES, languageOf, NOT_CHECKED_BY_RULE, NOT_ENGLISH, withLanguage } from './core/lesson';
+import { HINDI_RULE_ONLY, languageOf, NOT_ENGLISH, ruleSupportedLanguage, withLanguage } from './core/lesson';
 import { loadReceipts, makeReceipt, plainTitle, storeReceipts } from './core/receipts';
 import { approvalKey } from './core/policy';
 import {
@@ -38,31 +25,27 @@ import {
   setTriggers,
   unconfirmConstraint,
 } from './core/constraints';
-import { Caught, ConstraintsPanel } from './ui/Constraints';
-import { Hero, PROMISE } from './ui/Hero';
-import { DevicePill, How, Inspect, Receipts, WHERE_RAN, type Records } from './ui/pages';
-import { draftFailure, resultOrder, summaryLine } from './ui/say';
+import { ConstraintsPanel } from './ui/Constraints';
+import { Hero } from './ui/Hero';
+import { How, Inspect, Receipts, WHERE_RAN, type Records } from './ui/pages';
+import { draftFailure, resultOrder } from './ui/say';
 import { keptAfterRecheck, modelSaid, recheckItems, rewriteStep, stepIndexOf, stepToRewrite } from './core/recheck';
-import { canFit, FIT_CHILD_FAILED, FIT_FAILED, FIT_LABEL, fitForChild, fitInputFor, fitLessonForChild, fitStep } from './ai/fit';
+import { canFit, FIT_CHILD_FAILED, FIT_FAILED, fitForChild, fitInputFor, fitLessonForChild, fitStep } from './ai/fit';
 import { useInstall, useUpdate } from './ui/pwa';
-import { checkNeed, needIsTyped, needLine, notSentLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
-import { lessonNeedIsTyped, lessonNeedLine, askAgain, entryLine, lessonNeeds, needLabel, needOutcomes, needsAccount, planWithNeeds, proposeLearning, secondAsk, splitVariations, variationLine, withSecondReading, type LessonNeed, type NeedsReading, type Variation } from './core/lessonNeeds';
-import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_FIT_LABEL, RECORDED_SOURCE, replayBanner, replayNext, replayPrev, sourceOf, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
+import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
+import { askAgain, entryLine, lessonNeedIsTyped, lessonNeedLine, lessonNeeds, needLabel, needOutcomes, planWithNeeds, proposeLearning, secondAsk, splitVariations, variationLine, withSecondReading, type LessonNeed, type NeedsReading, type Variation } from './core/lessonNeeds';
+import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_SOURCE, replayBanner, replayNext, replayPrev, sourceOf, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyAfterRewrite, familyFor } from './core/family';
-import { REPEATS_NOTE, repeatsForChild, repeatsPrivate } from './core/repeats';
+import { repeatsForChild, repeatsPrivate } from './core/repeats';
 import {
   acceptedAdjustments,
   adjustmentHits,
   adjustmentProblem,
   classPlanText,
-  FIELD_MAX,
-  LAST_TIME_MAX,
   lessonCounts,
   lessonHits,
-  lessonMinutes,
   lessonReady,
   loadLessons,
-  needsFitting,
   nextLessonFields,
   NO_LESSON,
   recordedAdjustments,
@@ -76,8 +59,8 @@ import {
   type LessonHit,
   type SavedLesson,
 } from './core/lesson';
-import { ChildSections, ForTheseChildren, Lessons, type PointActions } from './ui/Lesson';
-import { acceptedPoints, childFitSaid, childNotes, dedupePairVariations, fitSummary, inNoteOrder, missingPoints, namesForNeed, pairPoints, placeVariations, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
+import { Lessons, type PointActions } from './ui/Lesson';
+import { acceptedPoints, childFitSaid, childNotes, dedupePairVariations, inNoteOrder, missingPoints, namesForNeed, pairPoints, placeVariations, pointCounts, pointHits, pointProblem, recheckPoints, recordedPoints, stageLines, type Point } from './core/points';
 import { clearUserSession, configured, DEFAULT_POLICY, ensureUser, loadPolicy, loadReceiptCopies, saveReceiptCopy, watchUser, type Policy } from './ai/firebase';
 import { deviceStatus, imageOnDeviceStatus, prepareDevice, type DeviceStatus } from './ai/routes';
 import { constraintsFromCombined, guardCombinedOnDevice, guardOutcome, paragraphs, unreadText } from './ai/guard';
@@ -85,11 +68,8 @@ import { extractScannedClassList, prepareNotebookImage, transcribeNotebookOnDevi
 import { mergeLearningIntoConstraints, mergeProposals, type ConstraintReport } from './ai/constraints';
 import { classView, currentTicketKind, withoutClass, withTicketNeeds } from './core/ticket';
 import { materialsReply, materialsText, unnumbered, type Materials } from './core/materials';
-import { MODEL_HOST, recordNetwork, STEPS_MAX, type StepId, type StepMark, type StepWhere } from './core/network';
+import { MODEL_HOST, STEPS_MAX, type StepId, type StepMark, type StepWhere } from './core/network';
 import { stageName } from './core/lesson';
-import { MaterialsCard, MaterialsPages, MaterialsWire } from './ui/Materials';
-import { CopyPreview } from './ui/PrintPreview';
-import { ReadAloud } from './ui/ReadAloud';
 import { NOTE_MAX } from './core/text';
 import {
   DRAFT_FORMAT,
@@ -103,87 +83,42 @@ import {
   type MaterialsResult,
   type DraftResult,
 } from './ai/draft';
-import { anythingToCheck, checkDidNotRun, checkOnDevice, detailsFor, keepNoConflict, noConflictFound, NOTHING_WITHHELD, startsKept } from './ai/check';
-import { afterBellActivities, combineChecks, ruleCheckItem, verdictLabel } from './core/conflicts';
-import { CloudText, DeviceText, KIND_LABEL, RouteChip, Spinner, Stepper } from './ui/parts';
-
-type Stage = 'write' | 'guarding' | 'review' | 'drafting' | 'checking' | 'result' | 'signed';
-type View = 'desk' | 'lessons' | 'receipts' | 'how';
-
-// The five steps the teacher sees: Write, What leaves, Draft, What your device caught, Sign off.
-const STEP: Record<Stage, number> = { write: 0, guarding: 1, review: 1, drafting: 2, checking: 3, result: 3, signed: 5 };
-
-const read = <T,>(storage: () => Storage, key: string, fallback: T): T => {
-  try {
-    const raw = storage().getItem(key);
-    return raw === null ? fallback : (JSON.parse(raw) as T);
-  } catch {
-    return fallback;
-  }
-};
-
-/** Write a value, or remove the key when the value is empty. Storage can be switched off: that is not an error. */
-const write = (storage: () => Storage, key: string, value: unknown, empty: boolean) => {
-  try {
-    if (empty) storage().removeItem(key);
-    else storage().setItem(key, JSON.stringify(value));
-  } catch {
-    // Nothing to do: the value stays in memory for this page only.
-  }
-};
-
-// The raw note and the class list are kept for this tab only, and are gone when it closes.
-// Settings and receipts (which hold only approved text) stay in local storage.
-const session = () => sessionStorage;
-const local = () => localStorage;
-const NOTE_KEY = 'staffroom.note';
-const CLASS_LIST_KEY = 'staffroom.classList';
-// The constraints live with the note: in this tab only, and only for the note they were made for.
-const CONSTRAINTS_KEY = 'staffroom.constraints';
-// The lines about the lesson. Nothing in them is private, and they are kept with the note.
-const LESSON_KEY = 'staffroom.lesson';
-// "Keep this class on this device": the note, the class list, the constraints and the lesson lines, in local storage.
-const KEEP_CLASS_KEY = 'staffroom.keepClass';
-const CLASS_KEY = 'staffroom.class.v1';
-interface KeptClass {
-  note: string;
-  classList: string[];
-  constraints: Constraint[];
-  constraintsNote: string;
-  lesson: LessonFields;
-  /** Proposals the teacher removed, by kind and words, so the next guard run does not propose them again. */
-  removed?: string[];
-}
-/** What the tab keeps comes first; with none, the class kept on this device, when the teacher chose to keep one. */
-const keptClass = (): KeptClass | null => (read<boolean>(local, KEEP_CLASS_KEY, false) === true ? read<KeptClass | null>(local, CLASS_KEY, null) : null);
-
-/** The browser's own record of the requests this page makes, kept from the moment the app loads. Inspect reads it. */
-const network = typeof window !== 'undefined' ? recordNetwork() : null;
-
-// Earlier versions kept the raw note and the class list in local storage. Remove what they left.
-try {
-  localStorage.removeItem(NOTE_KEY);
-  localStorage.removeItem(CLASS_LIST_KEY);
-} catch {
-  // Storage is switched off, so there is nothing to remove.
-}
-
-/** Where the on-device guard fell short: pieces it did not read, things it reported that were lost or only partly found. */
-interface Gaps {
-  unread: number[];
-  dropped: number;
-  partial: number;
-}
-
-const NO_GAPS: Gaps = { unread: [], dropped: 0, partial: 0 };
-
-/** The longest piece of the note that can be marked in one go. */
-const MAX_SELECTION = 600;
-
-const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
-/** Thrown inside the check when this browser has no on-device model. It is caught there and is no error to the teacher. */
-const NO_MODEL = new Error('no on-device model was available.');
+import { anythingToCheck, checkDidNotRun, checkOnDevice, keepNoConflict, noConflictFound, NOTHING_WITHHELD, startsKept } from './ai/check';
+import { afterBellActivities, combineChecks, ruleCheckItem } from './core/conflicts';
+import { RouteChip, Stepper } from './ui/parts';
+import { AppHeader } from './ui/AppHeader';
+import { ReviewCard } from './ui/ReviewCard';
+import { PrintSheet } from './ui/PrintSheet';
+import { CalmNotice } from './ui/CalmNotice';
+import { ForgetQuestion, NoteLinks, NoteView, VaultPanel } from './ui/VaultPanel';
+import { ResultItem } from './ui/ResultItem';
+import { NoteComposeCard, NoteReviewCard, TaskComposeCard } from './ui/ComposeCards';
+import { CloudOutcomeCards } from './ui/CloudOutcomeCards';
+import { ResultPanel } from './ui/ResultPanel';
+import { ActionBar } from './ui/ActionBar';
+import {
+  CLASS_KEY,
+  CLASS_LIST_KEY,
+  CONSTRAINTS_KEY,
+  KEEP_CLASS_KEY,
+  keptClass,
+  LESSON_KEY,
+  local,
+  MAX_SELECTION,
+  message,
+  network,
+  NO_GAPS,
+  NO_MODEL,
+  NOTE_KEY,
+  read,
+  session,
+  STEP,
+  write,
+  type Gaps,
+  type KeptClass,
+  type Stage,
+  type View,
+} from './app/storage';
 
 export function App() {
   const [view, setView] = useState<View>('desk');
@@ -242,6 +177,7 @@ export function App() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [deskCleared, setDeskCleared] = useState<'ok' | 'signout-failed' | null>(null);
   const deskClearedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const signOutBlockedRef = useRef(false);
   const recordsGenRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [nanoDiff, setNanoDiff] = useState<{ rulesOnly: number; nanoAdded: number } | null>(null);
@@ -459,7 +395,7 @@ export function App() {
     write(local, CLASS_KEY, { note, classList, constraints, constraintsNote: constraintsNote.current, lesson, removed } satisfies KeptClass, !keepClass || note === '');
   }, [keepClass, note, classList, constraints, lesson, removed, replay]);
   useEffect(() => {
-    if (!replay) storeLessons(lessons, keepClass);
+    if (!replay && !storeLessons(lessons, keepClass) && lessons.length > 0) setStoreFailed(true);
   }, [lessons, keepClass, replay]);
   useEffect(() => {
     if (!replay && !storeReceipts(receipts, keepClass) && receipts.length > 0) setStoreFailed(true);
@@ -470,21 +406,26 @@ export function App() {
 
   /** Read the records kept in the teacher's account. They hold no text, so there is none to show. */
   const refreshRecords = useCallback(async (user: string) => {
+    if (signOutBlockedRef.current) {
+      recordsGenRef.current += 1;
+      setRecords({ state: 'idle' });
+      return;
+    }
     const gen = ++recordsGenRef.current;
     setRecords((r) => (r.state === 'ready' ? r : { state: 'loading' }));
     try {
       const { records: list, unreadable } = await loadReceiptCopies(user);
-      if (recordsGenRef.current !== gen) return;
+      if (recordsGenRef.current !== gen || signOutBlockedRef.current) return;
       setRecords({ state: 'ready', list, unreadable });
     } catch {
-      if (recordsGenRef.current !== gen) return;
+      if (recordsGenRef.current !== gen || signOutBlockedRef.current) return;
       setRecords({ state: 'failed' });
     }
   }, []);
 
   useEffect(() => {
     if (view !== 'receipts') return;
-    if (uid) void refreshRecords(uid);
+    if (uid && !signOutBlockedRef.current) void refreshRecords(uid);
     else {
       recordsGenRef.current += 1;
       setRecords({ state: 'idle' });
@@ -965,55 +906,59 @@ export function App() {
     let byModelSaid: (ItemCheck | undefined)[] | null = null;
     // What the check reads: the vault, and what the teacher typed as a constraint that is not in the note.
     const facts = withConstraintFacts(entities, constraints);
-    if (language) {
-      // Not in English: no rule read it, and no model is asked. Every item says so.
+    if (language && !ruleSupportedLanguage(language)) {
+      // Unsupported language: no rule read it, and no model is asked. Every item says so.
       itemChecks = items.map(() => ({ verdict: 'not checked', reason: NOT_ENGLISH }));
     } else if (!anythingToCheck(items, facts)) {
       // No private detail was withheld and no constraint confirmed: there is nothing to check, so no model is asked.
       itemChecks = items.map(() => NOTHING_WITHHELD);
       where = 'SKIPPED';
     } else {
-      // Layer A: each step against each confirmed constraint, by rule. No model, so it runs in every browser.
+      // Layer A: each step against each confirmed constraint, by rule. Runs in every browser for English and Hindi drafts.
       // Every confirmed constraint is compared, whether or not the cloud was told its need: the cloud can ignore a need.
       const told = new Map(approved.needs.map((n) => [n.id, n.line]));
       // A stage of a lesson is for the whole class, whoever it names: it is compared with every confirmed constraint.
       const byRule = items.map((item) => ruleCheckItem(item, constraints, entities, tokens, note, told, task === 'lesson'));
       const ruleRan = byRule.some((r) => r.compared > 0);
       const unchecked = (reason: string): ItemCheck => ({ verdict: 'not checked', reason });
-      // Layer B: the on-device model, against every withheld private detail. Its "no" is a doubt, never a conflict.
+      // Layer B: the on-device model, against every withheld private detail (English only). Its "no" is a doubt, never a conflict.
       let byModel: ItemCheck[] | null = null;
-      let why = 'The on-device check did not run. Read this item against the private details yourself.';
-      try {
-        // No on-device model here: the rules have spoken, and the page says so once, calmly. This is not an error.
-        const present = (await deviceStatus()) === 'available';
-        if (gone()) return;
-        if (!present) throw NO_MODEL;
-        const checked = await timed('check', () =>
-          checkOnDevice(note, items, facts, tokens, (done, total) => {
-            if (!gone()) setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`);
-          }),
-        );
-        if (gone()) return;
-        requests = { asked: checked.asked, failed: checked.failed };
-        if (checkDidNotRun(checked)) {
-          // Every request failed, so the model checked nothing. It is recorded as a check that did not run.
-          setError(
-            `The on-device check could not run: all ${checked.asked} of its requests to the on-device model failed. ${
-              ruleRan ? 'The items below were checked by rule only.' : 'The items below are not checked.'
-            }`,
+      let why = language
+        ? HINDI_RULE_ONLY
+        : 'The on-device check did not run. Read this item against the private details yourself.';
+      if (!language) {
+        try {
+          // No on-device model here: the rules have spoken, and the page says so once, calmly. This is not an error.
+          const present = (await deviceStatus()) === 'available';
+          if (gone()) return;
+          if (!present) throw NO_MODEL;
+          const checked = await timed('check', () =>
+            checkOnDevice(note, items, facts, tokens, (done, total) => {
+              if (!gone()) setProgress(`The on-device model is checking item ${Math.min(done + 1, total)} of ${total}`);
+            }),
           );
-          why = 'The on-device model did not answer. Read this item against the private details yourself.';
-        } else {
-          byModel = checked.checks;
-          byModelSaid = checked.checks;
-          where = 'ON_DEVICE';
+          if (gone()) return;
+          requests = { asked: checked.asked, failed: checked.failed };
+          if (checkDidNotRun(checked)) {
+            // Every request failed, so the model checked nothing. It is recorded as a check that did not run.
+            setError(
+              `The on-device check could not run: all ${checked.asked} of its requests to the on-device model failed. ${
+                ruleRan ? 'The items below were checked by rule only.' : 'The items below are not checked.'
+              }`,
+            );
+            why = 'The on-device model did not answer. Read this item against the private details yourself.';
+          } else {
+            byModel = checked.checks;
+            byModelSaid = checked.checks;
+            where = 'ON_DEVICE';
+          }
+        } catch (e) {
+          if (gone()) return;
+          // Say what happened. The draft stays; what the rules found stands, and the rest is marked unchecked.
+          if (e !== NO_MODEL) setError(
+            `The on-device check stopped: ${message(e)} ${ruleRan ? 'The items below were checked by rule only.' : 'The items below are not checked.'}`,
+          );
         }
-      } catch (e) {
-        if (gone()) return;
-        // Say what happened. The draft stays; what the rules found stands, and the rest is marked unchecked.
-        if (e !== NO_MODEL) setError(
-          `The on-device check stopped: ${message(e)} ${ruleRan ? 'The items below were checked by rule only.' : 'The items below are not checked.'}`,
-        );
       }
       if (!byModel && ruleRan) where = 'RULES_ONLY';
       itemChecks = items.map((_, i) => combineChecks(byRule[i], byModel?.[i], unchecked(why)));
@@ -1041,7 +986,7 @@ export function App() {
     setVariationsDropped(split.dropped);
     setNeedsReply(approved.lessonNeeds ? { section: split.section, none: split.none, missing: split.missing, second } : null);
     const draftOnDevice = drafted.where === 'ON_DEVICE';
-    const placed = placeVariations(split.variations, toldNeeds, entities, items, language ? [] : constraints, note, draftOnDevice);
+    const placed = placeVariations(split.variations, toldNeeds, entities, items, language && !ruleSupportedLanguage(language) ? [] : constraints, note, draftOnDevice);
     const paired = approved.lessonNeeds ? pairPoints(constraints, entities, items, note) : [];
     const missing = dedupePairVariations(missingPoints(split.missing, toldNeeds, entities, constraints, note, draftOnDevice), paired, toldNeeds, constraints);
     setPoints([
@@ -1142,7 +1087,7 @@ export function App() {
     setStage('signed');
     setSigning(false);
     setCopyState('idle');
-    if (keepCopies && uid) {
+    if (keepCopies && uid && !signOutBlockedRef.current) {
       // Independent of the local store. With no network the write waits, and finishes when the network is back.
       setCopyState('pending');
       // The write can finish long after this run was cleared. Its outcome is shown only while this run is on screen.
@@ -1188,7 +1133,10 @@ export function App() {
     const items = came.map((item, i) => (i in nextEdits ? { ...item, text: nextEdits[i] } : item));
     const live = sent.constraints.map((c) => (nextOff.includes(c.id) ? { ...c, confirmed: false } : c));
     const told = new Map(sent.needs.filter((n) => !nextOff.includes(n.id)).map((n) => [n.id, n.line]));
-    const after = sent.language ? checks : recheckItems(items, live, sent.entities, sent.tokens, note, told, modelChecks, items.map((_, i) => i in nextEdits), task === 'lesson');
+    const after =
+      sent.language && !ruleSupportedLanguage(sent.language)
+        ? checks
+        : recheckItems(items, live, sent.entities, sent.tokens, note, told, modelChecks, items.map((_, i) => i in nextEdits), task === 'lesson');
     if (task !== 'lesson') setKept((k) => keptAfterRecheck(k, checks, after));
     setChecks(after);
     setEdits(nextEdits);
@@ -1284,7 +1232,7 @@ export function App() {
 
   /** Every step of the lesson that does not suit a child, by rule, against the constraints as they stand now. */
   const hits = useMemo<LessonHit[]>(() => {
-    if (task !== 'lesson' || !draft || !sent || sent.language) return [];
+    if (task !== 'lesson' || !draft || !sent || (sent.language && !ruleSupportedLanguage(sent.language))) return [];
     const told = new Map(sent.needs.filter((n) => !offIds.includes(n.id)).map((n) => [n.id, n.line]));
     return lessonHits(draft.items, liveConstraints, sent.entities, sent.tokens, note, told);
   }, [task, draft, sent, liveConstraints, offIds, note]);
@@ -1360,8 +1308,10 @@ export function App() {
       setChildSaid(({ [n.id]: _old, ...rest }) => rest);
       fitBusy.current = true;
       try {
+        const lessonHeader =
+          [lesson.klass.trim(), lesson.subject.trim(), lesson.topic.trim()].filter(Boolean).join(' — ') || restore(now.draft.title, sent.entities, sent.tokens);
         const got = await timed('fit', () =>
-          fitLessonForChild({ childName: n.child, childNote: n.text, stages: stageList }, (p) =>
+          fitLessonForChild({ childName: n.child, childNote: n.text, stages: stageList, lessonHeader, lessonSubject: lesson.subject.trim() }, (p) =>
             pointHits(p.text, n.id, p.itemIndex, items, liveRef.current.liveConstraints, note).map((h) => h.matched),
           ),
         );
@@ -1514,7 +1464,7 @@ export function App() {
 
   const changeLessons = (next: SavedLesson[]) => {
     setLessons(next);
-    storeLessons(next, keepClass);
+    if (!storeLessons(next, keepClass) && next.length > 0) setStoreFailed(true);
   };
 
   /** Open the write screen for the lesson after this one: same class, same subject, and what was done last time. */
@@ -1780,9 +1730,31 @@ export function App() {
       // Storage is switched off.
     }
     const signedOut = await clearUserSession();
-    if (deskClearedTimer.current) clearTimeout(deskClearedTimer.current);
+    signOutBlockedRef.current = !signedOut;
+    if (deskClearedTimer.current) {
+      clearTimeout(deskClearedTimer.current);
+      deskClearedTimer.current = null;
+    }
     setDeskCleared(signedOut ? 'ok' : 'signout-failed');
-    deskClearedTimer.current = setTimeout(() => setDeskCleared(null), signedOut ? 4000 : 8000);
+    if (signedOut) {
+      deskClearedTimer.current = setTimeout(() => setDeskCleared(null), 4000);
+    }
+  };
+
+  /** Retry ending the anonymous Auth session after Clear desk failed to sign out cleanly. */
+  const retrySignOut = async () => {
+    const signedOut = await clearUserSession();
+    signOutBlockedRef.current = !signedOut;
+    if (deskClearedTimer.current) {
+      clearTimeout(deskClearedTimer.current);
+      deskClearedTimer.current = null;
+    }
+    setDeskCleared(signedOut ? 'ok' : 'signout-failed');
+    if (signedOut) {
+      recordsGenRef.current += 1;
+      setRecords({ state: 'idle' });
+      deskClearedTimer.current = setTimeout(() => setDeskCleared(null), 4000);
+    }
   };
 
   // ---------------------------------------------------------------- the recorded run
@@ -2084,573 +2056,137 @@ export function App() {
   const canPrint = stage === 'signed' && !replay && !replyBlocked && keptCount > 0 && (task !== 'parents' || printable.length > 0);
 
   /** One row of the vault. `nested` rows are private details that lie inside the longer one above them. */
-  const vaultRow = (e: Entity, nested: boolean) => {
-    const reserved = e.category === RESERVED;
-    const locked = reserved || policy.lockedKinds.includes(e.kind);
-    const guess = e.source === 'rule' && e.category === CAPITALISED;
-    const about = entities.find((s) => s.id === e.about);
-    const parts = nested ? [] : entities.filter((x) => inside.get(x.id) === e.id);
-    const partsHeld = parts.filter((x) => x.withheld).length;
-    return (
-      <li key={e.id} className={e.withheld ? '' : 'off'}>
-        <span className={`dot k-${e.kind}`} />
-        <div className="what">
-          <strong>{e.surfaces[0]}</strong>
-          <small>
-            {reserved ? 'Looks like a stand-in' : KIND_LABEL[e.kind]}
-            {e.category && !guess && !reserved ? `, ${e.category}` : ''}
-            {about && !reserved ? `, about ${about.surfaces[0]}` : ''} · found by {guess ? 'rule: capitalised word' : e.source}
-            {e.source === 'on-device model' && <span className="source-badge nano inline">Found by Gemini Nano</span>}
-            {nested ? ' · inside the sentence above' : ''}
-          </small>
-          {!e.withheld && partsHeld > 0 && (
-            <small className="parts-held">
-              {partsHeld} {partsHeld === 1 ? 'part' : 'parts'} inside {partsHeld === 1 ? 'stays' : 'stay'} withheld.
-            </small>
-          )}
-        </div>
-        <code className="token">{e.withheld ? e.token : 'released'}</code>
-        <label
-          className="switch"
-          title={
-            reserved
-              ? 'Text that looks like one of the stand-ins is always withheld, so it cannot be mistaken for one'
-              : locked
-                ? 'A setting the school publishes: the app keeps this kind withheld'
-                : ''
-          }
-        >
-          <input
-            type="checkbox"
-            checked={e.withheld}
-            disabled={locked || stage !== 'review' || Boolean(replay)}
-            onChange={() => toggle(e)}
-            aria-label={`Withhold ${e.surfaces[0]}`}
-          />
-          <span />
-          {locked && <em>locked</em>}
-        </label>
-        {releaseAsk === e.id && e.withheld && !locked && stage === 'review' && (
-          <div className="confirm release-ask" role="group" aria-label={`Release ${e.surfaces[0]}`}>
-            <p>
-              Your school's policy is not in force: the app is using its built-in defaults, so it cannot tell whether your school
-              allows this to be sent. Release “{e.surfaces[0].length > 60 ? `${e.surfaces[0].slice(0, 60)}…` : e.surfaces[0]}” anyway?
-            </p>
-            <div className="actions">
-              <button
-                className="secondary small"
-                onClick={() => {
-                  setReleaseAsk(null);
-                  flip(e.id);
-                }}
-              >
-                Release it
-              </button>
-              <button className="link" onClick={() => setReleaseAsk(null)}>
-                Keep it withheld
-              </button>
-            </div>
-          </div>
-        )}
-        {unconfirmAsk === e.id && e.withheld && stage === 'review' && (
-          <div className="confirm release-ask" role="group" aria-label={`Release ${e.surfaces[0]}`}>
-            <p>You confirmed a constraint in these words, so they stay withheld. Unconfirm it first; then you can release them.</p>
-            <div className="actions">
-              <button
-                className="secondary small"
-                onClick={() => {
-                  setUnconfirmAsk(null);
-                  setConstraints((list) => list.map((c) => (c.detailId === e.id ? { ...c, confirmed: false, share: false } : c)));
-                }}
-              >
-                Unconfirm the constraint
-              </button>
-              <button className="link" onClick={() => setUnconfirmAsk(null)}>
-                Keep it withheld
-              </button>
-            </div>
-          </div>
-        )}
-        {parts.length > 0 && (
-          <details className="inside">
-            <summary>
-              {parts.length} {parts.length === 1 ? 'part' : 'parts'} inside the sentence above
-            </summary>
-            <ul className="vault">{parts.map((x) => vaultRow(x, true))}</ul>
-          </details>
-        )}
-      </li>
-    );
-  };
-
-  const vaultBody = (
-    <>
-      {/* The parts the model could not read are quoted here, on the device side: the words are from the raw note. */}
-      {guardWhere === 'ON_DEVICE' &&
-        guardGaps.unread.map((i) => (
-          <p className="caution" key={i}>
-            The on-device model could not read part {i + 1} of your note
-            {noteParts[i] ? ` (it begins “${noteParts[i].slice(0, 40).trim()}…”)` : ''}. In that part, capitalised words were held
-            back as possible names, by rule. Private details in it were not looked for: check it yourself before you approve.
-          </p>
-        ))}
-      {entities.length === 0 ? (
-        <p className="empty">Nothing was found to withhold.</p>
-      ) : (
-        <ul className="vault">{entities.filter((e) => !inside.has(e.id)).map((e) => vaultRow(e, false))}</ul>
-      )}
-    </>
-  );
-
-  /** The vault, folded: the constraints are the centre of the review, and the note shows what is held by colour. */
   const vaultFold = (
-    <details
-      className="card fold"
-      // Open when the teacher opened it, and whenever it lists parts of the note the model could not read.
-      open={vaultOpen || (guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0)}
-      onToggle={(e) => setVaultOpen(e.currentTarget.open)}
-    >
-      <summary>
-        {withheld.length} {withheld.length === 1 ? 'name or detail' : 'names and details'} withheld
-      </summary>
-      {vaultBody}
-    </details>
+    <VaultPanel
+      entities={entities}
+      withheld={withheld}
+      inside={inside}
+      policy={policy}
+      stage={stage}
+      replay={Boolean(replay)}
+      guardWhere={guardWhere}
+      guardGaps={guardGaps}
+      noteParts={noteParts}
+      vaultOpen={vaultOpen}
+      setVaultOpen={setVaultOpen}
+      toggle={toggle}
+      releaseAsk={releaseAsk}
+      setReleaseAsk={setReleaseAsk}
+      flip={flip}
+      unconfirmAsk={unconfirmAsk}
+      setUnconfirmAsk={setUnconfirmAsk}
+      setConstraints={setConstraints}
+    />
   );
 
-  /** The note as written, with what is held marked by kind. At the review its text can be selected to withhold more. */
-  const noteView = (
-    <div className="note-view" ref={stage === 'review' ? noteRef : undefined} onMouseUp={onSelectText} onKeyUp={onSelectText}>
-      {segment(note, entities).map((s, i) =>
-        s.entity ? (
-          <mark
-            key={i}
-            className={`k-${s.entity.kind} ${s.entity.withheld ? 'held' : 'released'}`}
-            title={s.entity.withheld ? `Withheld. The cloud sees ${s.entity.token}` : 'You released this. The cloud will see it.'}
-          >
-            {s.text}
-          </mark>
-        ) : (
-          <span key={i}>{s.text}</span>
-        ),
-      )}
-    </div>
-  );
+  const noteView = <NoteView note={note} entities={entities} stage={stage} noteRef={noteRef} onSelectText={onSelectText} />;
 
   const noteLinks = (
-    <span className="head-links">
-      {replay ? null : editing ? (
-        <button className="link" onClick={loadSample}>
-          Fill in the invented class
-        </button>
-      ) : (
-        !busy &&
-        stage !== 'signed' && (
-          <button className="link" onClick={startOver}>
-            Edit note
-          </button>
-        )
-      )}
-      {!busy && !replay && (note !== '' || classList.length > 0) && (
-        <button
-          className="link forget"
-          onClick={() => (receipts.length > 0 ? setForgetAsk(true) : forgetNote(false))}
-          title="Clears the note, the class list, the vault and the results from this page and from this browser."
-        >
-          Forget this class
-        </button>
-      )}
-    </span>
+    <NoteLinks
+      replay={Boolean(replay)}
+      editing={editing}
+      busy={busy}
+      stage={stage}
+      note={note}
+      classListCount={classList.length}
+      receiptsCount={receipts.length}
+      loadSample={loadSample}
+      startOver={startOver}
+      setForgetAsk={setForgetAsk}
+      forgetNote={forgetNote}
+    />
   );
 
-  const forgetQuestion = forgetAsk && (
-    <div className="confirm" role="group" aria-label="Forget this note">
-      <p>
-        Your note, class list, vault and results will be cleared. This browser also keeps {receipts.length}{' '}
-        {receipts.length === 1 ? 'receipt' : 'receipts'}, and a receipt holds the text you approved. Delete{' '}
-        {receipts.length === 1 ? 'it' : 'them'} too?
-      </p>
-      <div className="actions">
-        <button className="secondary small" disabled={busy} onClick={() => forgetNote(true)}>
-          Forget the note and delete receipts
-        </button>
-        <button className="secondary small" disabled={busy} onClick={() => forgetNote(false)}>
-          Forget the note, keep receipts
-        </button>
-        <button className="link" onClick={() => setForgetAsk(false)}>
-          Cancel
-        </button>
-      </div>
-      {busy && <p className="hint">Wait for the step that is running to finish, then choose.</p>}
-    </div>
+  const forgetQuestion = (
+    <ForgetQuestion forgetAsk={forgetAsk} receiptsCount={receipts.length} busy={busy} forgetNote={forgetNote} setForgetAsk={setForgetAsk} />
   );
 
-  /** One calm line for a run without the on-device model. The long form is one click away. */
-  const calm =
-    (stage === 'review' || stage === 'guarding') && guardWhere === 'RULES_ONLY' ? (
-      <div className="calm" role="status">
-        <p>
-          <b>Rules only.</b>{' '}
-          {guardGaps.unread.length > 0
-            ? `The on-device model was asked and could not read any of the ${guardGaps.unread.length} ${guardGaps.unread.length === 1 ? 'part' : 'parts'} of your note`
-            : 'No on-device model ran here'}
-          , so no model has read your note. Anything you have not marked yourself is sent as written.
-        </p>
-        <details>
-          <summary>Details</summary>
-          <p>
-            Only your class list, the pattern rules, a short list of sensitive words and a rule for capitalised words were applied. That
-            rule holds back, as a possible name, a word that begins with a capital letter and is not an ordinary sentence opener, a day or
-            a month. It cannot tell a name from any other capitalised word, and it misses a name written without a capital. Private
-            details beyond the listed words were not looked for: select them in your note. No on-device model looked for constraints
-            either: these were found by rule, so add any that are missing.
-          </p>
-        </details>
-        {watch && (
-          <button className="link" onClick={watch}>
-            Watch a recorded run
-          </button>
-        )}
-      </div>
-    ) : (stage === 'result' || stage === 'signed') && checkWhere === 'RULES_ONLY' ? (
-      <div className="calm" role="status">
-        <p>
-          <b>Checked by rule only.</b> No on-device model ran here, so each step was compared with the constraints you confirmed and
-          nothing else.
-        </p>
-        <details>
-          <summary>Details</summary>
-          <p>
-            Read the items against your other private details yourself.
-            {isLesson
-              ? ' What the cloud wrote for a need is placed beside each child on this device by plain code, and read by the same rules. Where the on-device model is present, it can also offer more ideas for a child from your note, when you ask.'
-              : ''}
-          </p>
-        </details>
-        {privateHeld.length > 0 && (
-          <details>
-            <summary>
-              {privateHeld.length} private {privateHeld.length === 1 ? 'detail' : 'details'} no model compared the draft with
-            </summary>
-            <ul className="quotes">
-              {privateHeld.map((e) => (
-                <li key={e.id}>“{e.surfaces[0]}”</li>
-              ))}
-            </ul>
-          </details>
-        )}
-        {watch && (
-          <button className="link" onClick={watch}>
-            Watch a recorded run
-          </button>
-        )}
-      </div>
-    ) : null;
+  const calm = (
+    <CalmNotice
+      stage={stage}
+      guardWhere={guardWhere}
+      checkWhere={checkWhere}
+      guardGaps={guardGaps}
+      isLesson={isLesson}
+      privateHeld={privateHeld}
+      watch={watch}
+    />
+  );
 
   /** One item of the draft: the words, what the device found, and the teacher's choice. */
   const resultItem = (i: number) => {
     if (!draft) return null;
     const item = draft.items[i];
-    const c = checks[i];
-    const conflict = c?.verdict === 'conflict';
-    const doubt = c?.verdict === 'unsure';
-    const edited = i in edits;
-    const byRuleOnly = c?.verdict === 'not checked' && (c.rules ?? 0) > 0;
-    const facts = detailsFor(item, withConstraintFacts(entities, sent?.constraints ?? []));
-    const factCount = facts.reduce((n, f) => n + f.details.length, 0);
-    // A message home is for one family: the copy button is offered only when the app can tell which.
-    const family = task === 'parents' ? familyOf(item, i) : null;
-    const live = stage === 'result' && !replay;
-    const whole = live && (conflict || doubt) && sent ? stepToRewrite(item, sent.entities, sent.tokens, c?.matched).whole : true;
-    const box = rewriting[i];
-    /** For a lesson: the children this stage does not suit, by rule. */
-    const itemHits = isLesson ? hits.filter((h) => h.itemIndex === i) : [];
-    /** In a replay: what the on-device model suggested for this item in the recorded run. Read-only. */
-    const recordedFit = replay?.fits?.find((f) => f.itemIndex === i);
     return (
-      <li
+      <ResultItem
         key={i}
-        className={['item', kept[i] === null ? 'undecided' : kept[i] ? 'kept' : 'struck', isLesson ? (itemHits.length > 0 ? 'needs-fit' : '') : conflict ? 'is-conflict' : doubt ? 'is-doubt' : '']
-          .join(' ')
-          .trim()}
-      >
-        <h4>
-          <DeviceText text={item.heading} entities={entities} allowed={sent?.tokens} />
-          {edited && <span className="edited-chip">{replay ? 'Rewritten in the recorded run' : 'Rewritten by you'}</span>}
-        </h4>
-        <p className="item-text">
-          <DeviceText text={item.text} entities={entities} allowed={sent?.tokens} mark={conflict || (doubt && c?.constraintId) ? c?.matched : undefined} />
-        </p>
-        {isLesson && variations.some((v) => v.itemIndex === i) && (
-          <ul className="need-lines" aria-label="For the needs you told the cloud">
-            {variations
-              .filter((v) => v.itemIndex === i)
-              .map((v, k) => (
-                <li
-                  key={k}
-                  className={activeNeed === v.need ? 'is-traced' : undefined}
-                  onMouseEnter={() => setActiveNeed(v.need)}
-                  onMouseLeave={() => setActiveNeed(null)}
-                >
-                  <b>For Need {v.need}:</b> {v.text}
-                  {/* Whose need it is: known on this device only. */}
-                  {sent && namesForNeed(v.need, sent.lessonNeeds, notesByChild, sent.entities).map((name) => (
-                    <span className="names" key={name}>
-                      {name}
-                    </span>
-                  ))}
-                </li>
-              ))}
-          </ul>
-        )}
-        {isLesson && itemHits.length > 0 && (
-          <div className="verdict v-fit">
-            <b>{needsFitting(itemHits)}</b>
-            <span>{[...new Set(itemHits.map((h) => h.child))].join(', ')}: see above, under each name.</span>
-          </div>
-        )}
-        {c && conflict && !isLesson && (
-          <div className="verdict v-conflict">
-            <b>{verdictLabel(c)}</b>
-            <span>{c.reason}</span>
-            {c.also && (
-              <span className="also">
-                {rechecked ? 'In the earlier check the on-device model also doubted this: ' : 'The on-device model also doubts this: '}
-                {c.also}
-              </span>
-            )}
-            <Caught check={c} constraint={sent?.constraints.find((x) => x.id === c.constraintId)} />
-          </div>
-        )}
-        {c && doubt && !(isLesson && c.constraintId) && (
-          <div className="verdict v-doubt">
-            <b>{verdictLabel(c)}</b>
-            <span>
-              {c.reason}
-              {rechecked && c.by === 'model' ? ' (From the earlier check.)' : ''}
-            </span>
-            {c.also && <span className="also">The on-device model also doubts this: {c.also}</span>}
-            <Caught check={c} constraint={sent?.constraints.find((x) => x.id === c.constraintId)} />
-          </div>
-        )}
-        {c && !conflict && !doubt && !(isLesson && itemHits.length > 0) && (
-          <p className={`quiet-verdict q-${c.verdict.replace(' ', '-')}${byRuleOnly ? ' q-rule' : ''}`}>
-            <b>{sent?.language ? NOT_CHECKED_BY_RULE : edited ? 'Checked by rule' : byRuleOnly ? 'No conflict found by rule' : verdictLabel(c)}</b>{' '}
-            <span>
-              {sent?.language
-                ? NOT_ENGLISH
-                : edited
-                ? c.reason
-                : byRuleOnly
-                  ? `Compared with ${c.rules} ${c.rules === 1 ? 'constraint' : 'constraints'} you confirmed.`
-                  : c.verdict === 'not checked' && checkWhere === 'RULES_ONLY'
-                    ? 'No constraint you confirmed applies to this item, so no rule compared it.'
-                    : `${c.reason}${rechecked && c.verdict === 'fits' ? ' (From the earlier check.)' : ''}`}
-            </span>
-          </p>
-        )}
-        {/* What the model compared the item with is said once per item, folded, and only when a model did. */}
-        {c && checkWhere === 'ON_DEVICE' && c.verdict !== 'not checked' && !edited && factCount > 0 && (
-          <details className="against">
-            <summary>
-              Checked against {factCount} private {factCount === 1 ? 'detail' : 'details'}, on this device only
-            </summary>
-            <p>{facts.flatMap((f) => f.details.map((d) => `“${d.surfaces[0]}”`)).join(', ')}</p>
-          </details>
-        )}
-        {edited && repeatsNote(i) && (
-          <p className="caution repeats-note" role="status">
-            {REPEATS_NOTE}
-          </p>
-        )}
-        {fitSaid[i] && live && !box && (
-          <p className="caution fit-said" role="status">
-            {fitSaid[i]}
-          </p>
-        )}
-        {recordedFit && (
-          <div className="rewrite fit-recorded">
-            <b>{RECORDED_FIT_LABEL}</b>
-            <p>{recordedFit.suggestion}</p>
-          </div>
-        )}
-        {box && live && (
-          <div className="rewrite">
-            <label>
-              {box.whole ? 'Rewrite this item' : 'Rewrite this step'}
-              {box.suggested && <span className="fit-note">{FIT_LABEL}</span>}
-              <textarea
-                rows={3}
-                value={box.text}
-                maxLength={600}
-                onChange={(e) => setRewriting((r) => ({ ...r, [i]: { ...box, text: e.target.value } }))}
-                spellCheck={false}
-                autoCorrect="off"
-                autoCapitalize="off"
-                autoComplete="off"
-              />
-            </label>
-            <div className="actions">
-              <button className="secondary small" disabled={signing || box.text.trim().length === 0} onClick={() => saveRewrite(i)}>
-                Save and check by rule
-              </button>
-              <button className="link" onClick={() => closeRewrite(i)}>
-                Cancel
-              </button>
-              <span className="hint">
-                {box.suggested ? 'Change it or save it as it is. Nothing changes until you save.' : 'Your words stay on this device. No model is asked.'}
-              </span>
-            </div>
-          </div>
-        )}
-        {/* A message home is copied one at a time, so one family's message never travels with another's. */}
-        {stage === 'signed' && task === 'parents' && kept[i] === true && family && (
-          <div className="copy-one">
-            {family.student ? (
-              <>
-                <span className="for-family">For the family of {family.student.surfaces[0]}</span>
-                <button className="secondary small" disabled={replyBlocked} onClick={() => copy(i, restore(item.text, entities, sent?.tokens).trim())}>
-                  {copyLabel(i, 'Copy')}
-                </button>
-                {stage === 'signed' && !replyBlocked && <ReadAloud text={restore(item.text, entities, sent?.tokens).trim()} language={sent?.language ?? ''} />}
-              </>
-            ) : (
-              <>
-                <span className="caution copy-off">{family.why}</span>
-                {family.mayTurnOn && !replay && (
-                  <button className="secondary small" onClick={() => setCopyOn((on) => [...on, i])}>
-                    Turn copy on for this message
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        )}
-        {stage === 'result' && !(box && live) && !isLesson && (
-          <div className="decide" role="group" aria-label="Keep or strike this item">
-            <button
-              className={kept[i] === true ? 'choice on' : 'choice'}
-              aria-pressed={kept[i] === true}
-              aria-label="Keep this item"
-              disabled={signing || Boolean(replay)}
-              onClick={() => decide(i, true)}
-            >
-              Keep
-            </button>
-            <button
-              className={kept[i] === false ? 'choice on strike' : 'choice'}
-              aria-pressed={kept[i] === false}
-              aria-label="Strike this item"
-              disabled={signing || Boolean(replay)}
-              onClick={() => decide(i, false)}
-            >
-              Strike
-            </button>
-            {canFitHere && canFit(c, liveConstraints) && (
-              <button className="primary small" disabled={signing || fitting !== null || fittingAll} onClick={() => void fitOne(i)}>
-                {fitting === i ? 'Fitting on this device…' : 'Fit this step on this device'}
-              </button>
-            )}
-            {live && (conflict || doubt) && (
-              <button className="link" disabled={signing || fitting === i} onClick={() => startRewrite(i)}>
-                {whole ? 'Rewrite this item' : 'Rewrite this step'}
-              </button>
-            )}
-            {live && edited && (
-              <button
-                className="link"
-                disabled={signing}
-                onClick={() => {
-                  const { [i]: _dropped, ...rest } = edits;
-                  setFitted((f) => f.filter((x) => x !== i));
-                  checkAgain(rest, offIds);
-                }}
-              >
-                Put the cloud's words back
-              </button>
-            )}
-            <span className="hint state">
-              {kept[i] === null
-                ? 'Choose before you sign off.'
-                : conflict && kept[i] === false
-                  ? 'Struck to begin with. Keep it only if you still want it.'
-                  : ''}
-            </span>
-          </div>
-        )}
-      </li>
+        i={i}
+        item={item}
+        c={checks[i]}
+        keptValue={kept[i]}
+        edited={i in edits}
+        isLesson={isLesson}
+        task={task}
+        stage={stage}
+        replay={Boolean(replay)}
+        canFitHere={canFitHere}
+        checkWhere={checkWhere}
+        rechecked={rechecked}
+        entities={entities}
+        sent={sent}
+        variations={variations}
+        activeNeed={activeNeed}
+        setActiveNeed={setActiveNeed}
+        notesByChild={notesByChild}
+        hits={hits}
+        recordedFit={replay?.fits?.find((f) => f.itemIndex === i)}
+        box={rewriting[i]}
+        setRewriting={setRewriting}
+        fitSaidValue={fitSaid[i]}
+        repeats={repeatsNote(i)}
+        family={task === 'parents' ? familyOf(item, i) : null}
+        replyBlocked={replyBlocked}
+        copy={copy}
+        copyLabel={copyLabel}
+        setCopyOn={setCopyOn}
+        signing={signing}
+        decide={decide}
+        liveConstraints={liveConstraints}
+        fitting={fitting}
+        fittingAll={fittingAll}
+        fitOne={fitOne}
+        startRewrite={startRewrite}
+        saveRewrite={saveRewrite}
+        closeRewrite={closeRewrite}
+        edits={edits}
+        setFitted={setFitted}
+        checkAgain={checkAgain}
+        offIds={offIds}
+      />
     );
   };
 
   return (
     <div className="app">
-      <header className="top">
-        <div className="brand">
-          <span className="logo" aria-hidden="true" />
-          <div>
-            <h1>Staffroom</h1>
-            {!landing && <p>{PROMISE}</p>}
-          </div>
-        </div>
-        <nav aria-label="Sections">
-          <button className={view === 'desk' ? 'tab on' : 'tab'} onClick={() => setView('desk')}>
-            Desk
-          </button>
-          <button className={view === 'lessons' ? 'tab on' : 'tab'} onClick={() => setView('lessons')}>
-            Lessons
-            <span className={lessons.length > 0 ? 'count' : 'count none'} aria-hidden={lessons.length === 0}>
-              {lessons.length}
-            </span>
-          </button>
-          <button className={view === 'receipts' ? 'tab on' : 'tab'} onClick={() => setView('receipts')}>
-            Receipts
-            {/* The badge keeps its place when there is nothing to count, so the header does not shift when it appears. */}
-            <span className={receipts.length > 0 ? 'count' : 'count none'} aria-hidden={receipts.length === 0}>
-              {receipts.length}
-            </span>
-          </button>
-          <button className={view === 'how' ? 'tab on' : 'tab'} onClick={() => setView('how')}>
-            How it works
-          </button>
-        </nav>
-        <div className="status">
-          <DevicePill device={device} download={download} onTurnOn={turnOnDevice} onWatch={watch} />
-          {/* navigator.onLine says only that this computer has a network. It does not say the cloud model will answer. */}
-          {!online && (
-            <span className="pill warn">
-              <i />
-              Network: offline
-            </span>
-          )}
-          {!configured && (
-            <span className="pill warn">
-              <i />
-              Cloud: not connected
-            </span>
-          )}
-          {install && (
-            <button className="pill action" onClick={install}>
-              Install
-            </button>
-          )}
-          {deskCleared === 'ok' && (
-            <span className="pill ok" role="status">
-              <i />
-              Desk cleared from this browser
-            </span>
-          )}
-          {deskCleared === 'signout-failed' && (
-            <span className="pill warn" role="status">
-              <i />
-              Browser data cleared; sign-out failed — refresh before leaving
-            </span>
-          )}
-          {!replay && !busy && (note !== '' || classList.length > 0 || lessons.length > 0 || receipts.length > 0 || stage !== 'write') && (
-            <button className="pill action" type="button" onClick={() => void clearDesk()} title="Wipe notes, class list, saved lessons, and receipts from this browser (shared-PC reset)">
-              Clear desk
-            </button>
-          )}
-        </div>
-      </header>
+      <AppHeader
+        landing={landing}
+        view={view}
+        setView={setView}
+        lessonsCount={lessons.length}
+        receiptsCount={receipts.length}
+        device={device}
+        download={download}
+        onTurnOnDevice={turnOnDevice}
+        online={online}
+        configured={configured}
+        install={install ?? null}
+        deskCleared={deskCleared}
+        onRetrySignOut={() => void retrySignOut()}
+        canClearDesk={!replay && !busy && (note !== '' || classList.length > 0 || lessons.length > 0 || receipts.length > 0 || stage !== 'write')}
+        onClearDesk={() => void clearDesk()}
+        watch={watch}
+        stage={stage}
+      />
 
       {replay && (
         <div className="replay-banner" role="status">
@@ -2693,11 +2229,16 @@ export function App() {
           receipts={receipts}
           keepCopies={keepCopies}
           setKeepCopies={(on) => {
+            if (on) {
+              signOutBlockedRef.current = false;
+              setDeskCleared((c) => (c === 'signout-failed' ? null : c));
+            }
             setKeepCopies(on);
             if (on && !uid) void ensureUser();
+            else if (on && uid && view === 'receipts') void refreshRecords(uid);
           }}
-          signedIn={Boolean(uid)}
-          records={records}
+          signedIn={Boolean(uid) && deskCleared !== 'signout-failed'}
+          records={deskCleared === 'signout-failed' ? { state: 'idle' } : records}
           onClear={() => {
             setReceipts([]);
             storeReceipts([]);
@@ -2753,566 +2294,137 @@ export function App() {
               </h2>
 
               {/* ---- the result comes first once there is one: what the device caught */}
-              {stage === 'checking' && (
-                <article className="card">
-                  <Spinner label={progress} />
-                </article>
-              )}
-
-              {(stage === 'result' || stage === 'signed') && result && draft && (
-                <article className="card result">
-                  {sent?.language && (
-                    <p className="caution" role="status">
-                      {NOT_ENGLISH}
-                    </p>
-                  )}
-                  {isLesson && needsReply && sent && sent.lessonNeeds.length > 0 && <p className="hint">{needsAccount(needOutcomes(sent.lessonNeeds.map((n) => n.letter), variations, needsReply.none))}.</p>}
-                  {isLesson && needsReply && needsReply.none.length > 0 && (
-                    <p className="hint">
-                      {result.where === 'ON_DEVICE' ? 'The on-device draft' : 'The cloud'} says this lesson already suits{' '}
-                      {needsReply.none.map((l) => `Need ${l}${needNames(l).length > 0 ? ` (${needNames(l).join(', ')})` : ''}`).join('; ')}. Read it against what you know.
-                    </p>
-                  )}
-                  <h3 className="summary">{restore(draft.title, entities, sent?.tokens)}</h3>
-                  <p className="result-sub">
-                    {isLesson
-                      ? fitSummary(
-                          notesByChild.length,
-                          replay ? shownPoints.filter((p) => p.source === 'model' && !p.need).length : pointsSuggested,
-                          hits,
-                          shownPoints,
-                          result?.where === 'ON_DEVICE',
-                        )
-                      : summaryLine(checks)}
-                  </p>
-                  {isLesson && fittingLive && (notesByChild.length > 0 || hits.length > 0) && (
-                    <div className="actions fit-all">
-                      {(toFit || fittingLesson) && (
-                        <button className="primary small" disabled={signing || adjBusy !== null || fittingLesson} onClick={() => void fitLesson()}>
-                          {fitChild
-                            ? `Fitting for ${fitChild.done} of ${fitChild.total} ${fitChild.total === 1 ? 'child' : 'children'}…`
-                            : fittingLesson
-                              ? 'Fitting on this device…'
-                              : 'Fit the lesson on this device'}
-                        </button>
-                      )}
-                      {offered > 1 && (
-                        <button className="secondary small" disabled={signing} onClick={acceptAll}>
-                          Accept all {offered}
-                        </button>
-                      )}
-                      <span className="hint">
-                        {variations.length > 0
-                          ? result.where === 'ON_DEVICE'
-                            ? 'This device wrote each line for a need, not for a child, and put it beside the child. Nothing lands until you accept it.'
-                            : 'The cloud wrote each line for a need, not for a child. This device put it beside the child. Nothing lands until you accept it.'
-                          : device === 'available'
-                            ? 'Write what a child needs, or ask this device for more ideas under a name. Nothing is sent, and nothing lands until you accept it.'
-                            : 'No on-device model here. Write what a child needs yourself; a step that goes against a constraint gets starter wording by rule. Nothing lands until you accept it.'}
-                      </span>
-                    </div>
-                  )}
-                  {isLesson && stage === 'result' && (notesByChild.length > 0 || hits.length > 0) && (
-                    <ChildSections
-                      notes={notesByChild}
-                      stages={stageList.map((x) => x.name)}
-                      hits={hits}
-                      adjustments={shownAdj}
-                      points={shownPoints}
-                      live={fittingLive}
-                      canModel={device === 'available'}
-                      busyKey={adjBusy}
-                      busyChild={fitChild?.id ?? null}
-                      hitNotes={adjNotes}
-                      said={childSaid}
-                      recorded={Boolean(replay)}
-                      onDevice={result?.where === 'ON_DEVICE'}
-                      hitActions={hitActions}
-                      pointActions={pointActions}
-                      activeNeed={activeNeed}
-                      onHoverNeed={setActiveNeed}
-                    />
-                  )}
-                  {canFitHere && (fittable.length > 1 || fittingAll) && (
-                    <div className="actions fit-all">
-                      <button className="primary small" disabled={signing || fitting !== null || fittingAll} onClick={() => void fitAll()}>
-                        {fittingAll ? 'Fitting on this device…' : `Fit all ${fittable.length} conflicts on this device`}
-                      </button>
-                      <span className="hint">One after another. Each suggestion waits for you to save it.</span>
-                    </div>
-                  )}
-                  {!replay && stage === 'signed' && (
-                    <div className="signed">
-                      <span className="stamp">{keptCount === 0 ? 'Whole draft rejected by teacher' : 'Signed off by teacher'}</span>
-                      {storeFailed ? (
-                        <p className="caution" role="alert">
-                          This browser could not store the receipt. Copy what you need before you leave this page.
-                        </p>
-                      ) : (
-                        <p className="receipt-line">
-                          Receipt saved.{' '}
-                          <button className="link" onClick={() => setView('receipts')}>
-                            See the receipt
-                          </button>
-                        </p>
-                      )}
-                      <div className="actions">
-                        {keptCount > 0 && task !== 'parents' && (
-                          <button className="primary" onClick={() => copy('all', isLesson ? classPlan : finalText)} disabled={replyBlocked}>
-                            {copyLabel('all', isLesson ? 'Copy the class plan' : 'Copy the text')}
-                          </button>
-                        )}
-                        {keptCount > 0 && isLesson && (
-                          <button className="secondary" onClick={() => setPreviewOpen((o) => !o)}>
-                            {previewOpen ? 'Hide copy preview' : 'Preview class & teacher copies'}
-                          </button>
-                        )}
-                        {keptCount > 0 && isLesson && !replyBlocked && <ReadAloud text={classPlan} language={sent?.language ?? ''} />}
-                        {isLesson && (
-                          <button className="link" onClick={() => setView('lessons')}>
-                            Lessons
-                          </button>
-                        )}
-                        {canPrint && isLesson && (
-                          <>
-                            <button className="secondary" onClick={() => printSheet('class-only')}>
-                              Print class copy (no names)
-                            </button>
-                            <button className="secondary" onClick={() => printSheet('teacher-only')}>
-                              Print teacher's copy (private)
-                            </button>
-                          </>
-                        )}
-                        {canPrint && !isLesson && (
-                          <button className="secondary" onClick={() => window.print()}>
-                            Print
-                          </button>
-                        )}
-                        <button className="link" onClick={startOver}>
-                          Start again
-                        </button>
-                      </div>
-                      {isLesson && keptCount > 0 && (
-                        <p className="hint">
-                          On a shared printer, print the class copy (no names) separately from your private teacher copy.
-                        </p>
-                      )}
-                      {keptCount === 0 ? (
-                        <p className="hint">You kept no item, so there is nothing to copy.</p>
-                      ) : (
-                        task === 'parents' && <p className="hint">Each message is copied on its own, and printed on its own page, for one family at a time.</p>
-                      )}
-                      {copied && !copied.ok && (
-                        <p className="caution" role="alert">
-                          Could not copy. Your browser did not allow it: select the text and copy it by hand.
-                        </p>
-                      )}
-                      {copyState === 'pending' && (
-                        <p className="hint">
-                          {online ? 'Saving the record to your account.' : 'The record will be saved when the network is back. Keep this tab open.'}
-                        </p>
-                      )}
-                      {copyState === 'saved' && <p className="hint">The receipt's record (no text) was written to your account by this browser.</p>}
-                      {copyState === 'failed' && (
-                        <p className="caution">The record could not be saved to your account. The receipt is still kept in this browser.</p>
-                      )}
-                    </div>
-                  )}
-                  {rechecked && (
-                    <p className="again" role="status">
-                      Checked again on this device. Nothing was sent.
-                    </p>
-                  )}
-                  {replyIssues.length > 0 && (
-                    <p className="caution">
-                      The return gate flagged this draft.{' '}
-                      {replyIssues.some((v) => !v.say) &&
-                        `${replyIssues
-                          .filter((v) => !v.say)
-                          .map((v) => `“${v.what}” (${v.why})`)
-                          .join('; ')}. `}
-                      {replyIssues
-                        .filter((v) => v.say)
-                        .map((v) => `${v.say} `)
-                        .join('')}
-                      You cannot sign off or copy it until you tick that you have read it.
-                    </p>
-                  )}
-                  {checkWhere === 'SKIPPED' && <p className="hint">No private detail was withheld, so no model was asked.</p>}
-                  {checkWhere === 'NOT_RUN' && (
-                    <p className="caution">
-                      {checkRequests && checkRequests.asked > 0
-                        ? `The on-device check could not run: all ${checkRequests.asked} of its requests to the on-device model failed.`
-                        : 'The on-device check did not run.'}{' '}
-                      This draft was not checked against what was withheld. Read each item against the private details yourself.
-                    </p>
-                  )}
-                  {checkWhere === 'ON_DEVICE' && checkRequests && checkRequests.failed > 0 && (
-                    <p className="caution">
-                      The on-device check ran only in part: {checkRequests.failed} of its {checkRequests.asked} requests failed. The items
-                      it could not check say so. Read those against the private details yourself.
-                    </p>
-                  )}
-
-                  {/* What the device caught comes first: conflicts, then doubts. The rest follow the constraints. */}
-                  {flagged.length > 0 && <ol className="items">{flagged.map(resultItem)}</ol>}
-                  {sent && sent.constraints.some((c) => c.confirmed) && (
-                    <div className="strip" role="group" aria-label="Constraints you confirmed">
-                      <h4>Constraints you confirmed</h4>
-                      <ul>
-                        {sent.constraints
-                          .filter((c) => c.confirmed)
-                          .map((c) => {
-                            const who = entities.find((e) => e.id === c.about)?.surfaces[0];
-                            return (
-                              <li key={c.id}>
-                                <label className="switch">
-                                  <input
-                                    type="checkbox"
-                                    checked={!offIds.includes(c.id)}
-                                    disabled={stage !== 'result' || signing || Boolean(replay)}
-                                    onChange={(e) => switchConstraint(c.id, e.target.checked)}
-                                  />
-                                  <span />
-                                  <q>{c.text}</q>
-                                  {who && <small>{who}</small>}
-                                </label>
-                              </li>
-                            );
-                          })}
-                      </ul>
-                      {stage === 'result' && !replay && (
-                        <p className="hint">Switch one off or on: the same draft is checked again here, by rule. No new draft is asked for.</p>
-                      )}
-                    </div>
-                  )}
-                  {unflagged.length > 0 && <ol className="items">{unflagged.map(resultItem)}</ol>}
-
-                  {isLesson && stage === 'signed' && (
-                    <div className="strip">
-                      <h4>For these children</h4>
-                      <ForTheseChildren stages={draft.items} adjustments={acceptedNow} />
-                      <p className="hint">Kept on this device with the lesson. Never sent, and not in any record.</p>
-                    </div>
-                  )}
-
-                  {isLesson && stage === 'signed' && previewOpen && (replay || keptCount > 0) && (
-                    <CopyPreview
-                      title={draft.title}
-                      meta={[lesson.klass, lesson.subject, lesson.topic, `${lessonMinutes(lesson.minutes)} minutes`].filter(Boolean).join(' · ')}
-                      stages={draft.items.filter((_, i) => kept[i] === true)}
-                      variations={variations}
-                      adjustments={acceptedNow}
-                    />
-                  )}
-
-                  {capture && !replay && (
-                    <div className="actions">
-                      <button className="secondary small" onClick={downloadRun}>
-                        Download this run as JSON
-                      </button>
-                      <span className="hint">
-                        For the recorded run: the file holds this note, the vault, the constraints, the draft and the verdicts as first checked,
-                        and any rewrites and on-device suggestions as they stand now.
-                      </span>
-                    </div>
-                  )}
-
-                  {replay && stage === 'signed' && (
-                    <div className="actions">
-                      <span className="stamp">End of the recorded run</span>
-                      {isLesson && (
-                        <button className="secondary small" onClick={() => setPreviewOpen((o) => !o)}>
-                          {previewOpen ? 'Hide copy preview' : 'Preview class & teacher copies'}
-                        </button>
-                      )}
-                      <span className="hint">No receipt was written.</span>
-                      <button className="secondary small" onClick={leaveReplay}>
-                        Leave the recorded run
-                      </button>
-                    </div>
-                  )}
-
-                </article>
-              )}
-
-              {isLesson && sent && !replyBlocked && (replay ? Boolean(materials) && (stage === 'result' || stage === 'signed') : stage === 'result' || (stage === 'signed' && keptCount > 0)) && (
-                <MaterialsCard
-                  request={materialsRequest}
-                  stopped={materialsStopped}
-                  busy={materialsBusy}
-                  streamChars={materialsStreamChars}
-                  fail={materialsFail}
-                  result={materials?.materials ?? null}
-                  issues={materials?.issues ?? []}
-                  where={materials ? (materials.where === 'IN_CLOUD' ? `Written in the cloud by ${materials.model}` : 'The cloud failed, so the on-device model wrote these') : ''}
-                  onDevice={materials?.where === 'ON_DEVICE'}
-                  namesFor={needNames}
-                  onSend={() => void makeMaterials()}
-                  onPrint={stage === 'signed' && !replay ? printMaterials : undefined}
-                  noPrint={replay ? 'From the recorded run.' : 'Sign off the lesson to print these.'}
-                  activeNeed={activeNeed}
-                  onHoverNeed={setActiveNeed}
-                />
-              )}
+              <ResultPanel
+                stage={stage}
+                progress={progress}
+                result={result}
+                draft={draft}
+                sent={sent}
+                isLesson={isLesson}
+                needsReply={needsReply}
+                variations={variations}
+                needNames={needNames}
+                entities={entities}
+                notesByChild={notesByChild}
+                pointsSuggested={pointsSuggested}
+                shownPoints={shownPoints}
+                hits={hits}
+                checks={checks}
+                fittingLive={fittingLive}
+                toFit={toFit}
+                fittingLesson={fittingLesson}
+                fitLesson={fitLesson}
+                fitChild={fitChild}
+                offered={offered}
+                acceptAll={acceptAll}
+                device={device}
+                stageList={stageList}
+                shownAdj={shownAdj}
+                adjBusy={adjBusy}
+                adjNotes={adjNotes}
+                childSaid={childSaid}
+                replay={Boolean(replay)}
+                hitActions={hitActions}
+                pointActions={pointActions}
+                activeNeed={activeNeed}
+                setActiveNeed={setActiveNeed}
+                canFitHere={canFitHere}
+                fittable={fittable}
+                fittingAll={fittingAll}
+                fitting={fitting}
+                fitAll={fitAll}
+                signing={signing}
+                kept={kept}
+                keptCount={keptCount}
+                storeFailed={storeFailed}
+                setView={setView}
+                task={task}
+                copy={copy}
+                copyLabel={copyLabel}
+                classPlan={classPlan}
+                finalText={finalText}
+                replyBlocked={replyBlocked}
+                previewOpen={previewOpen}
+                setPreviewOpen={setPreviewOpen}
+                canPrint={canPrint}
+                printSheet={printSheet}
+                startOver={startOver}
+                copied={copied}
+                copyState={copyState}
+                online={online}
+                rechecked={rechecked}
+                replyIssues={replyIssues}
+                checkWhere={checkWhere}
+                checkRequests={checkRequests}
+                flagged={flagged}
+                unflagged={unflagged}
+                resultItem={resultItem}
+                offIds={offIds}
+                switchConstraint={switchConstraint}
+                acceptedNow={acceptedNow}
+                lesson={lesson}
+                capture={capture}
+                downloadRun={downloadRun}
+                leaveReplay={leaveReplay}
+                materials={materials}
+                materialsRequest={materialsRequest}
+                materialsStopped={materialsStopped}
+                materialsBusy={materialsBusy}
+                materialsStreamChars={materialsStreamChars}
+                materialsFail={materialsFail}
+                makeMaterials={makeMaterials}
+                printMaterials={printMaterials}
+              />
 
               {/* ---- the task, and for a lesson the lines that say what it is */}
               {editing && (
-                <article className="card">
-                  <fieldset className="tasks">
-                    <legend>What do you want help with?</legend>
-                    {TASKS.map((t) => (
-                      <label key={t.id} className={task === t.id ? 'task on' : 'task'}>
-                        <input type="radio" name="task" checked={task === t.id} disabled={Boolean(replay)} onChange={() => setTask(t.id)} />
-                        <strong>{t.label}</strong>
-                        <span>{t.blurb}</span>
-                      </label>
-                    ))}
-                  </fieldset>
-                  {(task === 'lesson' || task === 'parents') && (
-                    <div className="write-in">
-                      <label className="lesson-field">
-                        Write it in
-                        <select
-                          value={LANGUAGES.some((l) => l === (lesson.language || 'English')) ? lesson.language || 'English' : 'other'}
-                          disabled={Boolean(replay)}
-                          onChange={(e) => setLesson((l) => ({ ...l, language: e.target.value === 'other' ? ' ' : e.target.value === 'English' ? '' : e.target.value }))}
-                        >
-                          {LANGUAGES.map((l) => (
-                            <option key={l} value={l}>
-                              {l}
-                            </option>
-                          ))}
-                          <option value="other">Another language</option>
-                        </select>
-                      </label>
-                      {lesson.language !== undefined && lesson.language !== '' && !LANGUAGES.some((l) => l === lesson.language) && (
-                        <label className="lesson-field">
-                          Which language
-                          <input type="text" value={lesson.language.trimStart()} maxLength={40} readOnly={Boolean(replay)} placeholder="Marathi" onChange={(e) => setLesson((l) => ({ ...l, language: e.target.value || ' ' }))} />
-                        </label>
-                      )}
-                      {languageOf(lesson) && (
-                        <p className="hint">
-                          Sent as one line: “{task === 'lesson' ? 'Language of the plan' : 'Language of the messages'}: {languageOf(lesson)}”. {NOT_ENGLISH}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {task === 'lesson' && (
-                    <div className="lesson-lines">
-                      {(
-                        [
-                          ['klass', 'Class', 'Class 6'],
-                          ['subject', 'Subject', 'English'],
-                          ['topic', 'Topic', 'Writing a short description of a place'],
-                        ] as const
-                      ).map(([key, label, example]) => (
-                        <label key={key} className={`lesson-field f-${key}`}>
-                          {label}
-                          <input
-                            type="text"
-                            value={lesson[key]}
-                            readOnly={Boolean(replay)}
-                            maxLength={FIELD_MAX}
-                            placeholder={example}
-                            onChange={(e) => setLesson((l) => ({ ...l, [key]: e.target.value }))}
-                          />
-                        </label>
-                      ))}
-                      <label className="lesson-field f-minutes">
-                        Minutes
-                        <input
-                          type="number"
-                          min={5}
-                          max={240}
-                          value={lesson.minutes}
-                          readOnly={Boolean(replay)}
-                          onChange={(e) => setLesson((l) => ({ ...l, minutes: Number(e.target.value) }))}
-                          onBlur={() => setLesson((l) => ({ ...l, minutes: lessonMinutes(l.minutes) }))}
-                        />
-                      </label>
-                      <label className="lesson-field f-last">
-                        What we did last time <small>optional</small>
-                        <textarea
-                          rows={2}
-                          value={lesson.lastTime}
-                          readOnly={Boolean(replay)}
-                          maxLength={LAST_TIME_MAX}
-                          onChange={(e) => setLesson((l) => ({ ...l, lastTime: e.target.value }))}
-                        />
-                      </label>
-                      <p className="hint">These lines are not private. They are sent as written, under “Lesson”.</p>
-                    </div>
-                  )}
-                </article>
+                <TaskComposeCard task={task} setTask={setTask} lesson={lesson} setLesson={setLesson} replay={Boolean(replay)} />
               )}
 
               {/* ---- the note */}
               {editing && (
-                <article className="card">
-                  <div className="card-head">
-                    <h3>Your note</h3>
-                    {noteLinks}
-                  </div>
-                  {forgetQuestion}
-                  <p className="demo-notice">Demonstration. Use invented details only, no real pupils' records.</p>
-                  {!replay && (
-                    <div className="notebook-scan">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        hidden
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) void scanNotebookFile(f);
-                          e.target.value = '';
-                        }}
-                      />
-                      <button className="secondary small" type="button" disabled={scanning} onClick={() => fileInputRef.current?.click()}>
-                        {scanning ? 'Transcribing on this device…' : 'Scan notebook photo'}
-                      </button>
-                      <button className="link" type="button" disabled={scanning} onClick={() => void scanSampleNotebook()}>
-                        Try sample notebook photo
-                      </button>
-                      {noModel || imageDevice === 'unsupported' || imageDevice === 'unavailable' ? (
-                        <span className="hint">Notebook photo transcription requires Chrome's built-in Gemini Nano with image support.</span>
-                      ) : null}
-                    </div>
-                  )}
-                  {scanPreview && (
-                    <div className="scan-preview" role="status">
-                      <img src={scanPreview.url} alt="Scanned handwritten register thumbnail" />
-                      <span>{scanPreview.summary}</span>
-                    </div>
-                  )}
-                  {scanError && (
-                    <p className="caution" role="alert">
-                      {scanError}
-                    </p>
-                  )}
-                  <textarea
-                    value={note}
-                    readOnly={Boolean(replay)}
-                    maxLength={NOTE_MAX}
-                    onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
-                    placeholder="Write what you noticed this week, as you would in your own notebook. Names, family matters, health: write it all."
-                    rows={9}
-                    spellCheck={false}
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    autoComplete="off"
-                    aria-label="Your note"
-                  />
-                  <p className={note.length >= NOTE_MAX ? 'hint note-count full' : 'hint note-count'}>
-                    {note.length.toLocaleString()} of {NOTE_MAX.toLocaleString()} characters
-                    {note.length >= NOTE_MAX ? '. Put a longer note through in two runs.' : ''}
-                  </p>
-                  <details className="class-list" open={listOpen} onToggle={(e) => setListOpen(e.currentTarget.open)}>
-                    <summary>
-                      Class list <small>{classList.length > 0 ? `${classList.length} names` : 'optional'}</small>
-                    </summary>
-                    <p>
-                      One name per line, kept with your note. A name on this list is{' '}
-                      {policy.lockedKinds.includes('student') ? 'always withheld' : 'withheld by default'}, with or without a model.
-                    </p>
-                    <textarea
-                      readOnly={Boolean(replay)}
-                      value={classList.join('\n')}
-                      onChange={(e) => setClassList(e.target.value.split('\n').map((s) => s.trimStart()))}
-                      onBlur={() => setClassList((l) => l.map((s) => s.trim()).filter(Boolean))}
-                      rows={5}
-                      spellCheck={false}
-                      autoCorrect="off"
-                      autoCapitalize="off"
-                      autoComplete="off"
-                      aria-label="Class list"
-                    />
-                  </details>
-                  {!replay && (
-                    <label className="keep-class">
-                      <input type="checkbox" checked={keepClass} onChange={(e) => setKeepClass(e.target.checked)} />
-                      Keep this class in this browser
-                      <small>
-                        {keepClass
-                          ? 'On: your note, class list, constraints, saved lessons and receipts stay in local storage on this computer only.'
-                          : 'Personal device only — leave off on a shared staffroom PC (session clears when tab closes).'}
-                      </small>
-                    </label>
-                  )}
-                  {noModel && !replay && (
-                    <p className="notice">
-                      No on-device model in this browser, so the guard runs by rule: your class list, patterns, a short list of sensitive
-                      words and capitalised words. Mark other private details yourself.
-                    </p>
-                  )}
-                  {(device === 'downloadable' || device === 'downloading') && download === null && (
-                    <p className="notice">The first run downloads the on-device model (several GB) and can take a few minutes.</p>
-                  )}
-                  {replay ? (
-                    <div className="actions">
-                      <button className="primary" onClick={nextInReplay}>
-                        Next
-                      </button>
-                      <span className="hint">Recorded run: the next screen shows what the guard found on the day.</span>
-                    </div>
-                  ) : (
-                    <div className="actions">
-                      <button
-                        className="primary"
-                        disabled={note.trim().length < 20 || note.length > NOTE_MAX || (task === 'lesson' && !lessonReady(lesson))}
-                        onClick={() => runGuard()}
-                      >
-                        Run the guard
-                      </button>
-                      <span className="hint">Nothing is sent. The guard runs here.</span>
-                      {watch && (
-                        <button className="link" onClick={watch}>
-                          Watch a recorded run
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </article>
-              )}
-
-              {stage === 'guarding' && (
-                <article className="card">
-                  <Spinner label={download !== null ? `Loading the on-device model: ${Math.round(download * 100)}%` : progress} />
-                </article>
+                <NoteComposeCard
+                  noteLinks={noteLinks}
+                  forgetQuestion={forgetQuestion}
+                  replay={Boolean(replay)}
+                  fileInputRef={fileInputRef}
+                  scanning={scanning}
+                  scanNotebookFile={scanNotebookFile}
+                  scanSampleNotebook={scanSampleNotebook}
+                  noModel={noModel}
+                  imageDevice={imageDevice}
+                  scanPreview={scanPreview}
+                  scanError={scanError}
+                  note={note}
+                  setNote={setNote}
+                  listOpen={listOpen}
+                  setListOpen={setListOpen}
+                  classList={classList}
+                  setClassList={setClassList}
+                  policy={policy}
+                  keepClass={keepClass}
+                  setKeepClass={setKeepClass}
+                  device={device}
+                  download={download}
+                  nextInReplay={nextInReplay}
+                  task={task}
+                  lesson={lesson}
+                  runGuard={() => runGuard()}
+                  watch={watch}
+                />
               )}
 
               {(stage === 'guarding' || stage === 'review') && (
-                <article className="card">
-                  <div className="card-head">
-                    <h3>Your note</h3>
-                    {noteLinks}
-                  </div>
-                  {forgetQuestion}
-                  <p className="demo-notice">Demonstration. Use invented details only, no real pupils' records.</p>
-                  {noteView}
-                  {stage === 'review' && !replay && (
-                    <div className="select-bar" aria-live="polite">
-                      {selection ? (
-                        <>
-                          <span>
-                            Withhold <q>{selection.length > 48 ? `${selection.slice(0, 48)}…` : selection}</q> as
-                          </span>
-                          {(['student', 'adult', 'place', 'contact', 'id', 'private'] as Kind[]).map((k) => (
-                            <button key={k} className="chip-btn" onClick={() => withholdSelection(k)}>
-                              {KIND_LABEL[k]}
-                            </button>
-                          ))}
-                        </>
-                      ) : selectionNote ? (
-                        <span className="caution selection-note">{selectionNote}</span>
-                      ) : (
-                        <span className="hint">Missed something? Select it in your note to withhold it.</span>
-                      )}
-                    </div>
-                  )}
-                </article>
+                <NoteReviewCard
+                  noteLinks={noteLinks}
+                  forgetQuestion={forgetQuestion}
+                  noteView={noteView}
+                  stage={stage}
+                  replay={Boolean(replay)}
+                  selection={selection}
+                  selectionNote={selectionNote}
+                  withholdSelection={withholdSelection}
+                />
               )}
 
               {/* ---- the constraints: below the highlighted note on Review */}
@@ -3412,309 +2524,88 @@ export function App() {
 
               {stage === 'review' && (
                 <div className="cloud-sticky">
-                  <article className="card outbox waiting">
-                    <div className="card-head">
-                      <h3>Waiting at the door</h3>
-                      <span className={violations.length === 0 ? 'gate pass' : 'gate stop'}>
-                        {violations.length === 0 ? 'Exit gate: clear' : `Exit gate: ${violations.length} stopped`}
-                      </span>
-                    </div>
-                    {/* What the guard did not cover is said here, beside the gate: before the text, and above the tick. */}
-                    {nothingWithheld && (
-                      <p className="caution strong" role="alert">
-                        {partOfNote
-                          ? 'Nothing is withheld. The sentences of your note below are exactly as you wrote them: every name and every detail in them will be sent to the cloud model.'
-                          : 'Nothing is withheld. The text below is your note exactly as you wrote it: every name and every detail in it will be sent to the cloud model.'}
-                      </p>
-                    )}
-                    {guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0 && (
-                      <p className="caution">
-                        The on-device model could not read {guardGaps.unread.length} of the {noteParts.length} parts of your note (
-                        {guardGaps.unread.map((i) => `part ${i + 1}`).join(', ')}). They are listed on the device side, under what is withheld.
-                        Check {guardGaps.unread.length === 1 ? 'it' : 'them'} yourself before you approve.
-                      </p>
-                    )}
-                    {guardGaps.dropped > 0 && (
-                      <p className="caution">
-                        The on-device model reported {guardGaps.dropped} {guardGaps.dropped === 1 ? 'item' : 'items'} (a name, a place or a
-                        private detail) that could not be matched to the words of your note, so {guardGaps.dropped === 1 ? 'it was' : 'they were'}{' '}
-                        not withheld. Look for names and private details yourself before you approve.
-                      </p>
-                    )}
-                    {guardGaps.partial > 0 && (
-                      <p className="caution">
-                        {guardGaps.partial} private {guardGaps.partial === 1 ? 'detail was' : 'details were'} matched to your note only in
-                        part. The matching words were withheld. Read the text around each private detail and mark what is left.
-                      </p>
-                    )}
-                    <p className="hint">
-                      {replay ? 'The exact text that was sent on the day' : 'The exact text that will be sent'}, for: {currentTask.label.toLowerCase()}.
-                    </p>
-                    <pre className="wire">
-                      <CloudText text={outgoing} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
-                    </pre>
-                    {!replay && (going.notSent ?? 0) > 0 && <p className="hint">{notSentLine(going.notSent!)}</p>}
-                    {violations.length > 0 && (
-                      <ul className="stops">
-                        {violations.map((v, i) => (
-                          <li key={i}>
-                            <b>{v.what}</b> {v.why}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {nothingWithheld && (
-                      <p className="hint">
-                        {partOfNote
-                          ? 'A receipt holds the text you approved. Here that is the sentences of your note that are sent, as written.'
-                          : 'A receipt holds the text you approved. Here that is your whole note, as written.'}
-                      </p>
-                    )}
-                  </article>
-                </div>
-              )}
-
-              {stage === 'drafting' && (
-                <article className="card">
-                  <Spinner
-                    label={
-                      online
-                        ? streamPreview
-                          ? `Streaming draft from ${policy.cloudModel} (${streamPreview.length} chars)…`
-                          : `Asking ${policy.cloudModel} to write the draft`
-                        : 'Offline — trying cloud first; falling back to Gemini Nano on this device…'
-                    }
+                  <ReviewCard
+                    violations={violations}
+                    nothingWithheld={nothingWithheld}
+                    partOfNote={partOfNote}
+                    guardWhere={guardWhere}
+                    guardGaps={guardGaps}
+                    notePartsCount={noteParts.length}
+                    replay={Boolean(replay)}
+                    taskLabel={currentTask.label}
+                    outgoing={outgoing}
+                    isLesson={isLesson}
+                    activeNeed={activeNeed}
+                    onHoverNeed={setActiveNeed}
+                    notSentCount={going.notSent ?? 0}
                   />
-                  {streamPreview && (
-                    <pre className="wire stream-live" aria-live="polite">
-                      {streamPreview.slice(-900)}
-                    </pre>
-                  )}
-                </article>
-              )}
-
-              {((result && stage !== 'review' && stage !== 'drafting') || materials || (sent && stage !== 'review')) && (
-                <div className="cloud-sticky">
-                  {result && stage !== 'review' && stage !== 'drafting' && (
-                    <article className="card">
-                      <div className="card-head">
-                        <h3>{result.where === 'IN_CLOUD' ? 'What came back' : 'Written on the device'}</h3>
-                        <span className="hint">{result.model}</span>
-                      </div>
-                      {result.where === 'ON_DEVICE' && (
-                        <>
-                          <p className="caution">The cloud draft failed, so the on-device model wrote this draft from the same approved text.</p>
-                          {/* A separate fact. The app does not know why the cloud draft failed. */}
-                          <p className="hint">Browser reported when you approved: {sent?.online ? 'online' : 'offline'}.</p>
-                        </>
-                      )}
-                      <div className="wire reply">
-                        <strong>
-                          <CloudText text={result.draft.title} />
-                        </strong>
-                        {result.draft.items.map((item, i) => (
-                          <p key={i}>
-                            <b>
-                              <CloudText text={item.heading} />
-                            </b>
-                            <br />
-                            <CloudText text={item.text} />
-                          </p>
-                        ))}
-                        {sectionLines.length > 0 && (
-                          <p>
-                            <b>For each need</b>
-                            {sectionLines.map((l, k) => (
-                              <span key={k}>
-                                <br />
-                                <CloudText text={l} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
-                              </span>
-                            ))}
-                          </p>
-                        )}
-                      </div>
-                      <p className="hint">
-                        {variations.length > 0
-                          ? result.where === 'ON_DEVICE'
-                            ? 'This device wrote for each need by its letter from the same approved text.'
-                            : 'The cloud wrote for each need by its letter. It was not told whose a need is, or how many pupils have it.'
-                          : 'The reply uses the stand-ins. Names are put back on your side of the door.'}
-                      </p>
-                      {variationsDropped > 0 && (
-                        <p className="hint">
-                          {variationsDropped} {variationsDropped === 1 ? 'entry was' : 'entries were'} for a need you did not tell the cloud or a stage that is not in the lesson, or had no words, so{' '}
-                          {variationsDropped === 1 ? 'it is' : 'they are'} left out.
-                        </p>
-                      )}
-                      {needsReply?.second && (
-                        <p className="hint">
-                          {result.where === 'ON_DEVICE' ? 'The on-device model' : 'The cloud'} was asked once more for the needs its first reply left out. Inspect shows the exact text of that second request.
-                        </p>
-                      )}
-                    </article>
-                  )}
-
-                  {materials && (
-                    <article className="card">
-                      <div className="card-head">
-                        <h3>{materials.where === 'IN_CLOUD' ? 'Materials: what came back' : 'Materials: written on the device'}</h3>
-                        <span className="hint">{materials.model}</span>
-                      </div>
-                      <MaterialsWire result={materials.materials} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
-                      <p className="hint">
-                        {materials.where === 'ON_DEVICE'
-                          ? 'This device wrote these materials from the signed class plan and the needs by letter.'
-                          : 'The cloud was sent the signed class plan and the needs by letter. It was not told whose a need is.'}
-                      </p>
-                      <details className="fold">
-                        <summary>The text that was sent for the materials · {materials.text.length.toLocaleString()} characters</summary>
-                        <pre className="wire">
-                          <CloudText text={materials.text} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
-                        </pre>
-                      </details>
-                    </article>
-                  )}
-
-                  {sent && stage !== 'review' && (
-                    <details className="card fold outbox" open={stage === 'drafting' || undefined}>
-                      {/* "Sent" only once the cloud has answered. Until then, and when it never did, the app cannot say the text arrived. */}
-                      <summary>
-                        {result?.where === 'IN_CLOUD' ? 'Sent' : 'Approved by you'} at {time(sent.at)} · {sent.text.length.toLocaleString()} characters
-                      </summary>
-                      <pre className="wire">
-                        <CloudText text={sent.text} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
-                      </pre>
-                    </details>
-                  )}
                 </div>
               )}
+
+              <CloudOutcomeCards
+                stage={stage}
+                online={online}
+                cloudModel={policy.cloudModel}
+                streamPreview={streamPreview}
+                result={result}
+                sectionLines={sectionLines}
+                isLesson={isLesson}
+                activeNeed={activeNeed}
+                setActiveNeed={setActiveNeed}
+                variationsCount={variations.length}
+                variationsDropped={variationsDropped}
+                needsReply={needsReply}
+                materials={materials}
+                sent={sent}
+              />
             </section>
           </div>
 
           {/* ------------------------------------------------ the action bar: always in reach at the foot of the window */}
-          {stage === 'review' && (
-            <div className="action-bar cloud-bar">
-              {replay ? (
-                <>
-                  <span className="hint">Recorded run: this is the text that was approved and sent on the day. Nothing is sent now.</span>
-                  <button className="secondary" onClick={prevInReplay}>
-                    Back
-                  </button>
-                  <button className="primary send" onClick={nextInReplay}>
-                    Next
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="ticks">
-                    <label className="read-it">
-                      <input type="checkbox" checked={readIt} onChange={(e) => setReadKey(e.target.checked ? approval : null)} />
-                      {guardWhere === 'RULES_ONLY'
-                        ? 'No model looked for private details. I have read this text and marked them myself.'
-                        : 'I have read this text and I am content to send it.'}
-                    </label>
-                    {partsUnread && (
-                      <label className="read-it unread-parts">
-                        <input type="checkbox" checked={unreadAcked} onChange={(e) => setUnreadKey(e.target.checked ? unreadApproval : null)} />
-                        The on-device model did not read {guardGaps.unread.length === 1 ? 'one part' : `${guardGaps.unread.length} parts`} of
-                        this note. I have read {guardGaps.unread.length === 1 ? 'that part' : 'those parts'} and marked what is private in{' '}
-                        {guardGaps.unread.length === 1 ? 'it' : 'them'} myself.
-                      </label>
-                    )}
-                    {nothingWithheld && (
-                      <label className="read-it as-written">
-                        <input type="checkbox" checked={asWritten} onChange={(e) => setAsWrittenKey(e.target.checked ? asWrittenApproval : null)} />
-                        {partOfNote
-                          ? 'Nothing has been withheld. I am sending these sentences of my note as written.'
-                          : 'Nothing has been withheld. I am sending my note as written.'}
-                      </label>
-                    )}
-                  </div>
-                  <span className="hint bar-say">
-                    {policyReady ? `${outgoing.length.toLocaleString()} characters to ${policy.cloudModel}` : 'Loading school policy…'}
-                  </span>
-                  <button className="primary send" disabled={!canSend} onClick={approveAndSend}>
-                    Approve and send
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-
-          {stage === 'result' && (
-            <div className="action-bar device-bar">
-              {replay ? (
-                <>
-                  <span className="hint">Recorded run: in a live run you keep or strike each item here, then sign off. Nothing is signed off now.</span>
-                  <button className="secondary" onClick={prevInReplay}>
-                    Back
-                  </button>
-                  <button className="primary" onClick={nextInReplay}>
-                    Next
-                  </button>
-                </>
-              ) : (
-                <>
-                  {replyIssues.length > 0 && (
-                    <div className="ticks">
-                      <label className="read-it reply-read">
-                        <input type="checkbox" checked={replyRead} onChange={(e) => setReplyRead(e.target.checked)} />
-                        I have read the flagged reply and I still want to use it.
-                      </label>
-                    </div>
-                  )}
-                  <span className="hint bar-say">
-                    {isLesson
-                      ? waitingHits.length > 0
-                        ? `${waitingHits.length} ${waitingHits.length === 1 ? 'child still waits' : 'children still wait'} for an adjustment, or for you to leave the step as it is.`
-                        : `${acceptedNow.length} accepted for ${new Set(acceptedNow.map((a) => a.child)).size} ${new Set(acceptedNow.map((a) => a.child)).size === 1 ? 'child' : 'children'}. They stay on this device.${
-                            waitingPoints.length > 0
-                              ? waitingAcceptablePoints.length > 0 && waitingPoints.length > waitingAcceptablePoints.length
-                                ? ` ${waitingAcceptablePoints.length} ready to accept · ${waitingPoints.length - waitingAcceptablePoints.length} need wording.`
-                                : ` ${waitingPoints.length} ${waitingPoints.length === 1 ? 'adaptation still waits' : 'adaptations still wait'}.`
-                              : ''
-                          }`
-                      : undecided > 0
-                      ? `${undecided} of ${kept.length} still to decide. Nothing is kept until you keep it.`
-                      : keptCount === 0
-                        ? 'Every item is struck. Signing off now rejects the whole draft.'
-                        : `${keptCount} kept, ${struckCount} struck.`}
-                  </span>
-                  {toKeep > 0 && !isLesson && (
-                    <button className="secondary" disabled={signing} onClick={() => !signingRef.current && setKept((k) => keepNoConflict(k, checks))}>
-                      Keep the {toKeep} {toKeep === 1 ? 'item' : 'items'} with no conflict found
-                    </button>
-                  )}
-                  {isLesson && waitingHits.length === 0 && waitingAcceptablePoints.length > 0 ? (
-                    <>
-                      <button className="primary" onClick={acceptWaitingAndSignOff} disabled={signing || undecided > 0 || replyBlocked}>
-                        Accept all {waitingAcceptablePoints.length} & sign off
-                      </button>
-                      <button className="link" onClick={() => void signOff()} disabled={signing || undecided > 0 || replyBlocked}>
-                        Sign off without {waitingAcceptablePoints.length} unaccepted
-                      </button>
-                    </>
-                  ) : (
-                    <button className="primary" onClick={() => void signOff()} disabled={signing || undecided > 0 || replyBlocked || (isLesson && waitingHits.length > 0)}>
-                      {isLesson ? 'Sign off the lesson' : undecided === 0 && keptCount === 0 ? 'Reject the whole draft' : `Sign off ${keptCount} of ${kept.length} items`}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          {stage === 'signed' && replay && (
-            <div className="action-bar device-bar">
-              <span className="hint">Recorded run: end of the replay. Nothing was sent or stored.</span>
-              <button className="secondary" onClick={prevInReplay}>
-                Back
-              </button>
-              <button className="primary" onClick={leaveReplay}>
-                Leave the recorded run
-              </button>
-            </div>
-          )}
+          <ActionBar
+            stage={stage}
+            replay={Boolean(replay)}
+            prevInReplay={prevInReplay}
+            nextInReplay={nextInReplay}
+            leaveReplay={leaveReplay}
+            readIt={readIt}
+            setReadKey={setReadKey}
+            approval={approval}
+            guardWhere={guardWhere}
+            partsUnread={partsUnread}
+            unreadAcked={unreadAcked}
+            setUnreadKey={setUnreadKey}
+            unreadApproval={unreadApproval}
+            guardGaps={guardGaps}
+            nothingWithheld={nothingWithheld}
+            asWritten={asWritten}
+            setAsWrittenKey={setAsWrittenKey}
+            asWrittenApproval={asWrittenApproval}
+            partOfNote={partOfNote}
+            policyReady={policyReady}
+            outgoingLength={outgoing.length}
+            cloudModel={policy.cloudModel}
+            canSend={canSend}
+            approveAndSend={approveAndSend}
+            replyIssues={replyIssues}
+            replyRead={replyRead}
+            setReplyRead={setReplyRead}
+            isLesson={isLesson}
+            waitingHits={waitingHits}
+            acceptedNow={acceptedNow}
+            waitingPoints={waitingPoints}
+            waitingAcceptablePoints={waitingAcceptablePoints}
+            undecided={undecided}
+            kept={kept}
+            keptCount={keptCount}
+            struckCount={struckCount}
+            toKeep={toKeep}
+            signing={signing}
+            keepNoConflictClick={() => !signingRef.current && setKept((k) => keepNoConflict(k, checks))}
+            acceptWaitingAndSignOff={acceptWaitingAndSignOff}
+            signOff={() => void signOff()}
+            replyBlocked={replyBlocked}
+          />
         </main>
       )}
 
@@ -3819,59 +2710,21 @@ export function App() {
 
       {/* ------------------------------------------------ what is printed: the signed text, names put back, nothing else */}
       {canPrint && draft && (
-        <section className="print-sheet" aria-hidden="true">
-          {printWhat === 'materials' || printWhat === 'materials-no-names' ? (
-            materials && <MaterialsPages title={draft.title} result={materials.materials} namesFor={needNames} withNames={printWhat === 'materials'} />
-          ) : task === 'parents' ? (
-            printable.map(({ item, i, family }) => (
-              <div className="print-page" key={i}>
-                <h2>For the family of {family.student!.surfaces[0]}</h2>
-                <p>{restore(item.text, entities, sent?.tokens).trim()}</p>
-              </div>
-            ))
-          ) : isLesson ? (
-            <>
-              {/* Page 1: the class plan, stand-ins as they came. No name and no adjustment: it can be pinned up or shared. */}
-              {printWhat !== 'teacher-only' && (
-                <div className="print-page">
-                  <h1>{draft.title}</h1>
-                  <p>{[lesson.klass, lesson.subject, lesson.topic, `${lessonMinutes(lesson.minutes)} minutes`].filter(Boolean).join(' · ')}</p>
-                  {draft.items.map((item, i) =>
-                    kept[i] === true ? (
-                      <div key={i}>
-                        <h2>{item.heading}</h2>
-                        <p>{item.text.trim()}</p>
-                        {variations
-                          .filter((v) => v.itemIndex === i)
-                          .map((v, k) => (
-                            <p key={k}>{variationLine(v)}</p>
-                          ))}
-                      </div>
-                    ) : null,
-                  )}
-                </div>
-              )}
-              {printWhat === 'teacher-only' && (
-                <div className="print-page">
-                  <h1>Teacher's copy: adjustments. Keep this private.</h1>
-                  <ForTheseChildren stages={draft.items} adjustments={acceptedNow} />
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="print-page">
-              <h1>{restore(draft.title, entities, sent?.tokens)}</h1>
-              {draft.items.map((item, i) =>
-                kept[i] === true ? (
-                  <div key={i}>
-                    <h2>{restore(item.heading, entities, sent?.tokens)}</h2>
-                    <p>{restore(item.text, entities, sent?.tokens).trim()}</p>
-                  </div>
-                ) : null,
-              )}
-            </div>
-          )}
-        </section>
+        <PrintSheet
+          printWhat={printWhat}
+          draft={draft}
+          task={task}
+          isLesson={isLesson}
+          lesson={lesson}
+          materials={materials}
+          needNames={needNames}
+          printable={printable}
+          kept={kept}
+          variations={variations}
+          acceptedNow={acceptedNow}
+          entities={entities}
+          tokens={sent?.tokens}
+        />
       )}
     </div>
   );

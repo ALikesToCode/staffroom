@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-11-27T21:43:22.005Z",
+  "recordedAt": "2026-11-28T05:45:56.352Z",
   "chrome": "Chrome 158.0.0.0",
   "where": {
     "scan": "ON_DEVICE",
@@ -194,7 +194,7 @@
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
-        "his father lost his job at the mill"
+        "his father lost his job at the mill and the family cannot pay for anything extra this term"
       ],
       "source": "on-device model",
       "withheld": true,
@@ -207,20 +207,7 @@
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
-        "the family cannot pay for anything extra this term"
-      ],
-      "source": "on-device model",
-      "withheld": true,
-      "category": "money",
-      "at": 194,
-      "about": "student-1"
-    },
-    {
-      "id": "private-6",
-      "kind": "private",
-      "token": "[withheld]",
-      "surfaces": [
-        "Aarav now helps at the family tea stall before school."
+        "Aarav now helps at the family tea stall before school"
       ],
       "source": "on-device model",
       "withheld": true,
@@ -229,20 +216,7 @@
       "about": "student-1"
     },
     {
-      "id": "private-7",
-      "kind": "private",
-      "token": "[withheld]",
-      "surfaces": [
-        "She told me she has epilepsy and is afraid of having a seizure in the exam hall."
-      ],
-      "source": "on-device model",
-      "withheld": true,
-      "category": "health",
-      "at": 515,
-      "about": "student-2"
-    },
-    {
-      "id": "private-8",
+      "id": "private-6",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
@@ -255,33 +229,33 @@
       "about": "student-3"
     },
     {
-      "id": "private-9",
+      "id": "private-7",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
-        "family does not have a smartphone or an internet connection"
+        "Her family does not have a smartphone or an internet connection"
       ],
       "source": "on-device model",
       "withheld": true,
       "category": "money",
-      "at": 967,
+      "at": 963,
       "about": "student-4"
     },
     {
-      "id": "private-10",
+      "id": "private-8",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
-        "mother cooks in two homes until evening"
+        "her mother cooks in two homes until evening"
       ],
       "source": "on-device model",
       "withheld": true,
       "category": "family",
-      "at": 1132,
+      "at": 1128,
       "about": "student-4"
     },
     {
-      "id": "private-11",
+      "id": "private-9",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
@@ -297,7 +271,7 @@
       "about": "student-1"
     },
     {
-      "id": "private-12",
+      "id": "private-10",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
@@ -313,7 +287,7 @@
       "about": "student-1"
     },
     {
-      "id": "private-13",
+      "id": "private-11",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
@@ -329,7 +303,7 @@
       "about": "student-2"
     },
     {
-      "id": "private-14",
+      "id": "private-12",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
@@ -345,7 +319,7 @@
       "about": "student-2"
     },
     {
-      "id": "private-15",
+      "id": "private-13",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
@@ -360,7 +334,7 @@
       "at": 748
     },
     {
-      "id": "private-16",
+      "id": "private-14",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
@@ -376,7 +350,7 @@
       "about": "student-5"
     },
     {
-      "id": "private-17",
+      "id": "private-15",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
@@ -392,7 +366,7 @@
       "about": "student-4"
     },
     {
-      "id": "private-18",
+      "id": "private-16",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
@@ -408,7 +382,7 @@
       "about": "student-4"
     },
     {
-      "id": "private-19",
+      "id": "private-17",
       "kind": "private",
       "token": "[withheld]",
       "surfaces": [
@@ -436,7 +410,7 @@
       "need": "has missed recent lessons",
       "source": "rule",
       "confirmed": true,
-      "detailId": "private-11",
+      "detailId": "private-9",
       "share": true
     },
     {
@@ -448,7 +422,6 @@
       "confirmed": true,
       "about": "student-1",
       "aboutName": "Aarav Sharma",
-      "alsoModel": true,
       "detailId": "private-1",
       "share": true
     },
@@ -476,7 +449,7 @@
       "need": "has not handed in recent homework",
       "source": "rule",
       "confirmed": true,
-      "detailId": "private-12",
+      "detailId": "private-10",
       "share": true
     },
     {
@@ -490,7 +463,7 @@
       "need": "finds written tests hard; can answer aloud",
       "source": "rule",
       "confirmed": true,
-      "detailId": "private-13",
+      "detailId": "private-11",
       "share": true
     },
     {
@@ -509,7 +482,7 @@
       "confirmed": true,
       "about": "student-2",
       "aboutName": "Meenal Joshi",
-      "detailId": "private-7"
+      "detailId": "private-2"
     },
     {
       "id": "rule-666-time-after",
@@ -520,8 +493,7 @@
       "confirmed": true,
       "about": "student-2",
       "aboutName": "Meenal Joshi",
-      "alsoModel": true,
-      "detailId": "private-14",
+      "detailId": "private-12",
       "share": true
     },
     {
@@ -535,7 +507,7 @@
       "need": "works better apart from one classmate",
       "source": "rule",
       "confirmed": true,
-      "detailId": "private-15",
+      "detailId": "private-13",
       "share": true
     },
     {
@@ -549,7 +521,7 @@
       "need": "works better apart from one classmate",
       "source": "rule",
       "confirmed": true,
-      "detailId": "private-15",
+      "detailId": "private-13",
       "share": true
     },
     {
@@ -579,7 +551,7 @@
       "source": "rule",
       "confirmed": true,
       "alsoModel": true,
-      "detailId": "private-16",
+      "detailId": "private-14",
       "share": true
     },
     {
@@ -593,7 +565,7 @@
       "need": "reads above the level of the class",
       "source": "rule",
       "confirmed": true,
-      "detailId": "private-17",
+      "detailId": "private-15",
       "share": true
     },
     {
@@ -607,7 +579,7 @@
       "need": "needs time before speaking in front of the class",
       "source": "rule",
       "confirmed": true,
-      "detailId": "private-18",
+      "detailId": "private-16",
       "share": true
     },
     {
@@ -619,7 +591,7 @@
       "confirmed": true,
       "about": "student-4",
       "aboutName": "Tanvi Rao",
-      "detailId": "private-9",
+      "detailId": "private-7",
       "share": true
     },
     {
@@ -634,7 +606,7 @@
       "confirmed": true,
       "about": "student-4",
       "aboutName": "Tanvi Rao",
-      "detailId": "private-19",
+      "detailId": "private-17",
       "share": true
     }
   ],
@@ -649,27 +621,27 @@
     "from": "school policy (Remote Config)"
   },
   "draft": {
-    "title": "Class 6 English — Writing a short description of a place",
+    "title": "Class 6 English — Writing a Short Description of a Place",
     "items": [
       {
         "heading": "Starter (5 minutes)",
-        "text": "The teacher writes a place on the board and asks the class for sensory words. Pupils call out words for sights and sounds while the teacher lists them. Materials used are the whiteboard and a marker."
+        "text": "The teacher asks the whole class to name their favourite spot outdoors and writes the ideas on the board. The pupils call out places like a park or a playground. The materials needed are just the chalkboard and chalk."
       },
       {
         "heading": "Teach (10 minutes)",
-        "text": "The teacher explains how to structure a short description with an introductory sentence and supporting details. Pupils listen and identify adjectives in a sample sentence read aloud by the teacher. Materials used are prepared sample text strips."
+        "text": "The teacher explains how to use sensory words like sights and sounds to describe a place clearly. The pupils listen and give examples of words that describe a busy market. The materials needed are a large chart paper and markers."
       },
       {
         "heading": "Practise (15 minutes)",
-        "text": "The teacher guides pupils to write a five-line description of their favourite room using the board notes. Pupils draft their descriptions individually in their notebooks. Materials used are notebooks and pens."
+        "text": "The teacher guides the class to write a short paragraph about a familiar place using the new words. The pupils write their paragraphs individually in their notebooks. The materials needed are notebooks and pens."
       },
       {
         "heading": "Check (10 minutes)",
-        "text": "The teacher invites volunteers to read a sentence from their draft to the class. Pupils swap notebooks with a partner to check for capital letters and full stops. Materials used are the pupil notebooks."
+        "text": "The teacher invites volunteers to read their descriptions aloud and asks the class what they liked about each one. The pupils listen and share kind feedback. No special materials are needed."
       },
       {
         "heading": "Homework",
-        "text": "The teacher asks pupils to finish their short description of a place at home if not completed in class. Pupils copy the final homework task into their notebooks. Materials used are notebooks and pens."
+        "text": "The teacher assigns the task of writing a five-sentence description of the school library to be done at home. The pupils note down the task in their notebooks. The materials needed are notebooks and pens."
       }
     ]
   },
@@ -699,9 +671,10 @@
       "rules": 15
     },
     {
-      "verdict": "fits",
-      "reason": "Checked 3 steps against these details. No conflict found.",
-      "by": "none",
+      "verdict": "unsure",
+      "reason": "Aarav Sharma has not handed in homework for two weeks.",
+      "by": "model",
+      "modelSaid": "conflict",
       "rules": 15
     }
   ],
@@ -717,49 +690,49 @@
     {
       "step": "scan",
       "where": "ON_DEVICE",
-      "durationMs": 1535,
+      "durationMs": 3129,
       "modelRequests": 0,
       "otherRequests": 0
     },
     {
       "step": "guard",
       "where": "ON_DEVICE",
-      "durationMs": 16305,
+      "durationMs": 18431,
       "modelRequests": 0,
       "otherRequests": 0
     },
     {
       "step": "draft",
       "where": "IN_CLOUD",
-      "durationMs": 3181,
+      "durationMs": 4418,
       "modelRequests": 1,
       "otherRequests": 0
     },
     {
       "step": "check",
       "where": "ON_DEVICE",
-      "durationMs": 15951,
+      "durationMs": 18381,
       "modelRequests": 0,
       "otherRequests": 0
     },
     {
       "step": "label",
       "where": "ON_DEVICE",
-      "durationMs": 398,
+      "durationMs": 200,
       "modelRequests": 0,
       "otherRequests": 0
     },
     {
       "step": "fit",
       "where": "ON_DEVICE",
-      "durationMs": 1422,
+      "durationMs": 847,
       "modelRequests": 0,
       "otherRequests": 0
     },
     {
       "step": "materials",
       "where": "IN_CLOUD",
-      "durationMs": 2925,
+      "durationMs": 4071,
       "modelRequests": 1,
       "otherRequests": 0
     }
@@ -769,45 +742,46 @@
       "itemIndex": 1,
       "stage": "Teach",
       "childId": "student-1",
-      "text": "Give a brief recap of previous descriptive words used last time.",
+      "text": "Provide all required writing paper in class.",
+      "source": "cloud, for a need you approved",
+      "need": "C"
+    },
+    {
+      "itemIndex": 1,
+      "stage": "Teach",
+      "childId": "student-1",
+      "text": "Provide a quick recap of the recent missed lessons.",
       "source": "cloud, for a need you approved",
       "need": "H"
     },
     {
-      "itemIndex": 2,
-      "stage": "Practise",
+      "itemIndex": 1,
+      "stage": "Teach",
       "childId": "student-1",
-      "text": "During practice, the teacher offers Aarav a simpler sentence structure option to ensure completion without overwhelming him.",
-      "source": "on-device model"
-    },
-    {
-      "itemIndex": 3,
-      "stage": "Check",
-      "childId": "student-1",
-      "text": "When Aarav volunteers, the teacher provides specific positive feedback on content, focusing on his descriptive language.",
+      "text": "Show Aarav examples linking sensory words to place descriptions during the explanation to reinforce understanding.",
       "source": "on-device model"
     },
     {
       "itemIndex": 4,
       "stage": "Homework",
       "childId": "student-1",
-      "text": "Provide a reminder slip to submit current and past work.",
+      "text": "Give a gentle reminder and extra time to submit.",
       "source": "cloud, for a need you approved",
       "need": "M"
     },
     {
-      "itemIndex": 2,
-      "stage": "Practise",
+      "itemIndex": 3,
+      "stage": "Check",
       "childId": "student-2",
       "text": "Allow an oral answer instead of writing.",
       "source": "cloud, for a need you approved",
       "need": "F"
     },
     {
-      "itemIndex": 3,
-      "stage": "Check",
+      "itemIndex": 2,
+      "stage": "Practise",
       "childId": "student-3",
-      "text": "Put Kabir and Ishaan in different groups.",
+      "text": "Seat Kabir and Ishaan apart.",
       "source": "rule starter",
       "pair": true
     },
@@ -820,10 +794,10 @@
       "need": "G"
     },
     {
-      "itemIndex": 3,
-      "stage": "Check",
+      "itemIndex": 2,
+      "stage": "Practise",
       "childId": "student-5",
-      "text": "Put Kabir and Ishaan in different groups.",
+      "text": "Seat Kabir and Ishaan apart.",
       "source": "rule starter",
       "pair": true
     },
@@ -831,7 +805,7 @@
       "itemIndex": 2,
       "stage": "Practise",
       "childId": "student-4",
-      "text": "Offer an advanced vocabulary sheet for descriptive writing.",
+      "text": "Provide a more complex descriptive writing prompt.",
       "source": "cloud, for a need you approved",
       "need": "O"
     },
@@ -839,7 +813,7 @@
       "itemIndex": 3,
       "stage": "Check",
       "childId": "student-4",
-      "text": "Allow time to write thoughts before speaking in front of the class.",
+      "text": "Allow writing the answer before speaking aloud.",
       "source": "cloud, for a need you approved",
       "need": "N"
     },
@@ -847,7 +821,7 @@
       "itemIndex": 4,
       "stage": "Homework",
       "childId": "student-4",
-      "text": "Provide a written summary of the place description steps to take home.",
+      "text": "Give a take-home summary sheet of the lesson.",
       "source": "cloud, for a need you approved",
       "need": "E"
     }
@@ -944,7 +918,7 @@
   "needOutcomes": {
     "A": "already suits",
     "B": "already suits",
-    "C": "already suits",
+    "C": "for a stage",
     "D": "already suits",
     "E": "for a stage",
     "F": "for a stage",
@@ -958,13 +932,13 @@
   "variations": [
     {
       "itemIndex": 1,
-      "need": "H",
-      "text": "Give a brief recap of previous descriptive words used last time."
+      "need": "C",
+      "text": "Provide all required writing paper in class."
     },
     {
-      "itemIndex": 2,
-      "need": "F",
-      "text": "Allow an oral answer instead of writing."
+      "itemIndex": 1,
+      "need": "H",
+      "text": "Provide a quick recap of the recent missed lessons."
     },
     {
       "itemIndex": 2,
@@ -974,128 +948,172 @@
     {
       "itemIndex": 2,
       "need": "I",
-      "text": "Seat apart from the specified classmate."
+      "text": "Seat apart from the specific classmate."
     },
     {
       "itemIndex": 2,
       "need": "O",
-      "text": "Offer an advanced vocabulary sheet for descriptive writing."
+      "text": "Provide a more complex descriptive writing prompt."
+    },
+    {
+      "itemIndex": 3,
+      "need": "F",
+      "text": "Allow an oral answer instead of writing."
     },
     {
       "itemIndex": 3,
       "need": "N",
-      "text": "Allow time to write thoughts before speaking in front of the class."
+      "text": "Allow writing the answer before speaking aloud."
     },
     {
       "itemIndex": 4,
       "need": "E",
-      "text": "Provide a written summary of the place description steps to take home."
+      "text": "Give a take-home summary sheet of the lesson."
     },
     {
       "itemIndex": 4,
       "need": "M",
-      "text": "Provide a reminder slip to submit current and past work."
+      "text": "Give a gentle reminder and extra time to submit."
     }
   ],
   "materials": {
     "board": [
-      "Describing a Place",
-      "Sentence 1: Introduction",
-      "Sentences 2-5: Supporting details (sights, sounds)",
-      "Sensory words:",
-      "- Sights: bright, dusty, shadow",
-      "- Sounds: hum, whisper, echo",
-      "Use capital letters and full stops."
+      "Favourite outdoor spots: park, playground, beach, garden",
+      "Sensory words help us describe a place clearly",
+      "Sights: bright, tall, crowded, green",
+      "Sounds: loud, quiet, buzzing, laughing",
+      "Task: Write a short paragraph about a familiar place",
+      "Use sensory details for sights and sounds",
+      "Homework: Write a five-sentence description of the school library"
     ],
     "sheet": [
-      "Write an introductory sentence naming your favourite room.",
-      "Add a detail about what you see in the room.",
-      "Add a detail about what you hear in the room.",
-      "Add a detail about the lighting or colours.",
-      "Write a concluding sentence about how the room feels.",
-      "Check your work for capital letters and full stops."
+      "Name the familiar place you are writing about in one sentence.",
+      "Write two sentences describing what you can see in this place.",
+      "Write two sentences describing what you can hear in this place.",
+      "Choose one sensory word for colour and use it in a sentence.",
+      "Choose one sensory word for sound and use it in a sentence.",
+      "Combine your sentences into a single cohesive paragraph."
     ],
     "versions": [
       {
-        "need": "E",
-        "note": "Provide this summary for homework support.",
+        "need": "C",
+        "note": "Provide all required writing paper in class.",
         "items": [
-          "Step 1: Write an introductory sentence naming your favourite room.",
-          "Step 2: Add supporting details about sights and sounds.",
-          "Step 3: Check for capital letters and full stops."
+          "Name the familiar place you are writing about in one sentence on this provided paper.",
+          "Write two sentences describing what you can see in this place.",
+          "Write two sentences describing what you can hear in this place.",
+          "Choose one sensory word for colour and use it in a sentence.",
+          "Choose one sensory word for sound and use it in a sentence.",
+          "Combine your sentences into a single cohesive paragraph."
+        ]
+      },
+      {
+        "need": "E",
+        "note": "Give a take-home summary sheet of the lesson.",
+        "items": [
+          "Lesson Recap: Sensory words describe sights and sounds.",
+          "Sights tell us what a place looks like, such as bright or crowded.",
+          "Sounds tell us what a place sounds like, such as loud or quiet.",
+          "Homework task: Write a five-sentence description of the school library."
         ]
       },
       {
         "need": "F",
-        "note": "Allow the pupil to answer orally instead of writing.",
+        "note": "Allow an oral answer instead of writing.",
         "items": [
-          "Tell the teacher your introductory sentence aloud.",
-          "Tell the teacher one thing you see.",
-          "Tell the teacher one thing you hear.",
-          "Tell the teacher the colours or lighting.",
-          "Tell the teacher how the room makes you feel."
+          "Tell the teacher the name of your familiar place aloud.",
+          "Say two sentences describing what you can see.",
+          "Say two sentences describing what you can hear.",
+          "Say one sentence using a sensory word for colour.",
+          "Say one sentence using a sensory word for sound.",
+          "Recite your full short paragraph aloud."
         ]
       },
       {
         "need": "G",
-        "note": "Provide this extra challenge to write a second paragraph.",
+        "note": "Provide an extra challenge to write a second paragraph.",
         "items": [
-          "Complete the first five-line description of your favourite room.",
-          "Write a second paragraph describing how you move around this room.",
-          "Include three new sensory words in your second paragraph.",
-          "Check both paragraphs for capital letters and full stops."
+          "Name the familiar place you are writing about in one sentence.",
+          "Write two sentences describing what you can see in this place.",
+          "Write two sentences describing what you can hear in this place.",
+          "Combine your sentences into your first paragraph.",
+          "Extra Challenge: Write a second paragraph describing how the place smells and feels."
         ]
       },
       {
         "need": "H",
-        "note": "Provide this recap before starting the sheet.",
+        "note": "Provide a quick recap of the recent missed lessons.",
         "items": [
-          "Recap: Descriptive words tell us about sights and sounds.",
-          "Example sights: bright, dark, shiny, tall.",
-          "Example sounds: loud, quiet, sharp, soft.",
-          "Now proceed to the main practice sheet."
+          "Recap: A description paints a picture with words.",
+          "We use adjectives to describe objects and places.",
+          "Today we focus on sensory words for sights and sounds.",
+          "Name a familiar place.",
+          "Write two sentences about what you see.",
+          "Write two sentences about what you hear."
+        ]
+      },
+      {
+        "need": "I",
+        "note": "Seat apart from the specific classmate.",
+        "items": [
+          "Name the familiar place you are writing about in one sentence at your isolated desk.",
+          "Write two sentences describing what you can see in this place.",
+          "Write two sentences describing what you can hear in this place.",
+          "Choose one sensory word for colour and use it in a sentence.",
+          "Choose one sensory word for sound and use it in a sentence.",
+          "Combine your sentences into a single cohesive paragraph."
         ]
       },
       {
         "need": "M",
-        "note": "Provide this reminder slip with the homework.",
+        "note": "Give a gentle reminder and extra time to submit.",
         "items": [
-          "Reminder: Please finish your short description at home.",
-          "Reminder: Submit all current and past work tomorrow."
+          "Name the familiar place you are writing about in one sentence.",
+          "Write two sentences describing what you can see in this place.",
+          "Write two sentences describing what you can hear in this place.",
+          "Note: Take your time, submit when ready with extra days granted."
+        ]
+      },
+      {
+        "need": "N",
+        "note": "Allow writing the answer before speaking aloud.",
+        "items": [
+          "Write down your answers to the practice questions first.",
+          "Read your written sentences quietly to yourself.",
+          "Raise your hand when ready to read your description aloud.",
+          "Share your sights and sounds sentences with the class."
         ]
       },
       {
         "need": "O",
-        "note": "Provide this advanced vocabulary sheet for the description.",
+        "note": "Provide a more complex descriptive writing prompt.",
         "items": [
-          "Advanced Sights: shimmering, gloomy, vibrant, barren.",
-          "Advanced Sounds: muffled, resonant, rustling, discordant.",
-          "Write your introduction using advanced vocabulary.",
-          "Draft your five-line description with complex sentences."
+          "Name a complex, bustling historical marketplace in one sentence.",
+          "Write two advanced sentences incorporating rich visual imagery.",
+          "Write two sentences capturing layered auditory details and echoes.",
+          "Use figurative language or metaphor in your description.",
+          "Combine your complex sentences into a polished descriptive paragraph."
         ]
       }
     ],
     "ticket": [
       {
-        "question": "What should the first sentence of your description do?",
-        "answer": "Introduce the place."
+        "question": "What kind of words do we use to describe sights and sounds?",
+        "answer": "Sensory words"
       },
       {
-        "question": "Give one example of a sensory word for sound.",
-        "answer": "Hum"
+        "question": "Give one example of a sensory word for a sound.",
+        "answer": "Loud (or quiet, buzzing, laughing)"
       },
       {
-        "question": "What two punctuation marks must every sentence have?",
-        "answer": "Capital letter and full stop"
+        "question": "What is the homework task assigned today?",
+        "answer": "Write a five-sentence description of the school library"
       }
     ],
     "same": [
       "A",
       "B",
-      "C",
-      "D",
-      "I",
-      "N"
+      "D"
     ],
     "missing": []
   }

@@ -613,6 +613,28 @@ describe('guard helpers', () => {
     expect(anchorQuote(para, 'he has asthma')).toBeUndefined();
   });
 
+  it('skips bare kinship titles in people and normalizes curly apostrophes and trailing punctuation in anchor', () => {
+    const curly = "Kabir’s parents are separating, and his father lost his shop.";
+    expect(anchorQuote(curly, "Kabir's parents are separating.")).toBe('Kabir’s parents are separating');
+    const reading = readGuardAnswer(
+      curly,
+      JSON.stringify({
+        people: [
+          { name: 'Kabir', role: 'student' },
+          { name: 'his father', role: 'adult' },
+          { name: 'mother', role: 'adult' },
+        ],
+        places: [],
+        private: [{ quote: 'his father lost his shop.', category: 'family', about: 'Kabir' }],
+      }),
+    );
+    expect(reading?.dropped).toBe(0);
+    expect(reading?.candidates.map((c) => [c.kind, c.text])).toEqual([
+      ['student', 'Kabir'],
+      ['private', 'his father lost his shop'],
+    ]);
+  });
+
   it('widens a quote that cuts a word', () => {
     expect(anchorQuote(para, 'staying with his grandmoth')).toBe('staying with his grandmother');
     expect(anchor(para, 'staying with his grandmoth')).toEqual({ text: 'staying with his grandmother', exact: true });
@@ -2229,5 +2251,18 @@ describe('parts of the note the on-device model could not read', () => {
     expect(approvalKey('x', ['contact'], 'gemini-3.5-flash-lite', false, [1])).not.toBe(unread);
     expect(approvalKey('y', ['contact'], 'gemini-3.5-flash-lite', false, [1, 3])).not.toBe(unread);
     expect(approvalKey('x', ['contact'], 'gemini-3.5-flash-lite', true)).not.toBe(unread);
+  });
+});
+
+describe('sensitive rule refinements', () => {
+  it('spares curriculum health topics while keeping personal health, fatigue, hunger, shop loss, and unpaid fees', () => {
+    expect(
+      findSensitive('She is preparing a science chapter on diseases after reading a story about a hospital. He is making a poster on mental health.'),
+    ).toEqual([]);
+
+    const mixed =
+      'She missed a chapter on biology because she was admitted to hospital with asthma. Gets tired easily in class. Arrives without breakfast. Father lost his shop and has not paid the exam fee.';
+    const hits = findSensitive(mixed);
+    expect(hits.map((h) => h.category)).toEqual(['health', 'health', 'family', 'family']);
   });
 });

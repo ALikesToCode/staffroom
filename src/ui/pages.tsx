@@ -546,11 +546,24 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
         <tbody>
           <tr>
             <td>Guard on 12 fresh invented notes (60 private details, 3 runs each)</td>
-            <td>Rules alone hid 40/60 in full and missed 9; rules + 1-pass combined Gemini Nano hid 49.3/60 on average (148/180, median 4.06s) and cut misses to 2.3/60, with 2/8 harmless held (vs 5/8).</td>
+            <td>
+              Rules alone hid 46/60 in full (138/180) and held 9/24 harmless details; rules + 1-pass combined Gemini Nano hid 51.0/60 (153/180, median 3.81s),
+              cut misses to 2.0/60 (6/180), and dropped false holds to 0/24 (12/33 constraints, +19 extra).
+            </td>
+          </tr>
+          <tr>
+            <td>35-pupil class stress test (28 Nov, Chrome 158)</td>
+            <td>
+              2,177-char note across 16 paragraphs: 67 private spans withheld locally (+17 Nano beyond 50 rules), 0 unread/dropped/partial,
+              0 exit-gate violations, 0 leaked tokens (50.3s).
+            </td>
           </tr>
           <tr>
             <td>Multimodal scan &amp; offline draft fallback (28 Nov, Chrome 158)</td>
-            <td>Local notebook photo OCR transcribed 231 chars in 7.1s with 0 cloud requests; offline PREFER_IN_CLOUD draft fallback streamed on Gemini Nano in 40.8s with caution notice.</td>
+            <td>
+              Local notebook photo OCR transcribed 231 chars in 3.1s (4.4s end-to-end) with 0 cloud requests and extracted 2 pupil names;
+              offline PREFER_IN_CLOUD draft fallback streamed on Gemini Nano in 41.3s with caution notice, 12/12 needs covered (0 missing), and 0 bracket leaks.
+            </td>
           </tr>
           <tr>
             <td>Check on 16 unseen held-out cases (3 runs each)</td>

@@ -237,7 +237,7 @@ export async function fitForChild(input: ChildFitInput, ask?: FitAsk): Promise<F
 
 /** Kept short, like FIT_SYSTEM. The lesson stays as it is for the class; the answer is for the teacher, about one child. */
 export const FIT_LESSON_SYSTEM =
-  'A teacher has a lesson plan for the whole class and private notes about one child. Write at most two points for the teacher. Each point names one stage of the lesson and gives one sentence of at most 25 words. The sentence begins with a verb and says what the teacher does for this child in that stage based on the notes and stage task. No generic encouragement. If nothing in the notes matters for this lesson, give no points. No diagnosis. Never ask a child to share or recall family, money, health, or home hardships.';
+  "A teacher has a lesson plan for the whole class and private notes about one child. Write at most two points for the teacher. Each point names one stage of the lesson and gives one sentence of at most 25 words. The sentence begins with a verb and says what the teacher does for this child in that stage based on the notes and stage task. No generic encouragement. If nothing in the notes matters for this lesson, give no points. No diagnosis. Never ask a child to share or recall family, money, health, or home hardships. Match the lesson's subject and stage task; do not pull in other subjects.";
 export const FIT_LESSON_CHILD = 'Child: ';
 export const FIT_LESSON_NOTES = 'Notes about the child:';
 export const FIT_LESSON_PLAN = 'Lesson plan:';
@@ -260,6 +260,10 @@ export interface LessonFitInput {
   /** What the note says about the child, names and private details as written. It is read on the device only. */
   childNote: string;
   stages: FitStage[];
+  /** Optional class/subject/topic summary so suggestions stay aligned to this lesson. */
+  lessonHeader?: string;
+  /** Optional subject name used to filter off-subject suggestions (e.g., maths in an English lesson). */
+  lessonSubject?: string;
 }
 
 /** The answer's form: at most two points, each for one of this lesson's stages. */
@@ -283,10 +287,12 @@ export function fitLessonSchema(stages: readonly FitStage[]): Record<string, unk
 
 /** The prompt for one child and the whole lesson. `mustNot`: the words a rule matched in the answer before this one. */
 export function fitLessonPrompt(input: LessonFitInput, mustNot: string[] = []): string {
+  const subjectLine = input.lessonHeader?.trim() || input.lessonSubject?.trim();
   const lines = [
     `${FIT_LESSON_CHILD}${input.childName}`,
     FIT_LESSON_NOTES,
     input.childNote,
+    ...(subjectLine ? [`Lesson: ${subjectLine}`] : []),
     FIT_LESSON_PLAN,
     ...input.stages.map((s) => `${s.name}${s.minutes ? ` (${s.minutes} minutes)` : ''}: ${s.summary}`),
     FIT_LESSON_ASK,
@@ -314,8 +320,9 @@ const INTRUSIVE_PROMPT_RE =
   /\b(?:(?:ask|prompt|invite|have|encourage|get)(?:s|ed|ing)?\b[^.!?\n]{0,50}\b(?:shar(?:e|es|ed|ing)|recall(?:s|ed|ing)?|describ(?:e|es|ed|ing)|discuss(?:es|ed|ing)?|talk(?:s|ed|ing)? about|writ(?:e|es|ing) about|mention(?:s|ed|ing)?|explain(?:s|ed|ing)?)\b|(?:recall(?:s|ed|ing)?|shar(?:e|es|ed|ing)|discuss(?:es|ed|ing)?|talk(?:s|ed|ing)? about|draw(?:s|ed|ing)?\s+on|bring(?:s|ing)? up|brought up|connect(?:s|ed|ing)?|refer(?:s|red|ring)?\s+to|relat(?:e|es|ed|ing)?|us(?:e|es|ing)|incorporat(?:e|es|ing)|bas(?:e|es|ed|ing)|tie(?:s|d)?|weav(?:e|es|ing))\b)[^.!?\n]{0,65}\b(?:family(?:'s)?|home\s+(?:life|situation)|tea\s+stall|job|money|income|financial|epilepsy|seizure|illness|health|mother|father|grandmother|parents?|separation|hardships?|situation|involvement)\b/i;
 
 const PRIVATE_HARDSHIP_NOUN_RE = /\b(?:tea\s+stall|mill\s+job|unpaid\s+fee|parents?\s+separat\w*|divorce)\b/i;
+const MATH_TERM_RE = /\b(?:maths?|mathematics|arithmetic|calculations?|numeracy)\b/i;
 
-export function readPoints(raw: string, stages: readonly FitStage[]): { points: FitPoint[]; unknown: number } | undefined {
+export function readPoints(raw: string, stages: readonly FitStage[], lessonSubject = ''): { points: FitPoint[]; unknown: number } | undefined {
   let parsed: { points?: unknown } | null;
   try {
     parsed = JSON.parse(raw) as { points?: unknown } | null;
@@ -323,6 +330,7 @@ export function readPoints(raw: string, stages: readonly FitStage[]): { points: 
     return undefined;
   }
   if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.points)) return undefined;
+  const nonMathLesson = Boolean(lessonSubject.trim() && !MATH_TERM_RE.test(lessonSubject));
   const points: FitPoint[] = [];
   let unknown = 0;
   for (const p of parsed.points as { stage?: unknown; do?: unknown }[]) {
@@ -338,6 +346,10 @@ export function readPoints(raw: string, stages: readonly FitStage[]): { points: 
     const itemIndex = stages.findIndex((s) => s.name.toLowerCase() === named);
     if (itemIndex < 0) {
       unknown++;
+      continue;
+    }
+    const targetStage = stages[itemIndex];
+    if (nonMathLesson && MATH_TERM_RE.test(text) && !MATH_TERM_RE.test(targetStage.name) && !MATH_TERM_RE.test(targetStage.summary)) {
       continue;
     }
     if (points.some((x) => x.itemIndex === itemIndex && same(x.text, text))) continue;
@@ -378,7 +390,7 @@ export async function fitLessonForChild(input: LessonFitInput, check: (point: Fi
   const answer = async (mustNot: string[]) => {
     const got = await put(fitLessonPrompt(input, mustNot));
     if (!got.onDevice) throw new Error('The fit did not run on the device. Stopped.');
-    return readPoints(got.text, input.stages);
+    return readPoints(got.text, input.stages, input.lessonSubject);
   };
   const first = await answer([]);
   if (!first) return { points: [], droppedByRule: 0, unknownStage: 0, read: false, asked: 1 };

@@ -4,6 +4,7 @@ import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redactRange, redactWithTokens } from './vault';
 import { confirmConstraint, proposeConstraints } from './constraints';
 import { afterBellActivities, cloudSawAround, combineChecks, layerCounts, negated, ruleCheckItem, ruleConflicts, ruleOnlyReason, stageOf, verdictLabel } from './conflicts';
+import { ruleSupportedLanguage } from './lesson';
 import { keepNoConflict, NOT_ANSWERED, NOTHING_WITHHELD, startsKept } from '../ai/check';
 import { makeReceipt, plainTitle, receiptRecord } from './receipts';
 import { constraintCounts } from './constraints';
@@ -531,5 +532,61 @@ describe('the title a receipt has before a model names it', () => {
     expect(plainTitle('plan', new Date(2026, 10, 26, 9, 30))).toBe('Support plan · 26 Nov 2026');
     expect(plainTitle('parents', new Date(2027, 0, 3))).toBe('Notes to parents · 3 Jan 2027');
     expect(plainTitle('handover', new Date(2026, 11, 31))).toBe('Hand-over · 31 Dec 2026');
+  });
+});
+
+describe('Hindi (Devanagari) conflict rules', () => {
+  const c = (kind: ConstraintKind, extra: Partial<Constraint> = {}): Constraint => ({
+    id: `c-${kind}`,
+    kind,
+    about: 's1',
+    text: 'hindi test',
+    source: 'rule',
+    confirmed: true,
+    ...extra,
+  });
+
+  it('catches time-after, time-before, and cross-language days-away while sparing home evening study', () => {
+    expect(ruleConflicts('स्कूल छूटने के बाद अतिरिक्त कक्षा में अभ्यास करें।', c('time-after'), { name: 'Meenal' })?.verdict).toBe('conflict');
+    expect(ruleConflicts('घर पर शाम को दोहराएँ।', c('time-after'), { name: 'Meenal' })).toBeUndefined();
+    expect(ruleConflicts('पहली घंटी से पहले विद्यालय आएँ।', c('time-before'), { name: 'Aarav' })?.verdict).toBe('conflict');
+    expect(ruleConflicts('मंगलवार को समूह कार्य करें।', c('days-away', { days: ['tuesday'] }), { name: 'Tanvi' })?.verdict).toBe('conflict');
+  });
+
+  it('catches money, bring-from-home, phone/internet, and SOV parent contact while respecting Hindi negation', () => {
+    expect(ruleConflicts('बच्चों से कार्यपुस्तिका खरीदें या शुल्क जमा करें।', c('money'), { name: 'Riya' })?.verdict).toBe('conflict');
+    expect(ruleConflicts('Bring a mat from home.', c('money'), { name: 'Riya' })?.verdict).toBe('conflict');
+    expect(ruleConflicts('घर से मिट्टी का मॉडल लाएँ।', c('money'), { name: 'Riya' })?.verdict).toBe('conflict');
+    expect(ruleConflicts('घर से कॉपी लाएँ।', c('money'), { name: 'Riya' })).toBeUndefined();
+
+    expect(ruleConflicts('घर पर ऑनलाइन वीडियो देखें और व्हाट्सएप करें।', c('no-phone-internet'), { name: 'Kabir' })?.verdict).toBe('conflict');
+    expect(ruleConflicts('कक्षा में प्रोजेक्टर पर वीडियो दिखाएँ।', c('no-phone-internet'), { name: 'Kabir' })).toBeUndefined();
+    expect(ruleConflicts('ऑनलाइन अभ्यास करें।', c('no-phone-internet'), { name: 'Kabir' })?.verdict).toBe('unsure');
+
+    expect(ruleConflicts('पिताजी को फ़ोन करें और समस्या बताएँ।', c('contact', { who: 'father' }), { name: 'Kabir' })?.verdict).toBe('conflict');
+    expect(ruleConflicts('माता-पिता से मिलें।', c('contact', { who: 'father' }), { name: 'Kabir' })?.verdict).toBe('unsure');
+
+    // SOV post-negation and verb-conjunction boundary:
+    expect(ruleConflicts('मोबाइल और इंटरनेट का उपयोग न करें।', c('no-phone-internet'), { name: 'Kabir' })).toBeUndefined();
+    expect(ruleConflicts('अंतिम घंटी के बाद रुकना नहीं है।', c('time-after'), { name: 'Meenal' })).toBeUndefined();
+    expect(ruleConflicts('अभिभावक को फोन न करें।', c('contact', { who: 'father' }), { name: 'Kabir' })).toBeUndefined();
+    expect(ruleConflicts('घर पर वीडियो देखें और स्कूल के बाद न रुकें।', c('no-phone-internet'), { name: 'Kabir' })?.verdict).toBe('conflict');
+  });
+
+  it('handles Devanagari matras without splitting inside words and recognizes Hindi homework headings', () => {
+    expect(stageOf({ heading: 'गृहकार्य', text: 'अभ्यास करें।' }, true)).toBe('homework');
+    expect(ruleSupportedLanguage('Hindi')).toBe(true);
+    expect(ruleSupportedLanguage('French')).toBe(false);
+    // "फ़ोनों" / words with matras remain intact:
+    const hit = ruleCheckItem(
+      { heading: 'गृहकार्य', text: 'शाम को ऑनलाइन अभ्यास करें।' },
+      [c('no-phone-internet')],
+      [{ id: 's1', kind: 'student', category: 'STUDENT', surfaces: ['Kabir'], token: '[Student 1]', source: 'class list', withheld: true }],
+      ['[Student 1]'],
+      'Kabir has no phone at home.',
+      new Map(),
+      true,
+    );
+    expect(hit.hit?.verdict).toBe('conflict');
   });
 });

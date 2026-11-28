@@ -11,9 +11,10 @@ import { FIT_CASES, FIT_CHILD_CASES, fitRow, fitTotals, lessonFitCases, lessonFi
 import { FIT_CHILD_SYSTEM, FIT_LESSON_SYSTEM, fitLessonSchema, onDeviceFit } from '../ai/fit';
 import { runLessonSet } from './lesson';
 import { LEARNING_CASES, runLearningRules, runNeedsSet, runTicketSet } from './needs';
-import { guardOnDevice } from '../ai/guard';
-import { constraintsOnDevice } from '../ai/constraints';
+import { constraintsFromCombined, guardCombinedOnDevice, guardOutcome } from '../ai/guard';
+import { buildVault, deterministicCandidates } from '../core/vault';
 import { GUARD_CASES, guardNote, guardTotals, scoreGuard, type GuardDevice, type GuardMode, type GuardRow } from './guard';
+import { buildScale35Fixture, scoreScale35, type Scale35Result } from './scale35';
 
 // A developer page, not part of the app. It runs fixed cases through the same check the app runs and shows
 // what came back. Nothing is sent anywhere: the model sets use the ONLY_ON_DEVICE route, and the rule set
@@ -38,7 +39,7 @@ const runs = Math.max(1, Math.min(20, Number(params.get('runs')) || 1));
  * No set: the 24 single-fact cases.
  */
 const rawSet = params.get('set') === 'check' ? 'heldout' : params.get('set');
-const set = (['rules', 'full', 'heldout', 'fit', 'lesson', 'needs', 'learning', 'guard'] as const).find((s) => s === rawSet) ?? 'cases';
+const set = (['rules', 'full', 'heldout', 'fit', 'lesson', 'needs', 'learning', 'guard', 'scale35'] as const).find((s) => s === rawSet) ?? 'cases';
 /** One fact at a time is the default, as in the app. ?perFact=0 asks about all of a child's facts in one prompt. */
 const perFact = params.get('perFact') !== '0';
 
@@ -52,11 +53,12 @@ const SET_NAME: Record<typeof set, string> = {
   needs: '5 lesson replies with lines for needs, placed beside the children of the sample class, plain code, no model',
   learning: '12 paragraphs for the rule-based learning-need proposer (no model)',
   guard: '12 fresh notes through the guard, rules only and with the on-device model',
+  scale35: '35-pupil full-class stress benchmark (mixed English, Hinglish, and Devanagari), rules and combined on-device guard',
 };
 /** The guard set runs each note three times unless the address says otherwise. */
 const guardRuns = params.has('runs') ? runs : 3;
 document.getElementById('eval-mode')!.textContent =
-  set === 'rules' || set === 'lesson' || set === 'needs' || set === 'learning'
+  set === 'rules' || set === 'lesson' || set === 'needs' || set === 'learning' || set === 'scale35'
     ? `Set: ${SET_NAME[set]}.`
     : set === 'fit'
       ? `Set: ${SET_NAME[set]}. Runs of each: ${runs}.`
@@ -457,7 +459,18 @@ async function runGuardSet(onDevice: GuardDevice | null) {
 /** The guard set starts at once with the rules; the model is loaded first when it can be. */
 async function startGuard() {
   const device = await deviceStatus();
-  const onDevice: GuardDevice = { guard: (note) => guardOnDevice(note, () => {}), constraints: (note, entities) => constraintsOnDevice(note, entities, () => {}) };
+  let lastRaw: { paragraph: string; raw: string }[] = [];
+  const onDevice: GuardDevice = {
+    guard: async (note) => {
+      const report = await guardCombinedOnDevice(note, () => {});
+      lastRaw = report.rawParagraphAnswers;
+      return report;
+    },
+    constraints: async (note, entities) => {
+      const extracted = constraintsFromCombined(note, entities, lastRaw);
+      return { constraints: extracted.constraints, asked: lastRaw.length, unread: 0, dropped: extracted.dropped };
+    },
+  };
   if (device === 'available') return runGuardSet(onDevice);
   if (device === 'downloadable' || device === 'downloading') {
     status.textContent = 'The on-device model is not loaded yet. Press the button to load it and run both modes.';
@@ -496,12 +509,76 @@ function runRules() {
   document.body.dataset.state = 'done';
 }
 
+async function runScale35Set(withModel: boolean) {
+  const fixture = buildScale35Fixture();
+  const paras = paragraphs(fixture.note);
+  const t0 = performance.now();
+  const rulesRow = scoreScale35(fixture, [], 'RULES_ONLY', [], 0, 0, Math.round(performance.now() - t0), paras.length);
+  let modelRow: (Scale35Result & { combinedConstraints: number }) | null = null;
+  if (withModel) {
+    status.textContent = `Running 35-pupil combined Nano guard (${paras.length} paragraphs)…`;
+    const began = performance.now();
+    const report = await guardCombinedOnDevice(fixture.note, (done, total) => {
+      status.textContent = `35-pupil stress test: paragraph ${Math.min(done + 1, total)} of ${total}`;
+    });
+    const outcome = guardOutcome(report);
+    const ms = Math.round(performance.now() - began);
+    const scored = scoreScale35(fixture, report.candidates, outcome.where, outcome.unread, outcome.dropped, outcome.partial, ms, report.total);
+    const modelVault = buildVault(fixture.note, [...deterministicCandidates(fixture.note, fixture.classList), ...report.candidates]);
+    const combinedConstraints = constraintsFromCombined(fixture.note, modelVault, report.rawParagraphAnswers).constraints.length;
+    modelRow = { ...scored, combinedConstraints };
+  }
+  const addRow = (mode: string, r: Scale35Result & { combinedConstraints?: number }) => {
+    const tr = table.insertRow();
+    cell(tr, '1');
+    cell(tr, 'scale35');
+    cell(tr, `${mode} (${r.where})`);
+    cell(tr, `${r.students} students · ${r.noteChars} chars · ${r.paragraphs} paragraphs`);
+    cell(tr, `${fixture.mustWithhold.length} PII markers, 0 leaks`);
+    cell(
+      tr,
+      `${r.entitiesHeld} withheld (+${r.nanoAdded} Nano), ${r.leakedTokens.length} leaked, ${r.exitGateViolations.length} gate stops`,
+      r.leakedTokens.length === 0 && r.exitGateViolations.length === 0 ? 'right' : 'wrong',
+    );
+    cell(tr, `constraints ${r.constraintsProposed}${r.combinedConstraints !== undefined ? ` + ${r.combinedConstraints} Nano` : ''}, dropped ${r.dropped}, partial ${r.partial}`);
+    cell(tr, String(r.ms));
+  };
+  addRow('rules', rulesRow);
+  if (modelRow) addRow('model', modelRow);
+  status.textContent = `Done (${SET_NAME.scale35}). Rules: ${rulesRow.entitiesHeld} withheld (${rulesRow.leakedTokens.length} leaked, ${rulesRow.ms} ms).${
+    modelRow ? ` Model (${modelRow.where}): ${modelRow.entitiesHeld} withheld (+${modelRow.nanoAdded} Nano, ${modelRow.leakedTokens.length} leaked, ${modelRow.ms} ms).` : ' No on-device model run.'
+  }`;
+  json.textContent = JSON.stringify({ done: true, at: new Date().toISOString(), userAgent: navigator.userAgent, set: 'scale35', rules: rulesRow, model: modelRow }, null, 2);
+  document.body.dataset.state = 'done';
+}
+
+async function startScale35() {
+  const device = await deviceStatus();
+  if (device === 'available') return runScale35Set(true);
+  if (device === 'downloadable' || device === 'downloading') {
+    status.textContent = 'The on-device model is not loaded yet. Press the button to load it and run scale35.';
+    start.hidden = false;
+    start.onclick = async () => {
+      start.disabled = true;
+      try {
+        await prepareDevice((f) => (status.textContent = `Loading the on-device model: ${Math.round(f * 100)}%`));
+        await runScale35Set(true);
+      } catch {
+        await runScale35Set(false);
+      }
+    };
+    return;
+  }
+  return runScale35Set(false);
+}
+
 async function begin() {
   if (set === 'rules') return runRules();
   if (set === 'lesson') return runLessons();
   if (set === 'needs') return runNeeds();
   if (set === 'learning') return runLearning();
   if (set === 'guard') return startGuard();
+  if (set === 'scale35') return startScale35();
   const device = await deviceStatus();
   if (device === 'available') return run();
   if (device === 'downloadable' || device === 'downloading') {

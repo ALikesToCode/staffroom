@@ -1,3 +1,4 @@
+import { splitVariations } from '../core/lessonNeeds';
 import { MATERIALS_SCHEMA, MATERIALS_SYSTEM, readMaterials, type Materials } from '../core/materials';
 import type { Draft, LabelWhere, Task, TaskId, Where } from '../core/types';
 import { ON_DEVICE_MODEL } from '../core/receipts';
@@ -54,6 +55,126 @@ export const DRAFT_NOTES_HEADING = "The teacher's redacted notes:";
  */
 export function draftPrompt(redacted: string, task: Task): string {
   return `${task.instruction}\n\n${DRAFT_FORMAT}\n\n${DRAFT_NOTES_HEADING}\n${redacted}`;
+}
+
+/** System instruction for offline on-device lesson plans: bracket-free and focused on lettered needs. */
+export const OFFLINE_LESSON_SYSTEM =
+  'You plan practical classroom lessons in plain text for teachers in India. Never write square brackets or numbered labels like Student 1. Write for the whole class and answer every lettered need requested.';
+
+/** Bracket-free schema used for on-device lesson fallback so local Nano does not echo stand-in hints. */
+const OFFLINE_LESSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: { type: 'string' },
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { heading: { type: 'string' }, text: { type: 'string' } },
+        required: ['heading', 'text'],
+      },
+    },
+  },
+  required: ['title', 'items'],
+};
+
+const NEEDS_LINE_RE = /^Need ([A-Z]+): (.+)$/gm;
+const LESSON_SECTION_RE = /(?:^|\n)Lesson\n/;
+const OFFLINE_COLON_NEED_RE = /^Need\s+([A-Za-z]{1,2})\s*[:.–-]\s*(.+)$/gm;
+const STAGE_MIN_RE = /\s*[(\[–—:-]\s*\d+\s*min(?:ute)?s?\.?\s*[)\]]?\s*$/iu;
+
+function pickOfflineStage(text: string, stages: readonly string[]): string {
+  if (/^(?:this\s+lesson\s+already\s+suits|already\s+suited|no\s+change\s+needed)/i.test(text.trim())) return 'none';
+  if (/homework|at home|take[- ]home|after school|before.*bell|next\s+(?:day|morning)|hand\s*in/i.test(text)) {
+    const hw = stages.find((s) => /homework/i.test(s));
+    if (hw) return hw;
+  }
+  if (/starter|warm[- ]?up|opening|begin/i.test(text)) {
+    const st = stages.find((s) => /starter/i.test(s));
+    if (st) return st;
+  }
+  if (/teach|explain|model|board|demonstrat/i.test(text)) {
+    const tc = stages.find((s) => /teach/i.test(s));
+    if (tc) return tc;
+  }
+  return stages.find((s) => /practis|practic/i.test(s)) ?? stages[0] ?? 'none';
+}
+
+/**
+ * Convert colon-formatted Need lines (`Need A: adjustment`) produced by compact
+ * offline Gemini Nano prompts into pipe entries (`Need A | Stage | adjustment`)
+ * expected by `splitVariations`. Cloud pipe replies pass through unchanged.
+ */
+export function normalizeOfflineNeeds(draft: Draft, letters: readonly string[]): Draft {
+  const isNeeds = (h: string) => h.replace(/[\s:.]+$/, '').trim().toLowerCase() === 'for each need';
+  const at = draft.items.map((i) => isNeeds(i.heading)).lastIndexOf(true);
+  if (at < 0) return draft;
+  const text = draft.items[at].text;
+  if (/\bNeed\s+[A-Za-z]{1,2}\s*\|/.test(text)) return draft;
+  const stages = draft.items
+    .filter((_, i) => i !== at)
+    .map((i) => i.heading.replace(STAGE_MIN_RE, '').trim())
+    .filter(Boolean);
+  const lines: string[] = [];
+  for (const m of text.matchAll(OFFLINE_COLON_NEED_RE)) {
+    const letter = m[1].toUpperCase();
+    const adj = m[2].trim();
+    if (!letters.includes(letter) || !adj) continue;
+    lines.push(`Need ${letter} | ${pickOfflineStage(adj, stages)} | ${adj}`);
+  }
+  if (lines.length === 0) return draft;
+  return {
+    title: draft.title,
+    items: draft.items.map((item, i) => (i === at ? { ...item, text: lines.join('\n') } : item)),
+  };
+}
+
+/**
+ * Compact, structured prompt used ONLY when the cloud is unreachable and Chrome's built-in Nano
+ * takes over a lesson plan. Reads only the already-redacted text so zero private identity is exposed.
+ */
+export function offlineLessonPrompt(redacted: string): string {
+  const needs = [...redacted.matchAll(NEEDS_LINE_RE)].map((m) => ({ letter: m[1], line: m[2].trim() }));
+  const needsAt = redacted.indexOf('Needs in this class');
+  const lessonMatch = LESSON_SECTION_RE.exec(redacted);
+  const whatAt = redacted.indexOf('What the lesson is:');
+  const lessonAt = lessonMatch ? lessonMatch.index + (lessonMatch[0].startsWith('\n') ? 1 : 0) : whatAt;
+
+  let lessonBlock = '';
+  let notesPart = '';
+  if (lessonAt >= 0 && needsAt >= 0) {
+    if (needsAt < lessonAt) {
+      notesPart = redacted.slice(0, needsAt).trim();
+      lessonBlock = redacted.slice(lessonAt).trim();
+    } else {
+      notesPart = redacted.slice(0, lessonAt).trim();
+      lessonBlock = redacted.slice(lessonAt, needsAt).trim();
+    }
+  } else if (lessonAt >= 0) {
+    notesPart = redacted.slice(0, lessonAt).trim();
+    lessonBlock = redacted.slice(lessonAt).trim();
+  } else if (needsAt >= 0) {
+    notesPart = redacted.slice(0, needsAt).trim();
+  } else {
+    notesPart = redacted.trim();
+  }
+
+  const lines = [
+    'Return JSON with "title" and "items": 4 practical stages totalling the lesson minutes (Starter, Teach, Practise, Homework), plus one final item with exact heading "For each need" if needs are given.',
+    'Plain text only. Refer to pupils generally (a pupil, pairs, the class). NEVER use square brackets anywhere.',
+    ...(lessonBlock ? ['', lessonBlock] : []),
+    ...(notesPart ? ['', 'Class notes:', notesPart] : []),
+  ];
+  if (needs.length > 0) {
+    const letters = needs.map((n) => n.letter);
+    lines.push(
+      '',
+      'Inside the final "For each need" item, write one line for EVERY letter in "Need X: <one short classroom adjustment>" format:',
+      ...needs.map((n) => `Need ${n.letter}: ${n.line}`),
+      `Cover every letter: ${letters.join(', ')}.`,
+    );
+  }
+  return lines.join('\n');
 }
 
 const SCHEMA = {
@@ -123,12 +244,13 @@ export async function streamContent(
   prompt: string,
   onChunk?: (accumulatedText: string) => void,
   fallbackModel?: () => ReturnType<typeof modelFor> | null,
-  validate?: (text: string) => boolean,
+  validate?: (text: string, onDevice: boolean) => boolean,
+  fallbackPrompt?: string,
 ): Promise<{ text: string; onDevice: boolean }> {
   try {
     const result = await readStream(model, prompt, onChunk);
-    if (!result.onDevice && validate && !validate(result.text)) {
-      throw new Error('The streamed cloud reply ended incomplete.');
+    if (validate && !validate(result.text, result.onDevice)) {
+      throw new Error(result.onDevice ? 'The on-device draft ended incomplete.' : 'The streamed cloud reply ended incomplete.');
     }
     return result;
   } catch (err) {
@@ -137,7 +259,7 @@ export async function streamContent(
     onChunk?.('');
     let recovered: { text: string; onDevice: boolean };
     try {
-      recovered = await readStream(deviceModel, prompt, onChunk);
+      recovered = await readStream(deviceModel, fallbackPrompt ?? prompt, onChunk);
     } catch {
       throw err;
     }
@@ -159,36 +281,61 @@ export async function writeDraft(
   cloudModel: string,
   onProgressText?: (partialText: string) => void,
 ): Promise<DraftResult> {
-  const opts = { system: draftSystem(task.id), schema: SCHEMA, cloudModel };
+  const isLesson = task.id === 'lesson';
+  const toldLetters = isLesson ? [...redacted.matchAll(NEEDS_LINE_RE)].map((m) => m[1]) : [];
+  const isOffline = typeof globalThis.navigator !== 'undefined' && globalThis.navigator.onLine === false;
+  const opts = {
+    system: draftSystem(task.id),
+    schema: SCHEMA,
+    cloudModel,
+    ...(isLesson ? { onDeviceSystem: OFFLINE_LESSON_SYSTEM, onDeviceSchema: OFFLINE_LESSON_SCHEMA } : {}),
+  };
   const model = modelFor('draft', opts);
   const { text, onDevice } = await streamContent(
     model,
-    draftPrompt(redacted, task),
+    isLesson && isOffline ? offlineLessonPrompt(redacted) : draftPrompt(redacted, task),
     onProgressText,
-    () => onDeviceFallbackFor(opts),
-    (t) => {
+    () =>
+      onDeviceFallbackFor(
+        isLesson ? { ...opts, system: OFFLINE_LESSON_SYSTEM, schema: OFFLINE_LESSON_SCHEMA } : opts,
+      ),
+    (t, fromDevice) => {
       try {
         const parsed = JSON.parse(t) as Draft | null;
-        return Boolean(
-          parsed &&
-            Array.isArray(parsed.items) &&
-            parsed.items.length > 0 &&
-            parsed.items.every((i) => i && typeof i.heading === 'string' && i.heading.trim().length > 0 && typeof i.text === 'string' && i.text.trim().length > 0),
-        );
+        if (
+          !parsed ||
+          !Array.isArray(parsed.items) ||
+          parsed.items.length === 0 ||
+          !parsed.items.every((i) => i && typeof i.heading === 'string' && i.heading.trim().length > 0 && typeof i.text === 'string' && i.text.trim().length > 0)
+        ) {
+          return false;
+        }
+        if (fromDevice && isLesson) {
+          if (/\[Student\s+\d+\]/i.test(t) && !/\[Student\s+\d+\]/i.test(redacted)) return false;
+          if (toldLetters.length > 0) {
+            const normalized = normalizeOfflineNeeds(parsed, toldLetters);
+            if (splitVariations(normalized, toldLetters).missing.length > Math.floor(toldLetters.length / 3)) {
+              return false;
+            }
+          }
+        }
+        return true;
       } catch {
         return false;
       }
     },
+    isLesson ? offlineLessonPrompt(redacted) : undefined,
   );
   const draft = JSON.parse(text) as Draft;
   if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) {
     throw new Error('The model returned an empty draft.');
   }
+  const cleanDraft: Draft = {
+    title: plainText(String(draft.title ?? task.label)),
+    items: draft.items.map((i) => ({ heading: plainText(String(i.heading ?? '')), text: plainText(String(i.text ?? '')) })),
+  };
   return {
-    draft: {
-      title: plainText(String(draft.title ?? task.label)),
-      items: draft.items.map((i) => ({ heading: plainText(String(i.heading ?? '')), text: plainText(String(i.text ?? '')) })),
-    },
+    draft: onDevice && isLesson && toldLetters.length > 0 ? normalizeOfflineNeeds(cleanDraft, toldLetters) : cleanDraft,
     where: onDevice ? 'ON_DEVICE' : 'IN_CLOUD',
     model: onDevice ? ON_DEVICE_MODEL : cloudModel,
   };

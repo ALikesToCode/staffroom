@@ -34,8 +34,8 @@ export interface RuleContext {
   stage?: 'homework' | 'class';
 }
 
-const BEFORE = '(?<![\\p{L}\\p{N}])';
-const AFTER = '(?![\\p{L}\\p{N}])';
+const BEFORE = '(?<![\\p{L}\\p{N}\\p{M}])';
+const AFTER = '(?![\\p{L}\\p{N}\\p{M}])';
 const words = (alternatives: string[]) => new RegExp(`${BEFORE}(?:${alternatives.join('|')})${AFTER}`, 'giu');
 
 /** Words that turn a step round when they stand just before the matched words in the same clause. */
@@ -60,16 +60,37 @@ const NEGATION = words([
   'avoiding',
   'not',
   'no',
+  'के बजाय',
+  'के बिना',
+  'बिना',
+  'बगैर',
+  'नहीं',
+  'मत',
+  'न',
+  'nahi',
+  'nahin',
+  'bina',
+  'mat\\s+(?:karo|karna|ruko|rukna|bhejo|bulao|lao|lo|aao|dekho|chalao|kharido)',
 ]);
 
-const CLAUSE_BREAK = /[,;:.!?()–—]|\sbut\s|\sso\s|\sthen\s/giu;
+const POST_NEGATION = words([
+  'नहीं',
+  'मत',
+  'न',
+  'nahi',
+  'nahin',
+  'mat\\s+(?:karo|karna|ruko|rukna|bhejo|bulao|lao|lo|aao|dekho|chalao|kharido)',
+]);
+const CLAUSE_BREAK = /[,;:.!?()–—।॥]|\s(?:but|so|then|लेकिन|परंतु|मगर|इसलिए)\s/giu;
+const VERB_CONJ_BREAK =
+  /(?:करें|रुकें|लें|भेजें|बोलें|देखें|आएं|आएँ|चलाएं|चलाएँ|खरीदें|बुलाएं|बुलाएँ|मिलें|बताएं|बताएँ|पढ़ें|लिखें)\s+(?:और|तथा)\s+/u;
 
 /**
  * How many words may stand between a negation and the words it turns round, small words not counted:
  * "do not ask him to come before school" has two, "ask" and "come".
  */
 const NEGATION_REACH = 3;
-const SMALL = /^(?:to|the|a|an|for|of|in|at|on|by|any|be|him|her|them|it|his|their|your|its)$/iu;
+const SMALL = /^(?:to|the|a|an|for|of|in|at|on|by|any|be|him|her|them|it|his|their|your|its|का|की|के|को|से|में|एक|कोई|किसी)$/iu;
 /** These stand before a thing: "without a phone". Followed at once by a verb they stand alone: "those without can buy a kit". */
 const BEFORE_A_THING = /^(?:without|instead of|rather than|in place of|free of)$/iu;
 const VERB_NEXT = /^(?:can|could|may|might|must|should|will|would|is|are|was|were|do|does|did|have|has|had|need|needs)$/iu;
@@ -88,6 +109,14 @@ export function negated(step: string, index: number): boolean {
   const breaks = [...before.matchAll(CLAUSE_BREAK)];
   const start = (k: number) => (k >= 0 ? breaks[k].index + breaks[k][0].length : 0);
   if (governs(before.slice(start(breaks.length - 1)))) return true;
+  // In SOV Hindi/Hinglish clauses, the negator often stands after the noun/object ("मोबाइल का उपयोग न करें").
+  const rest = step.slice(index);
+  const nextBreak = [...rest.matchAll(CLAUSE_BREAK)][0];
+  let sameClause = nextBreak ? rest.slice(0, nextBreak.index) : rest;
+  const conj = sameClause.match(VERB_CONJ_BREAK);
+  if (conj?.index !== undefined) sameClause = sameClause.slice(0, conj.index);
+  const afterWindow = sameClause.trim().split(/\s+/).slice(0, 7).join(' ');
+  if (has(POST_NEGATION, afterWindow)) return true;
   // A list after a negation: "no phone, internet, or purchased items". The negation before the first item governs
   // every later item, each one or two words after a comma (perhaps after "or", "and" or "nor"). The words matched must
   // stand in such a list: after "or"/"and"/"nor", or with a comma just after them. "If you have no pen, buy one" is no list.
@@ -171,17 +200,44 @@ const TIME_AFTER = [
   'after hours',
   'after dismissal',
   '(?:once|when) school (?:is over|ends|finishes)',
+  'स्कूल के बाद',
+  'विद्यालय के बाद',
+  'स्कूल छूटने के बाद',
+  'छुट्टी के बाद',
+  'अंतिम घंटी के बाद',
+  'आखिरी घंटी के बाद',
+  'आख़िरी घंटी के बाद',
+  'कक्षा के बाद',
+  'कक्षाओं के बाद',
+  'शाम को रुक(?:ें|ना|कर)',
+  'देर तक रुक(?:ें|ना|कर)',
+  'अतिरिक्त कक्षा(?:एँ|ओं)?',
+  'एक्स्ट्रा क्लास',
 ];
 
 /**
  * An evening is after the last bell only when the same clause puts it at school: "evening class",
  * "evening club", "stay for the evening study hour". "Write a few sentences every evening" is at home.
  */
-const EVENING = ['evenings?'];
-const SCHOOL_SIDE = words(['class(?:es)?', 'clubs?', 'sessions?', 'tuitions?', 'practices?', 'stay(?:s|ing|ed)?', '(?:at|in) school']);
+const EVENING = ['evenings?', 'शाम(?:ों)?'];
+const SCHOOL_SIDE = words([
+  'class(?:es)?',
+  'clubs?',
+  'sessions?',
+  'tuitions?',
+  'practices?',
+  'stay(?:s|ing|ed)?',
+  '(?:at|in) school',
+  'कक्षा(?:एँ|ओं)?',
+  'क्लास',
+  'स्कूल',
+  'विद्यालय',
+  'अभ्यास',
+  'रुक(?:ें|ना|कर)',
+]);
 
 /** A step done at home is not at school, before the first bell or after the last. */
-const AT_HOME = words(['at home', 'from home']);
+const AT_HOME = words(['at home', 'from home', 'घर(?: पर| से| में)?']);
 
 const TIME_BEFORE = [
   'before[- ]school',
@@ -191,6 +247,17 @@ const TIME_BEFORE = [
   '(?:come|comes|coming|arrive|arrives|arriving)(?: in| to school)? early',
   'zero period',
   'morning assembly duty',
+  'स्कूल से पहले',
+  'विद्यालय से पहले',
+  'पहली घंटी से पहले',
+  'कक्षा से पहले',
+  'सुबह जल्दी',
+  'प्रातःकाल',
+  'प्रात:काल',
+  'जल्दी आ(?:एँ|एं|ना)',
+  'शून्य कालांश',
+  'जीरो पीरियड',
+  'ज़ीरो पीरियड',
 ];
 
 const MONEY = [
@@ -217,6 +284,22 @@ const MONEY = [
   'uniforms?',
   'kits?',
   'tuitions?',
+  'खरीद(?:ें|ना|कर|वाएँ|वाएं)?',
+  'ख़रीद(?:ें|ना|कर|वाएँ|वाएं)?',
+  'मोल लें',
+  'पैसे',
+  'रुपये',
+  'रुपए',
+  'शुल्क',
+  'फ़ीस',
+  'फीस',
+  'कार्यपुस्तिका(?:एँ|एं)?',
+  'वर्कबुक',
+  'किट',
+  'वर्दी',
+  'यूनिफॉर्म',
+  'दान',
+  'योगदान(?: दें| करें)?',
 ];
 
 /**
@@ -259,9 +342,29 @@ const BRING = [
   "bring(?:s|ing)?\\s+(?:[\\p{L}\\p{N}'-]+\\s+){1,6}?from\\s+home",
   'bring(?:s|ing)?\\s+(?:your|their|his|her|its)\\s+own(?:\\s+[\\p{L}-]+){0,3}',
   '(?:each|every)\\s+(?:pupil|child|student|learner|group|pair)\\s+(?:brings|(?:needs|has|is)\\s+to\\s+bring|must\\s+bring|should\\s+bring)(?:\\s+[\\p{L}\\p{N}-]+){0,4}',
+  'घर से\\s+(?:[\\p{L}\\p{N}\\p{M}-]+\\s+){1,6}?ला(?:एँ|एं|ना|कर)',
+  'अपना\\s+(?:[\\p{L}\\p{N}\\p{M}-]+\\s+){0,3}?ला(?:एँ|एं|ना)',
+  'अपने\\s+(?:[\\p{L}\\p{N}\\p{M}-]+\\s+){0,3}?ला(?:एँ|एं|ना)',
+  'प्रत्येक (?:छात्र|बच्चा|विद्यार्थी)\\s+(?:[\\p{L}\\p{N}\\p{M}-]+\\s+){0,4}?ला(?:ए|एँ|एं|ना)',
 ];
 /** What every pupil brings to school anyway. */
-const SCHOOL_THINGS = words(['notebooks?', 'textbooks?', 'homework', 'pens?', 'pencils?']);
+const SCHOOL_THINGS = words([
+  'notebooks?',
+  'textbooks?',
+  'homework',
+  'pens?',
+  'pencils?',
+  'कॉपी',
+  'कॉपियाँ',
+  'नोटबुक',
+  'किताब(?:ें)?',
+  'पाठ्यपुस्तक(?:ें)?',
+  'गृहकार्य',
+  'होमवर्क',
+  'कलम',
+  'पेन',
+  'पेंसिल(?:ें)?',
+]);
 
 const PHONE_INTERNET = [
   'online',
@@ -282,6 +385,26 @@ const PHONE_INTERNET = [
   'e-?mail(?:s|ed|ing)?',
   'messaging apps?',
   'download(?:s|ed|ing)?',
+  'ऑनलाइन',
+  'इंटरनेट',
+  'वीडियो',
+  'वीडियो कॉल',
+  'ऐप',
+  'ऐप्स',
+  'व्हाट्सएप',
+  'वॉट्सऐप',
+  'वेबसाइट',
+  'यूट्यूब',
+  'गूगल',
+  'फ़ोन',
+  'फोन',
+  'स्मार्टफोन',
+  'स्मार्टफ़ोन',
+  'मोबाइल',
+  'एसएमएस',
+  'संदेश ऐप',
+  'ई-?मेल',
+  'डाउनलोड',
 ];
 
 /** Words that put a step at home, or with the family. */
@@ -298,6 +421,21 @@ const HOME_SIDE = words([
   'mothers?',
   'fathers?',
   'guardians?',
+  'घर',
+  'गृहकार्य',
+  'होमवर्क',
+  'आज रात',
+  'शाम को',
+  'सप्ताहांत',
+  'छुट्टी के दिन',
+  'स्कूल के बाद',
+  'परिवार',
+  'माता-पिता',
+  'अभिभावक(?:ों)?',
+  'माँ',
+  'माताजी',
+  'पिता',
+  'पिताजी',
 ]);
 /** Words that put a phone or the internet at school, in the teacher's hands or on a device the school has. */
 const SCHOOL_DEVICE = words([
@@ -311,21 +449,44 @@ const SCHOOL_DEVICE = words([
   "teacher(?:'s)? (?:own )?(?:phone|mobile|laptop|device|computer|tablet)",
   'teacher (?:shows|plays|projects|displays|screens)',
   'on the board',
+  'कक्षा में',
+  'क्लास में',
+  'स्कूल में',
+  'विद्यालय में',
+  'कंप्यूटर लैब',
+  'प्रोजेक्टर',
+  'स्मार्ट बोर्ड',
+  'शिक्षक (?:का|के|अपने) (?:फ़ोन|फोन|मोबाइल|लैपटॉप|कंप्यूटर)',
+  'शिक्षक दिखा(?:एँ|एं|ते)',
+  'बोर्ड पर',
 ]);
 /** These reach the family at home whatever else the step says. */
-const TO_THE_FAMILY = /^(?:whatsapp|call(?:s|ing)? home)$/iu;
+const TO_THE_FAMILY = /^(?:whatsapp|व्हाट्सएप|वॉट्सऐप|call(?:s|ing)? home|घर पर (?:फ़ोन|फोन))$/iu;
 
 const CONTACT_VERBS =
   '(?:phone|phones|phoning|call|calls|calling|telephone|telephones|ring|rings|meet|meets|meeting|invite|invites|inviting|message|messages|contact|contacts|write to|writes to|writing to|speak to|speak with|talk to|talk with|send|sends|ask|asks|tell|tells|inform|informs|informing|notify|notifies|notifying|e-?mail|e-?mails|e-?mailing|text(?:s|ing)?(?=\\s+(?:his|her|their|[\\p{L}]+[\u2019\u0027]s)\\s)|visit|visits|note to|note for|letter to|letter for)';
 
+const HINDI_CONTACT_VERBS =
+  '(?:फ़ोन कर(?:ें|ना|ेंग[ेी])?|फोन कर(?:ें|ना|ेंग[ेी])?|कॉल कर(?:ें|ना)|बुला(?:एँ|एं|ना|इए)|संपर्क कर(?:ें|ना)|बात कर(?:ें|ना)|मिल(?:ें|ना)|संदेश भेज(?:ें|ना)|पत्र भेज(?:ें|ना)|सूचित कर(?:ें|ना)|लिख(?:ें|ना)|बता(?:एँ|एं|ना))';
+
 const ROLE_FORMS: Record<string, string[]> = {
-  father: ['father', 'dad', 'daddy', 'papa'],
-  mother: ['mother', 'mum', 'mummy', 'mom', 'amma'],
+  father: ['father', 'dad', 'daddy', 'papa', 'पिताजी', '(?<!माता-)पिता', 'पापा', 'अब्बा'],
+  mother: ['mother', 'mum', 'mummy', 'mom', 'amma', 'माताजी', 'माता(?!-पिता)', 'माँ', 'मम्मी', 'अम्मी'],
 };
-const PARENTS = ['both parents', 'mother and father', 'father and mother', 'parents'];
+const PARENTS = ['both parents', 'mother and father', 'father and mother', 'parents', 'माता-पिता', 'माता और पिता', 'अभिभावक(?:ों)?', 'घरवालों'];
 const formsOf = (who: string) => ROLE_FORMS[who] ?? [`${escapeRe(who)}s?`];
 
 const STOP = new Set(['the', 'a', 'an', 'and', 'but', 'or', 'our', 'that', 'because', 'as', 'since', 'so', 'when', 'while', 'if', 'then']);
+
+const DAY_HINDI: Record<string, string[]> = {
+  monday: ['सोमवार'],
+  tuesday: ['मंगलवार'],
+  wednesday: ['बुधवार'],
+  thursday: ['गुरुवार', 'बृहस्पतिवार', 'वीरवार'],
+  friday: ['शुक्रवार'],
+  saturday: ['शनिवार'],
+  sunday: ['रविवार', 'इतवार'],
+};
 
 /**
  * What the note itself says meets after the last bell: "the remedial
@@ -394,7 +555,10 @@ export function ruleConflicts(step: string, c: Constraint, context: RuleContext 
       return m ? hit(m[0], `This step needs ${name} at school before the first bell (${quote(m[0])}).`) : undefined;
     }
     case 'days-away': {
-      const m = firstMatch(step, (c.days ?? []).map((d) => `${d}s?`));
+      const m = firstMatch(
+        step,
+        (c.days ?? []).flatMap((d) => [`${d}s?`, ...(DAY_HINDI[d.toLowerCase()] ?? [])]),
+      );
       return m ? hit(m[0], `This step is set for ${m[0]}, a day ${name} is away.`) : undefined;
     }
     case 'money': {
@@ -431,7 +595,11 @@ export function ruleConflicts(step: string, c: Constraint, context: RuleContext 
         return m ? hit(m[0], `This step speaks to ${quote(m[0])}, and ${notThere}.`) : undefined;
       }
       // The verb and the adult stand in one clause: "speak to his mother, and do not contact his father" is two.
-      const reach = (roles: string[]) => firstMatch(step, [`${CONTACT_VERBS}${AFTER}[^.;!?,]{0,60}?${BEFORE}(?:${roles.join('|')})`]);
+      const reach = (roles: string[]) =>
+        firstMatch(step, [
+          `${CONTACT_VERBS}${AFTER}[^.;!?।,]{0,60}?${BEFORE}(?:${roles.join('|')})`,
+          `(?:${roles.join('|')})${AFTER}[^.;!?।,]{0,60}?${BEFORE}${HINDI_CONTACT_VERBS}`,
+        ]);
       const named = c.who === 'parents' ? [...PARENTS, ...ROLE_FORMS.father, ...ROLE_FORMS.mother] : c.who ? formsOf(c.who) : [];
       const m = named.length > 0 ? reach(named) : undefined;
       if (m) return hit(m[0], `This step has someone contact the ${c.who} of ${name} (${quote(m[0])}).`);
@@ -453,7 +621,7 @@ export function ruleConflicts(step: string, c: Constraint, context: RuleContext 
  * other stage of a lesson is taught in class. An item of another task that is not homework could be either.
  */
 export function stageOf(item: DraftItem, lesson: boolean): RuleContext['stage'] {
-  if (/^\s*home\s?work(?![\p{L}])/iu.test(item.heading)) return 'homework';
+  if (/^\s*(?:home\s?work|गृहकार्य|होमवर्क)(?![\p{L}\p{M}])/iu.test(item.heading)) return 'homework';
   return lesson ? 'class' : undefined;
 }
 

@@ -209,6 +209,19 @@ nav {
   font-weight: 600;
 }
 
+.pill .inline-retry {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  padding: 0 2px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 /* ------------------------------------------------------------------ stepper */
 
 .stepper {

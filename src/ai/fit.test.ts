@@ -271,4 +271,21 @@ describe('what one child needs in a lesson', () => {
   it('makes no request without an on-device model', async () => {
     await expect(fitLessonForChild(child)).rejects.toThrow();
   });
+
+  it('includes lesson header in prompt and drops off-subject maths suggestions in English lessons', async () => {
+    const engChild = { ...child, childName: 'Aarav', childNote: 'He is bright in maths and shy speaking English.', lessonHeader: 'Class 6 — English — Describing a Place', lessonSubject: 'English' };
+    const model = fake([
+      points(
+        ['Practise', 'Use his strengths in math to count adjectives aloud.'],
+        ['Starter', 'Pair him with one calm classmate before whole-class sharing.'],
+      ),
+    ]);
+    const got = await fitLessonForChild(engChild, () => [], model.ask);
+    expect(model.prompts[0]).toContain('Lesson: Class 6 — English — Describing a Place');
+    expect(got.points.map((p) => p.text)).toEqual(['Pair him with one calm classmate before whole-class sharing.']);
+
+    const mathChild = { ...engChild, lessonHeader: 'Class 6 — Maths — Fractions', lessonSubject: 'Maths' };
+    const mathGot = await fitLessonForChild(mathChild, () => [], fake([points(['Practise', 'Use his strengths in math on two stretch fraction problems.'])]).ask);
+    expect(mathGot.points).toHaveLength(1);
+  });
 });

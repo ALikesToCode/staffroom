@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildVault } from '../core/vault';
+import { splitVariations } from '../core/lessonNeeds';
 import { checkOnDevice } from './check';
 import { constraintsOnDevice } from './constraints';
-import { labelReceipt, streamContent } from './draft';
+import { labelReceipt, normalizeOfflineNeeds, offlineLessonPrompt, streamContent } from './draft';
 import { guardOnDevice } from './guard';
 import { fitForChild, fitStep } from './fit';
 import { transcribeNotebookOnDevice } from './notebook';
@@ -232,5 +233,151 @@ describe('naming the receipt', () => {
     } as unknown as Parameters<typeof streamContent>[0];
 
     await expect(streamContent(cloudBroken, 'prompt', undefined, () => spoofedLocal)).rejects.toThrow('did not run on the device');
+  });
+
+  it('uses fallbackPrompt on local recovery and formats compact offline lesson prompts', async () => {
+    const cloudErr = new Error('offline');
+    const rejectedCloud = Promise.reject(cloudErr);
+    rejectedCloud.catch(() => {});
+    const seenPrompts: string[] = [];
+    const cloudBroken = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            throw cloudErr;
+          },
+        },
+        response: rejectedCloud,
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+    const localOk = {
+      generateContentStream: async (p: string) => {
+        seenPrompts.push(p);
+        return {
+          stream: {
+            async *[Symbol.asyncIterator]() {
+              yield { text: () => '{"title":"Plan","items":[{"heading":"Starter","text":"Read aloud."}]}' };
+            },
+          },
+          response: Promise.resolve({
+            text: () => '{"title":"Plan","items":[{"heading":"Starter","text":"Read aloud."}]}',
+            inferenceSource: 'on_device',
+          }),
+        };
+      },
+    } as unknown as Parameters<typeof streamContent>[0];
+
+    const compact = offlineLessonPrompt(
+      [
+        'Class notes here.',
+        '',
+        'Needs in this class (no names and no reasons are given; a need may be one pupil’s or several):',
+        'Need A: has missed lessons',
+        'Need E: away on Tuesdays',
+        'Under "For each need", give an entry for every one of these letters: A, E.',
+        '',
+        'Lesson',
+        'Subject: English',
+        'Topic: Describing a Place',
+        'Length: 40 minutes',
+      ].join('\n'),
+    );
+    expect(compact).not.toMatch(/\[Student/i);
+    expect(compact).toContain('NEVER use square brackets anywhere');
+    expect(compact).toContain('Topic: Describing a Place');
+    expect(compact).toContain('Class notes:\nClass notes here.');
+    expect(compact).toContain('Need X: <one short classroom adjustment>');
+    expect(compact).toContain('Need A: has missed lessons');
+    expect(compact).toContain('Need E: away on Tuesdays');
+    expect(compact).toContain('Cover every letter: A, E.');
+
+    const res = await streamContent(cloudBroken, 'long cloud prompt', undefined, () => localOk, undefined, compact);
+    expect(res.onDevice).toBe(true);
+    expect(seenPrompts).toEqual([compact]);
+  });
+
+  it('normalizes offline colon-formatted Need lines into pipe entries for splitVariations while leaving pipe drafts intact', () => {
+    const colonDraft = {
+      title: 'Class 6 English — Describing a Place',
+      items: [
+        { heading: 'Starter (5 minutes)', text: 'Share sensory words.' },
+        { heading: 'Teach (10 minutes)', text: 'Model two sentences on the board.' },
+        { heading: 'Practise (15 minutes)', text: 'Pairs write four sentences.' },
+        { heading: 'Homework (10 minutes)', text: 'Add one sound detail.' },
+        {
+          heading: 'For each need',
+          text: [
+            'Need A: Let the pupil leave on time and hand in work the next morning.',
+            'Need B: Print the picture cards instead of asking for phone photos.',
+            'Need C: Explain the starter orally in pairs.',
+            'Need D: Give one extra extension prompt on the board.',
+            'Need E: This lesson already suits this need.',
+          ].join('\n'),
+        },
+      ],
+    };
+    const normalized = normalizeOfflineNeeds(colonDraft, ['A', 'B', 'C', 'D', 'E']);
+    const split = splitVariations(normalized, ['A', 'B', 'C', 'D', 'E']);
+    expect(split.missing).toEqual([]);
+    expect(split.dropped).toBe(0);
+    expect(split.none).toEqual(['E']);
+    expect(split.variations.find((v) => v.need === 'A')?.itemIndex).toBe(3); // Homework
+    expect(split.variations.find((v) => v.need === 'B')?.itemIndex).toBe(2); // Practise
+    expect(split.variations.find((v) => v.need === 'C')?.itemIndex).toBe(0); // Starter
+    expect(split.variations.find((v) => v.need === 'D')?.itemIndex).toBe(1); // Teach (on the board)
+
+    const pipeDraft = {
+      title: 'Plan',
+      items: [
+        { heading: 'Starter', text: 'Go.' },
+        { heading: 'For each need', text: 'Need A | Starter | Keep it brief.' },
+      ],
+    };
+    expect(normalizeOfflineNeeds(pipeDraft, ['A'])).toBe(pipeDraft);
+  });
+
+  it('retries with fallbackPrompt when internal PREFER_IN_CLOUD on-device reply fails validation', async () => {
+    const internalOnDevice = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            yield { text: () => '{"title":"Plan","items":[{"heading":"Starter [Student 1]","text":"Poor"}]}' };
+          },
+        },
+        response: Promise.resolve({
+          text: () => '{"title":"Plan","items":[{"heading":"Starter [Student 1]","text":"Poor"}]}',
+          inferenceSource: 'on_device',
+        }),
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+    const seenFallback: string[] = [];
+    const dedicatedLocal = {
+      generateContentStream: async (p: string) => {
+        seenFallback.push(p);
+        return {
+          stream: {
+            async *[Symbol.asyncIterator]() {
+              yield { text: () => '{"title":"Clean","items":[{"heading":"Starter","text":"Whole class."}]}' };
+            },
+          },
+          response: Promise.resolve({
+            text: () => '{"title":"Clean","items":[{"heading":"Starter","text":"Whole class."}]}',
+            inferenceSource: 'on_device',
+          }),
+        };
+      },
+    } as unknown as Parameters<typeof streamContent>[0];
+
+    const res = await streamContent(
+      internalOnDevice,
+      'long cloud prompt with [Student 1]',
+      undefined,
+      () => dedicatedLocal,
+      (t, fromDevice) => !(fromDevice && /\[Student\s+\d+\]/i.test(t)),
+      'compact bracket-free prompt',
+    );
+    expect(res.onDevice).toBe(true);
+    expect(JSON.parse(res.text).title).toBe('Clean');
+    expect(seenFallback).toEqual(['compact bracket-free prompt']);
   });
 });

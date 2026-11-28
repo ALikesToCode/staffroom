@@ -6,11 +6,11 @@ import { modelFor } from './routes';
 
 const SYSTEM = `You protect a teacher's private notes about children. You read one paragraph and list what must not leave the teacher's device. Copy every name and phrase exactly as written in the paragraph. Never paraphrase. Never add anything that is not in the paragraph.
 
-people: every person named. role is "student" for a child in the class, "adult" for a parent, relative or staff member.
+people: every named individual. role is "student" for a child in the class, "adult" for a parent, relative or staff member. Never list bare kinship words or titles such as "her mother", "father", or "teacher".
 places: every named village, town, street, shop, school or workplace. A class name such as "Class 6B" is not a place.
-private: every phrase that reveals a child's or family's health or disability, family situation, money or work, religion or caste, or a fear or secret the child confided. quote is the shortest exact phrase from the paragraph that carries the detail. category is health, family, money or identity. about is the name of the child it concerns.
+private: every phrase that reveals a child's or family's health, fatigue or chronic illness (such as fainting, dizziness or getting tired easily), hunger or coming without food (such as without breakfast), family situation, job loss, unpaid fees, money or work hardship, religion or caste, or a fear or secret the child confided. quote is the shortest exact phrase from the paragraph that carries the detail. category is health, family, money or identity. about is the name of the child it concerns.
 
-Do not list schoolwork, marks, attendance, reading level or behaviour in class as private: the teacher needs help with those. Shyness, boredom, finishing early, talking and fighting in class are classroom behaviour, not private details. A heading, a date or a remark about the notes themselves is never private.
+Do not list schoolwork, marks, attendance, reading level or behaviour in class as private: the teacher needs help with those. Reading or making a poster, project, story or chapter about a general topic (like diseases or mental health) is schoolwork, not private. Shyness, boredom, finishing early, talking and fighting in class are classroom behaviour, not private details. A heading, a date or a remark about the notes themselves is never private.
 
 If there is nothing for a list, return an empty list.`;
 
@@ -114,12 +114,17 @@ export interface Anchored {
  * ("staying with his grandmoth") still withholds the whole word.
  */
 export function anchor(paragraph: string, quote: string): Anchored | undefined {
-  const whole = widenToWords(paragraph, quote);
-  if (whole) return { text: whole, exact: true };
-  const words = quote.trim().split(/\s+/);
+  const trimmed = quote.trim();
+  const clean = trimmed.replace(/^["'“”‘’(\[]+|[.,;!?)"'”’\]]+$/g, '').trim();
+  for (const candidate of new Set([clean, clean.replace(/['’]/g, "'"), clean.replace(/['’]/g, '’'), trimmed].filter(Boolean))) {
+    const whole = widenToWords(paragraph, candidate);
+    if (whole) return { text: whole, exact: true };
+  }
+  const words = (clean || trimmed).split(/\s+/);
   for (let len = words.length - 1; len >= 3; len--) {
     for (let start = 0; start + len <= words.length; start++) {
-      const found = widenToWords(paragraph, words.slice(start, start + len).join(' '));
+      const span = words.slice(start, start + len).join(' ');
+      const found = widenToWords(paragraph, span) ?? widenToWords(paragraph, span.replace(/['’]/g, "'")) ?? widenToWords(paragraph, span.replace(/['’]/g, '’'));
       if (found) return { text: found, exact: false };
     }
   }
@@ -141,6 +146,8 @@ export interface ParagraphReading {
 }
 
 const GENERIC_PLACE = /^(?:(?:the|a|an|two|my|his|her|their|our)\s+)?(?:home|homes|school|classroom|class|exam hall)$/i;
+const KINSHIP_ONLY =
+  /^(?:(?:his|her|their|the|my|a|an)\s+)?(?:mother|father|mom|mum|dad|parent|parents|grandmother|grandfather|grandparent|uncle|aunt|brother|sister|sibling|cousin|teacher|principal|guardian|family|didi|bhaiya|mama|chacha|nana|nani|dada|dadi)(?:['’]s)?$/i;
 
 /**
  * Turn the model's answer for one paragraph into candidates. Returns
@@ -169,8 +176,8 @@ export function readGuardAnswer(paragraph: string, raw: string): ParagraphReadin
       dropped++;
       continue;
     }
-    // "Class 6B" and the like: not a person, and not something the model saw that was then lost.
-    if (/\d/.test(name)) continue;
+    // "Class 6B" or a bare kinship title: not a named person, and not something the model saw that was then lost.
+    if (/\d/.test(name) || KINSHIP_ONLY.test(name.trim())) continue;
     const text = widenToWords(paragraph, name);
     if (!text) {
       dropped++;
@@ -339,7 +346,7 @@ export async function guardOnDevice(
  */
 const COMBINED_SYSTEM = `${SYSTEM}
 
-constraints: also list each fact in the paragraph that limits what a child can do or what the school can ask of the family. For each give student (child's name), kind ("time-after" cannot stay after school, "time-before" cannot come before school, "days-away" away on some days, "money" family cannot pay, "no-phone-internet", "contact" adult not to contact, "health", "other"), and quote (exact words copied verbatim from the paragraph).`;
+constraints: also list each concrete practical limit in the paragraph on what a child can do or what the school can ask of the family. For each give student (child's name), kind ("time-after" stays late or cannot stay after school, "time-before" early morning work or cannot arrive before school, "days-away" away on some days, "money" family cannot pay, "no-phone-internet", "contact" adult not to contact, "health", "other"), and quote (exact words copied verbatim from the paragraph). Only emit "time-before" or "time-after" when the quote states an explicit clock time, morning/evening/bell limit; never emit "other" for praise, marks, reading level or ordinary shyness.`;
 
 const COMBINED_SCHEMA = {
   type: 'object',

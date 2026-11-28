@@ -445,4 +445,27 @@ describe('Hinglish and Devanagari constraints', () => {
     const hiFound = proposeConstraints(hiHealth, hiEntities);
     expect(hiFound.some((c) => c.kind === 'health' && (c.triggers ?? []).includes('flashing'))).toBe(true);
   });
+
+  it('remaps morning time-after to time-before and filters non-time or pure-praise proposals', () => {
+    const note = 'Meenal helps from five in the morning. Aarav is bright in maths. Kabir freezes in written tests. Riya is often absent.';
+    const entities = buildVault(note, deterministicCandidates(note, ['Meenal Joshi', 'Aarav Sharma', 'Kabir', 'Riya']));
+    const reading = readConstraintAnswer(
+      note,
+      note,
+      JSON.stringify({
+        constraints: [
+          { student: 'Meenal', kind: 'time-after', quote: 'helps from five in the morning' },
+          { student: 'Aarav', kind: 'other', quote: 'is bright in maths' },
+          { student: 'Kabir', kind: 'other', quote: 'freezes in written tests' },
+          { student: 'Riya', kind: 'time-after', quote: 'is often absent' },
+        ],
+      }),
+      entities,
+    )!;
+    expect(reading.dropped).toBe(0);
+    expect(reading.constraints.map((c) => [c.kind, c.text])).toEqual([
+      ['time-before', 'helps from five in the morning'],
+      ['other', 'freezes in written tests'],
+    ]);
+  });
 });

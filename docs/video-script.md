@@ -1,47 +1,30 @@
-# Staffroom — Demo Video Script (`v7`, `2m 28s` / `148.20s`)
+# Staffroom: Video Script (`v8` — `staffroom-demo-v8.mp4`)
 
-- **Final video**: `/home/mysterious/Videos/staffroom-demo-v7.mp4` (`1920x1080`, `30 fps`, H.264 + AAC, `148.20s`)
-- **Subtitles**: `/home/mysterious/Videos/staffroom-demo-v7.srt` (`34` cues)
-- **Narration**: 8 segments (`p01`–`p08`) paired with a single live Chrome 158 capture against `https://staffroom-hybrid-8a71.web.app`, crisp still plates for dense materials/copies, an offline Nano fallback demo, and verified benchmark/proof cards.
+- **Total duration**: `146.80s` (`2m 26.8s`, strictly under `2:30`), `1920x1080` `30fps` H.264/AAC (NVENC), cursor-free live Chrome 158 screencast + DOM stills, Maya 2 (`Nivedita`) narration, `34` decimal-safe caption cues ([`staffroom-demo-v8.srt`](/home/mysterious/Videos/staffroom-demo-v8.srt)).
+- **Unified `v8` export**: `?capture=1` exported the live online run (`4.4s` scan end-to-end / `3.1s` model step, `0` model-host calls on all 5 local routes) directly into [`public/recorded-run.json`](../public/recorded-run.json), then continued offline before send to film Shot 6.
 
-## Shot List & Verbatim Narration
+## Shot list & voiceover (`p01`–`p08`)
 
-### 1. Hook & Privacy Door (`0:00.00 – 0:10.17`)
-- **Visual**: Live capture of [staffroom-hybrid-8a71.web.app](https://staffroom-hybrid-8a71.web.app) showing the Workspace header, Device vs Cloud boundary (`The Door`), and `0 KB -> cloud` indicator.
-- **Narration (`p01`)**:
-  > Shared school PCs cannot paste pupil notes into the cloud. Staffroom puts a privacy door on Chrome with Firebase AI Logic.
+1. **`0:00.00 – 0:10.10` (`p01`) — Title Card + Hero Split-Pane Door**
+   > Shared school PCs cannot paste pupil notes into the cloud. Staffroom puts a privacy door on Chrome with Firebase AI Logic.
 
-### 2. Local Multimodal Notebook OCR (`0:10.17 – 0:27.07`)
-- **Visual**: **Write a note -> Try sample notebook photo** runs multimodal Gemini Nano locally in Chrome (`ONLY_ON_DEVICE`), producing handwritten OCR transcription with `0` cloud requests while `extractScannedClassList` pulls **`Class list 2 names`** (`Diya Sharma`, `Meenal Joshi`) locally without phone-number metadata leaks.
-- **Narration (`p02`)**:
-  > Start with a handwritten register photo. Strictly on-device multimodal Gemini Nano transcribes it locally with zero cloud requests, and local name rules extract pupil names straight from the scanned text.
+2. **`0:10.10 – 0:26.94` (`p02`) — Multimodal Notebook OCR (`scan`, `ONLY_ON_DEVICE`) & Class List**
+   > Start with a handwritten register photo. Strictly on-device multimodal Gemini Nano transcribes it locally with zero cloud requests, and local name rules extract pupil names straight from the scanned text.
 
-### 3. On-Device Guard, Need E Discovery & Exit Gate (`0:27.07 – 0:54.28`)
-- **Visual**: **Try an invented class** (6 pupils) -> one-pass local guard pairs Hinglish/English rules with Gemini Nano (`ON_DEVICE`). Nano catches **`Found by Gemini Nano`** (`Away on some days` -> **`Tanvi Rao`** missing Tuesdays for her grandmother's clinic visit). Private notes stay on the left of The Door; only teacher-reviewed class context and anonymous letter codes (`Need E: away on Tuesdays`) pass the `Exit gate: clear` check.
-- **Narration (`p03`)**:
-  > Switching to an invented six-pupil class, the one-pass on-device guard pairs Hinglish and English rules with Gemini Nano. Nano catches what rules miss: Tanvi misses Tuesdays for her grandmother's town clinic visit. Private reasons stay local; only teacher-reviewed class context and anonymous letter codes like Need E cross the Exit Gate.
+3. **`0:26.94 – 0:54.09` (`p03`) — 1-Pass Hybrid Guard (`guard`) + Nano-Exclusive Need E + Exit Gate**
+   > Switching to an invented six-pupil class, the one-pass on-device guard pairs Hinglish and English rules with Gemini Nano. Nano catches what rules miss: Tanvi misses Tuesdays for her grandmother's town clinic visit. Private reasons stay local; only teacher-reviewed class context and anonymous letter codes like Need E cross the Exit Gate.
 
-### 4. Live Cloud Streaming & Local Re-Pairing (`0:54.28 – 1:15.66`)
-- **Visual**: `gemini-3.5-flash-lite` streams the lesson (`IN_CLOUD`) over Firebase AI Logic using only anonymous letter codes (`Need A`–`Need F`). Back in Chrome, `Need E` lands beside `Tanvi Rao`, `Kabir Qureshi` + `Ishaan Verma` get one non-contradictory seating line (`Accept`), and **More ideas from this device** (`fit`) runs on Gemini Nano (`ON_DEVICE`) for `Aarav Sharma`.
-- **Narration (`p04`)**:
-  > Gemini 3.5 Flash Lite streams the whole-class lesson and adapts each lettered need without ever knowing whose it is. Back on Chrome, Need E lands beside Tanvi, Kabir and Ishaan get one clear seating line, and local Nano suggests empathetic classroom support for Aarav.
+4. **`0:54.09 – 1:15.41` (`p04`) — Cloud Stream (`PREFER_IN_CLOUD`) -> Check -> Beside Each Child & Aarav Fit (`fit`)**
+   > Gemini 3.5 Flash Lite streams the whole-class lesson and adapts each lettered need without ever knowing whose it is. Back on Chrome, Need E lands beside Tanvi, Kabir and Ishaan get one clear seating line, and local Nano suggests empathetic classroom support for Aarav.
 
-### 5. One-Click Materials, Copies & Exit-Ticket Loop (`1:15.66 – 1:35.84`)
-- **Visual**: `Materials` card from the same live run (`On the board` -> `Favourite outdoor places`, `Practice sheet for the class`, and **`Sheet for Need E`** for `Tanvi Rao`), separate nameless **Class copy** (`No names printed by default`) vs private **Teacher's copy** print actions, and the **Lessons** tab (`Got it / Partly / Not yet / Absent`) feeding into **Plan the next lesson**.
-- **Narration (`p05`)**:
-  > One click builds board work, a class worksheet, and a take-home summary sheet for Tanvi. Class copy prints letter codes only, separate from the private Teacher's copy. In the Lessons tab, marking Got it, Partly, Not yet, or Absent feeds straight into tomorrow's plan.
+5. **`1:15.41 – 1:35.53` (`p05`) — 1-Click Materials, Separate Print Copies & Lessons Exit Ticket**
+   > One click builds board work, a class worksheet, and a take-home summary sheet for Tanvi. Class copy prints letter codes only, separate from the private Teacher's copy. In the Lessons tab, marking Got it, Partly, Not yet, or Absent feeds straight into tomorrow's plan.
 
-### 6. Offline Cloud-Drop Recovery on Gemini Nano (`1:35.84 – 1:52.26`)
-- **Visual**: With Chrome offline, requesting the lesson drops straight onto on-device Gemini Nano (`ONLY_ON_DEVICE`), displaying the caution banner (`Written on the device · Gemini Nano`) while the deterministic Return Gate still validates the output locally.
-- **Narration (`p06`)**:
-  > If school Wi-Fi drops, Staffroom recovers on Gemini Nano offline with a clear caution banner, tested mid-stream in code and shown offline here, while the deterministic Return Gate still checks the output locally.
+6. **`1:35.53 – 1:51.89` (`p06`) — Offline-Before-Send Failover (`PREFER_IN_CLOUD -> ON_DEVICE`, `41.3s`, `12/12` needs)**
+   > If school Wi-Fi drops, Staffroom recovers on Gemini Nano offline with a clear caution banner, tested mid-stream in code and shown offline here, while the deterministic Return Gate still checks the output locally.
 
-### 7. Inspect Proof & Local Evaluation Card (`1:52.26 – 2:16.36`)
-- **Visual**: **Inspect -> Where each step runs** showing all 6 declared routes (`scan`, `guard`, `check`, `naming`, `lesson`, `fit`) across `ONLY_ON_DEVICE`, `PREFER_ON_DEVICE`, and `PREFER_IN_CLOUD`, followed by **Network, as the browser records it** (`22` live Resource Timing entries, `0` model requests on local steps), then the Benchmark Card (`49.3 / 60 withheld (148/180) vs 40 / 60 rules`, `478 / 478 Vitest tests (21 files)` recorded at build time; expanded to `480 / 480` after post-review storage & UI tests).
-- **Narration (`p07`)**:
-  > Inspect shows all six routes across all three modes, plus Chrome's Resource Timing log: zero model requests on scan, guard, check, naming, and fit. Across three runs on twelve invented notes with sixty labelled details total, Nano raised full catches from forty to forty-nine point three out of sixty.
+7. **`1:51.89 – 2:15.13` (`p07`) — Inspect (All 6 Routes + Resource Timing) & Verified Benchmark Card**
+   > Inspect logs all six routes and Resource Timing: zero cloud model calls on scan, guard, check, naming, and fit. On twelve invented notes across three runs, Nano raised catches from forty-six to fifty-one out of sixty with zero false holds, and held sixty-seven spans across thirty-five pupils.
 
-### 8. End Card (`2:16.36 – 2:28.20`)
-- **Visual**: Summary card showing `staffroom-hybrid-8a71.web.app`, core privacy promise, and **Watch a recorded run** guidance for any browser without Chrome Nano setup.
-- **Narration (`p08`)**:
-  > Staffroom: your device knows the child; the cloud only knows the need. Try the live app or click Watch a recorded run in any browser.
+8. **`2:15.13 – 2:26.80` (`p08`) — Closing Card**
+   > Staffroom: your device knows the child; the cloud only knows the need. Try the live app or click Watch a recorded run in any browser.

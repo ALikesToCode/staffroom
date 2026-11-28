@@ -38,6 +38,14 @@ export interface ConstraintReading {
   dropped: number;
 }
 
+const TIME_OF_DAY_CUE =
+  /\b(?:bell|before\s+school|after\s+school|after\s+class|after\s+hours|stays?\s+(?:back|late)|bus|dark|o'?clock|\d{1,2}:\d{2}|\d+\s*(?:am|pm)|morning|evening|afternoon|late\s+home|stall\s+before|dismissal|dawn|noon|night|(?:early\s+morning|(?:come|comes|coming|arrive|arrives|arriving|leaves?|leaving)\s+(?:early|late))|सुबह|शाम|घंटी|स्कूल के बाद|स्कूल से पहले)\b/i;
+
+const MORNING_BEFORE_RE = /\b(?:morning|early|am|dawn|sunrise|before\s+school|first\s+bell|zero\s+period|सुबह|प्रातःकाल|पहली घंटी से पहले)\b/i;
+const AFTER_SCHOOL_RE = /\b(?:after\s+school|afterschool|last\s+bell|evening|afternoon|late|night|pm|detention|stay(?:s|ing)?\s+back|शाम|अंतिम घंटी|स्कूल के बाद)\b/i;
+const NON_LIMIT_PRAISE_RE =
+  /^(?:(?:is|was|are)\s+)?(?:(?:very\s+)?(?:good|strong|bright|quick|sharp|neat|attentive|helpful|polite|ahead|well-behaved)\s+(?:at|in|with)|reads?\s+well|writes?\s+well|does\s+well|scores?\s+well)\b/i;
+
 /**
  * Read the model's answer for one paragraph. A constraint is kept only
  * when its kind is one of the kinds and its quote stands in the paragraph,
@@ -57,11 +65,20 @@ export function readConstraintAnswer(note: string, paragraph: string, raw: strin
   const reading: ConstraintReading = { constraints: [], dropped: 0 };
   for (const entry of parsed.constraints as { student?: unknown; kind?: unknown; quote?: unknown }[]) {
     const quote = typeof entry?.quote === 'string' ? entry.quote.trim() : '';
-    const kind = CONSTRAINT_KINDS.find((k) => k === entry?.kind);
+    let kind = CONSTRAINT_KINDS.find((k) => k === entry?.kind);
     const inParagraph = quote.length >= 3 ? paragraph.indexOf(quote) : -1;
     const at = inParagraph < 0 ? -1 : start >= 0 ? start + inParagraph : note.indexOf(quote);
     if (!kind || at < 0 || note.slice(at, at + quote.length) !== quote) {
       reading.dropped++;
+      continue;
+    }
+    if (kind === 'time-after' && MORNING_BEFORE_RE.test(quote) && !AFTER_SCHOOL_RE.test(quote)) {
+      kind = 'time-before';
+    }
+    if ((kind === 'time-after' || kind === 'time-before') && !TIME_OF_DAY_CUE.test(quote)) {
+      continue;
+    }
+    if (kind === 'other' && (quote.split(/\s+/).length < 2 || NON_LIMIT_PRAISE_RE.test(quote))) {
       continue;
     }
     const name = typeof entry.student === 'string' ? entry.student.trim() : '';
@@ -93,9 +110,6 @@ export function mergeProposals(byRule: Constraint[], byModel: Constraint[]): Con
   }
   return out.sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
 }
-
-const TIME_OF_DAY_CUE =
-  /\b(?:bell|before\s+school|after\s+school|after\s+class|stays?\s+(?:back|late)|bus|dark|o'?clock|\d{1,2}:\d{2}|\d+\s*(?:am|pm)|morning|evening|afternoon|late\s+home|stall\s+before)\b/i;
 
 const isRedundantWithLearning = (c: Constraint) =>
   !c.confirmed &&
