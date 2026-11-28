@@ -1,0 +1,198 @@
+{
+  "generatedAt": "2026-11-28T18:50:42.855Z",
+  "cloudModel": "gemini-3.5-flash-lite",
+  "results": [
+    {
+      "id": "sample",
+      "toldNeeds": 11,
+      "cloud": {
+        "ok": true,
+        "durationMs": 4165,
+        "where": "IN_CLOUD",
+        "model": "gemini-3.5-flash-lite",
+        "toldNeeds": 11,
+        "accountedCount": 11,
+        "variationsCount": 7,
+        "noneCount": 4,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 5,
+        "title": "Class 6 English — Writing a Short Description of a Place"
+      },
+      "local": {
+        "ok": true,
+        "durationMs": 15881,
+        "where": "ON_DEVICE",
+        "model": "Gemini Nano (Chrome built-in)",
+        "toldNeeds": 11,
+        "accountedCount": 11,
+        "variationsCount": 11,
+        "noneCount": 0,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 4,
+        "title": "Descriptive Writing: A Place"
+      }
+    },
+    {
+      "id": "c01",
+      "toldNeeds": 2,
+      "cloud": {
+        "ok": true,
+        "durationMs": 1926,
+        "where": "IN_CLOUD",
+        "model": "gemini-3.5-flash-lite",
+        "toldNeeds": 2,
+        "accountedCount": 2,
+        "variationsCount": 0,
+        "noneCount": 2,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 5,
+        "title": "Class 5B Science — Parts of a plant"
+      },
+      "local": {
+        "ok": true,
+        "durationMs": 4655,
+        "where": "ON_DEVICE",
+        "model": "Gemini Nano (Chrome built-in)",
+        "toldNeeds": 2,
+        "accountedCount": 2,
+        "variationsCount": 3,
+        "noneCount": 0,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 4,
+        "title": "Parts of a Plant Lesson Plan"
+      }
+    },
+    {
+      "id": "c06",
+      "toldNeeds": 2,
+      "cloud": {
+        "ok": true,
+        "durationMs": 3590,
+        "where": "IN_CLOUD",
+        "model": "gemini-3.5-flash-lite",
+        "toldNeeds": 2,
+        "accountedCount": 2,
+        "variationsCount": 2,
+        "noneCount": 0,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 5,
+        "title": "Class 8A History — Harappan town planning"
+      },
+      "local": {
+        "ok": true,
+        "durationMs": 5158,
+        "where": "ON_DEVICE",
+        "model": "Gemini Nano (Chrome built-in)",
+        "toldNeeds": 2,
+        "accountedCount": 2,
+        "variationsCount": 4,
+        "noneCount": 0,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 4,
+        "title": "Harappan Town Planning Lesson Plan"
+      }
+    },
+    {
+      "id": "c26",
+      "toldNeeds": 1,
+      "cloud": {
+        "ok": true,
+        "durationMs": 2388,
+        "where": "IN_CLOUD",
+        "model": "gemini-3.5-flash-lite",
+        "toldNeeds": 1,
+        "accountedCount": 1,
+        "variationsCount": 0,
+        "noneCount": 1,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 5,
+        "title": "Class 6C Mathematics — Perimeter and area"
+      },
+      "local": {
+        "ok": true,
+        "durationMs": 6160,
+        "where": "ON_DEVICE",
+        "model": "Gemini Nano (Chrome built-in)",
+        "toldNeeds": 1,
+        "accountedCount": 1,
+        "variationsCount": 1,
+        "noneCount": 0,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 4,
+        "title": "Perimeter and Area - Class 6C"
+      }
+    },
+    {
+      "id": "c35",
+      "toldNeeds": 2,
+      "cloud": {
+        "ok": true,
+        "durationMs": 2425,
+        "where": "IN_CLOUD",
+        "model": "gemini-3.5-flash-lite",
+        "toldNeeds": 2,
+        "accountedCount": 2,
+        "variationsCount": 0,
+        "noneCount": 2,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 5,
+        "title": "Class 5B Environmental Studies — Water Conservation"
+      },
+      "local": {
+        "ok": true,
+        "durationMs": 6406,
+        "where": "ON_DEVICE",
+        "model": "Gemini Nano (Chrome built-in)",
+        "toldNeeds": 2,
+        "accountedCount": 2,
+        "variationsCount": 2,
+        "noneCount": 0,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 4,
+        "title": "Water Conservation Lesson Plan"
+      }
+    },
+    {
+      "id": "c42",
+      "toldNeeds": 0,
+      "cloud": {
+        "ok": true,
+        "durationMs": 9184,
+        "where": "ON_DEVICE",
+        "model": "Gemini Nano (Chrome built-in)",
+        "toldNeeds": 0,
+        "accountedCount": 0,
+        "variationsCount": 0,
+        "noneCount": 0,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 4,
+        "title": "Properties of Triangles - Class 7B"
+      },
+      "local": {
+        "ok": true,
+        "durationMs": 7605,
+        "where": "ON_DEVICE",
+        "model": "Gemini Nano (Chrome built-in)",
+        "toldNeeds": 0,
+        "accountedCount": 0,
+        "variationsCount": 0,
+        "noneCount": 0,
+        "missingLetters": [],
+        "droppedCount": 0,
+        "stagesCount": 4,
+        "title": "Properties of Triangles - Class 7B"
+      }
+    }
+  ]
+}
