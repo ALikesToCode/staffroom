@@ -58,7 +58,9 @@ export function CloudOutcomeCards({
                 ? streamPreview
                   ? `Streaming draft from ${cloudModel} (${streamPreview.length} chars)…`
                   : `Asking ${cloudModel} to write the draft`
-                : 'Offline — trying cloud first; falling back to Gemini Nano on this device…'
+                : streamPreview
+                  ? `Offline — streaming on-device draft from Gemini Nano (${streamPreview.length} chars)…`
+                  : 'Offline — trying cloud first; falling back to Gemini Nano on this device…'
             }
           />
           {streamPreview && (
@@ -79,7 +81,11 @@ export function CloudOutcomeCards({
               </div>
               {result.where === 'ON_DEVICE' && (
                 <>
-                  <p className="caution">The cloud draft failed, so the on-device model wrote this draft from the same approved text.</p>
+                  <p className="caution">
+                    {sent?.online === false
+                      ? 'You were offline when you approved, so the on-device model wrote this draft from the same approved text.'
+                      : 'The cloud draft failed, so the on-device model wrote this draft from the same approved text.'}
+                  </p>
                   {/* A separate fact. The app does not know why the cloud draft failed. */}
                   <p className="hint">Browser reported when you approved: {sent?.online ? 'online' : 'offline'}.</p>
                 </>

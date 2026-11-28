@@ -40,6 +40,7 @@ export const LESSON_KEY = 'staffroom.lesson';
 // "Keep this class on this device": the note, the class list, the constraints and the lesson lines, in local storage.
 export const KEEP_CLASS_KEY = 'staffroom.keepClass';
 export const CLASS_KEY = 'staffroom.class.v1';
+export const SIGNOUT_BLOCKED_KEY = 'staffroom.signoutBlocked';
 
 export interface KeptClass {
   note: string;

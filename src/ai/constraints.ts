@@ -39,10 +39,12 @@ export interface ConstraintReading {
 }
 
 const TIME_OF_DAY_CUE =
-  /\b(?:bell|before\s+school|after\s+school|after\s+class|after\s+hours|stays?\s+(?:back|late)|bus|dark|o'?clock|\d{1,2}:\d{2}|\d+\s*(?:am|pm)|morning|evening|afternoon|late\s+home|stall\s+before|dismissal|dawn|noon|night|(?:early\s+morning|(?:come|comes|coming|arrive|arrives|arriving|leaves?|leaving)\s+(?:early|late))|सुबह|शाम|घंटी|स्कूल के बाद|स्कूल से पहले)\b/i;
+  /(?<![\p{L}\p{M}\d])(?:bell|before\s+school|after\s+school|after\s+class|after\s+hours|stays?\s+(?:back|late)|bus|dark|o'?clock|\d{1,2}:\d{2}|\d+\s*(?:am|pm)|morning|evening|afternoon|late\s+home|stall\s+before|dismissal|dawn|noon|night|(?:early\s+morning|(?:come|comes|coming|arrive|arrives|arriving|leaves?|leaving)\s+(?:early|late))|सुबह|प्रातःकाल|शाम|घंटी|आखिरी\s+घंटी|अंतिम\s+घंटी|पहली\s+घंटी(?:\s+से\s+पहले)?|स्कूल\s+के\s+बाद|स्कूल\s+से\s+पहले|छुट्टी(?:\s+के\s+बाद)?)(?![\p{L}\p{M}\d])/iu;
 
-const MORNING_BEFORE_RE = /\b(?:morning|early|am|dawn|sunrise|before\s+school|first\s+bell|zero\s+period|सुबह|प्रातःकाल|पहली घंटी से पहले)\b/i;
-const AFTER_SCHOOL_RE = /\b(?:after\s+school|afterschool|last\s+bell|evening|afternoon|late|night|pm|detention|stay(?:s|ing)?\s+back|शाम|अंतिम घंटी|स्कूल के बाद)\b/i;
+const MORNING_BEFORE_RE =
+  /(?<![\p{L}\p{M}\d])(?:morning|early|am|dawn|sunrise|before\s+school|first\s+bell|zero\s+period|सुबह|प्रातःकाल|पहली\s+घंटी(?:\s+से\s+पहले)?|स्कूल\s+से\s+पहले)(?![\p{L}\p{M}\d])/iu;
+const AFTER_SCHOOL_RE =
+  /(?<![\p{L}\p{M}\d])(?:after\s+school|afterschool|last\s+bell|evening|afternoon|late|night|pm|detention|stay(?:s|ing)?\s+back|शाम|आखिरी\s+घंटी|अंतिम\s+घंटी|स्कूल\s+के\s+बाद|छुट्टी(?:\s+के\s+बाद)?)(?![\p{L}\p{M}\d])/iu;
 const NON_LIMIT_PRAISE_RE =
   /^(?:(?:is|was|are)\s+)?(?:(?:very\s+)?(?:good|strong|bright|quick|sharp|neat|attentive|helpful|polite|ahead|well-behaved)\s+(?:at|in|with)|reads?\s+well|writes?\s+well|does\s+well|scores?\s+well)\b/i;
 

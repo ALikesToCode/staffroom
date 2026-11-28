@@ -284,4 +284,21 @@ describe('needs the cloud left out, and two children who work better apart', () 
     const lines = stageLines([{ heading: 'पहला चरण', text: 'सभी छात्र तीन वाक्य लिखेंगे। उसके बाद अभ्यास होगा।' }], hindiVault, []);
     expect(lines[0]?.summary).toBe('सभी छात्र तीन वाक्य लिखेंगे।');
   });
+
+  it('never places two-child pair seating lines onto Homework even if Homework mentions groups', async () => {
+    const { pairPoints } = await import('./points');
+    const note = 'Kabir and Ishaan fight most days during group work.';
+    const pairEntities = [
+      { id: 's1', kind: 'student' as const, token: '[Student 1]', surfaces: ['Kabir'], source: 'class list' as const, withheld: true },
+      { id: 's2', kind: 'student' as const, token: '[Student 2]', surfaces: ['Ishaan'], source: 'class list' as const, withheld: true },
+    ];
+    const groupConstraint = { id: 'c1', kind: 'learning' as const, learn: 'group' as const, about: 's1', at: 0, text: 'fight most days during group work', source: 'rule' as const, confirmed: true };
+    const groupConstraint2 = { id: 'c2', kind: 'learning' as const, learn: 'group' as const, about: 's2', at: 0, text: 'fight most days during group work', source: 'rule' as const, confirmed: true };
+    const items = [
+      { heading: 'Practise (15 minutes)', text: 'Work in groups.' },
+      { heading: 'Homework (10 minutes)', text: 'Share with family groups at home.' },
+    ];
+    const pts = pairPoints([groupConstraint, groupConstraint2], pairEntities, items, note);
+    expect(pts.map((p) => p.itemIndex)).toEqual([0, 0]);
+  });
 });

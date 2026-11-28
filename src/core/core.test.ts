@@ -2264,5 +2264,14 @@ describe('sensitive rule refinements', () => {
       'She missed a chapter on biology because she was admitted to hospital with asthma. Gets tired easily in class. Arrives without breakfast. Father lost his shop and has not paid the exam fee.';
     const hits = findSensitive(mixed);
     expect(hits.map((h) => h.category)).toEqual(['health', 'health', 'family', 'family']);
+
+    expect(findSensitive('The class is making a poster on diabetes for science exhibition.')).toEqual([]);
+    for (const disclosure of [
+      'Riya, who has seizures, is making a poster on epilepsy.',
+      'Meenal is making a poster on epilepsy because her fits started last month.',
+      'Aarav wrote an essay about diabetes; he takes insulin at lunch.',
+    ]) {
+      expect(findSensitive(disclosure).map((h) => h.category)).toEqual(['health']);
+    }
   });
 });

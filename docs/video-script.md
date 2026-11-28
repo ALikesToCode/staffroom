@@ -1,7 +1,7 @@
-# Staffroom: Video Script (`v8` — `staffroom-demo-v8.mp4`)
+# Staffroom: Video Script (`v9` — `staffroom-demo-v9.mp4`)
 
-- **Total duration**: `146.80s` (`2m 26.8s`, strictly under `2:30`), `1920x1080` `30fps` H.264/AAC (NVENC), cursor-free live Chrome 158 screencast + DOM stills, Maya 2 (`Nivedita`) narration, `34` decimal-safe caption cues ([`staffroom-demo-v8.srt`](/home/mysterious/Videos/staffroom-demo-v8.srt)).
-- **Unified `v8` export**: `?capture=1` exported the live online run (`4.4s` scan end-to-end / `3.1s` model step, `0` model-host calls on all 5 local routes) directly into [`public/recorded-run.json`](../public/recorded-run.json), then continued offline before send to film Shot 6.
+- **Total duration**: `146.80s` (`2m 26.8s`, strictly under `2:30`), `1920x1080` `30fps` H.264/AAC (NVENC), cursor-free live Chrome 158 screencast + DOM stills, Maya 2 (`Nivedita`) narration, `34` decimal-safe caption cues (`staffroom-demo-v9.srt`).
+- **Unified `v9` export**: `?capture=1` exported the live online run (`4.4s` scan end-to-end / `3.1s` model step, `0` model-host calls on all 5 local routes) directly into [`public/recorded-run.json`](../public/recorded-run.json), paired in Shot 6 with a live offline-before-send Chrome 158 fallback capture (`23.3s`, `12/12` needs written for a stage, `0` missing, `0` `[Student]` brackets).
 
 ## Shot list & voiceover (`p01`–`p08`)
 
@@ -20,7 +20,7 @@
 5. **`1:15.41 – 1:35.53` (`p05`) — 1-Click Materials, Separate Print Copies & Lessons Exit Ticket**
    > One click builds board work, a class worksheet, and a take-home summary sheet for Tanvi. Class copy prints letter codes only, separate from the private Teacher's copy. In the Lessons tab, marking Got it, Partly, Not yet, or Absent feeds straight into tomorrow's plan.
 
-6. **`1:35.53 – 1:51.89` (`p06`) — Offline-Before-Send Failover (`PREFER_IN_CLOUD -> ON_DEVICE`, `41.3s`, `12/12` needs)**
+6. **`1:35.53 – 1:51.89` (`p06`) — Offline-Before-Send Failover (`PREFER_IN_CLOUD -> ON_DEVICE`, `23.3s`, `12/12` needs)**
    > If school Wi-Fi drops, Staffroom recovers on Gemini Nano offline with a clear caution banner, tested mid-stream in code and shown offline here, while the deterministic Return Gate still checks the output locally.
 
 7. **`1:51.89 – 2:15.13` (`p07`) — Inspect (All 6 Routes + Resource Timing) & Verified Benchmark Card**

@@ -1,4 +1,4 @@
-import { splitVariations } from '../core/lessonNeeds';
+import { ALREADY_SUITS_RE, splitVariations } from '../core/lessonNeeds';
 import { MATERIALS_SCHEMA, MATERIALS_SYSTEM, readMaterials, type Materials } from '../core/materials';
 import type { Draft, LabelWhere, Task, TaskId, Where } from '../core/types';
 import { ON_DEVICE_MODEL } from '../core/receipts';
@@ -57,11 +57,11 @@ export function draftPrompt(redacted: string, task: Task): string {
   return `${task.instruction}\n\n${DRAFT_FORMAT}\n\n${DRAFT_NOTES_HEADING}\n${redacted}`;
 }
 
-/** System instruction for offline on-device lesson plans: bracket-free and focused on lettered needs. */
+/** System instruction for offline on-device lesson plans: bracket-free and focused on concrete lettered adjustments. */
 export const OFFLINE_LESSON_SYSTEM =
-  'You plan practical classroom lessons in plain text for teachers in India. Never write square brackets or numbered labels like Student 1. Write for the whole class and answer every lettered need requested.';
+  'You plan practical classroom lessons in plain text for teachers in India. Never write square brackets or numbered labels like Student 1. For every lettered need, write a concrete teacher action starting with a verb (never copy the need text).';
 
-/** Bracket-free schema used for on-device lesson fallback so local Nano does not echo stand-in hints. */
+/** Bracket-free schema used for on-device lesson fallback when no lettered needs are sent. */
 const OFFLINE_LESSON_SCHEMA = {
   type: 'object',
   properties: {
@@ -78,14 +78,73 @@ const OFFLINE_LESSON_SCHEMA = {
   required: ['title', 'items'],
 };
 
+/** Grammar-constrained offline lesson schema with an explicit per-letter `adjustments` array for Gemini Nano. */
+const OFFLINE_LESSON_NEEDS_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: { type: 'string' },
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { heading: { type: 'string' }, text: { type: 'string' } },
+        required: ['heading', 'text'],
+      },
+    },
+    adjustments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          letter: { type: 'string' },
+          stage: { type: 'string', enum: ['Starter', 'Teach', 'Practise', 'Homework', 'none'] },
+          action: { type: 'string' },
+        },
+        required: ['letter', 'stage', 'action'],
+      },
+    },
+  },
+  required: ['title', 'items', 'adjustments'],
+};
+
+export interface OfflineAdjustment {
+  letter: string;
+  stage?: string;
+  action: string;
+}
+
+export type RawOfflineDraft = Draft & { adjustments?: OfflineAdjustment[] };
+
 const NEEDS_LINE_RE = /^Need ([A-Z]+): (.+)$/gm;
 const LESSON_SECTION_RE = /(?:^|\n)Lesson\n/;
-const OFFLINE_COLON_NEED_RE = /^Need\s+([A-Za-z]{1,2})\s*[:.–-]\s*(.+)$/gm;
 const STAGE_MIN_RE = /\s*[(\[–—:-]\s*\d+\s*min(?:ute)?s?\.?\s*[)\]]?\s*$/iu;
+const SPLIT_INLINE_NEED_RE = /(?=\bNeed\s+[A-Za-z]{1,2}\s*(?:\||[:.–-]))/g;
+const OFFLINE_PIPE_NEED_RE = /^Need\s+([A-Za-z]{1,2})\s*\|\s*([^|\n]*?)\s*\|\s*(.+)$/u;
+const OFFLINE_COLON_NEED_RE = /^Need\s+([A-Za-z]{1,2})\s*[:.–-]\s*(.+)$/u;
+
+function normWords(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function isNeedEcho(adj: string, inputNeed?: string): boolean {
+  if (!inputNeed) return false;
+  const aWords = normWords(adj);
+  const bWords = normWords(inputNeed);
+  if (aWords.length === 0 || bWords.length === 0) return false;
+  if (aWords.join(' ') === bWords.join(' ')) return true;
+  const bSet = new Set(bWords);
+  const matched = bWords.filter((w) => aWords.includes(w)).length;
+  const extra = aWords.filter((w) => !bSet.has(w)).length;
+  return matched / bWords.length >= 0.85 && extra <= 2;
+}
 
 function pickOfflineStage(text: string, stages: readonly string[]): string {
   if (/^(?:this\s+lesson\s+already\s+suits|already\s+suited|no\s+change\s+needed)/i.test(text.trim())) return 'none';
-  if (/homework|at home|take[- ]home|after school|before.*bell|next\s+(?:day|morning)|hand\s*in/i.test(text)) {
+  if (/homework|at home|take[- ]home|after school|before.*(?:bell|end)|school\s+day|assignment|submitted|absent|return|next\s+(?:day|morning)|hand\s*in/i.test(text)) {
     const hw = stages.find((s) => /homework/i.test(s));
     if (hw) return hw;
   }
@@ -101,28 +160,85 @@ function pickOfflineStage(text: string, stages: readonly string[]): string {
 }
 
 /**
- * Convert colon-formatted Need lines (`Need A: adjustment`) produced by compact
- * offline Gemini Nano prompts into pipe entries (`Need A | Stage | adjustment`)
- * expected by `splitVariations`. Cloud pipe replies pass through unchanged.
+ * Convert structured `adjustments` arrays, colon-formatted Need lines (`Need A: adjustment`),
+ * or mixed colon/pipe entries produced by compact offline Gemini Nano prompts into canonical pipe
+ * entries (`Need A | Stage | adjustment`) for `splitVariations`, dropping lines
+ * that merely echo the input need description verbatim without an adjustment.
  */
-export function normalizeOfflineNeeds(draft: Draft, letters: readonly string[]): Draft {
+export function normalizeOfflineNeeds(draft: RawOfflineDraft, letters: readonly string[], inputNeeds?: ReadonlyMap<string, string>): Draft {
   const isNeeds = (h: string) => h.replace(/[\s:.]+$/, '').trim().toLowerCase() === 'for each need';
+
+  if (Array.isArray(draft.adjustments) && draft.adjustments.length > 0) {
+    const stageItems = draft.items.filter((i) => !isNeeds(i.heading));
+    const stages = stageItems.map((i) => i.heading.replace(STAGE_MIN_RE, '').trim()).filter(Boolean);
+    const seen = new Set<string>();
+    const lines: string[] = [];
+    for (const a of draft.adjustments) {
+      const letter = String(a?.letter ?? '').trim().replace(/^Need\s+/i, '').toUpperCase();
+      const action = String(a?.action ?? '').trim().replace(/^Need\s+[A-Za-z]{1,2}\s*(?:\||[:.–-])\s*/u, '').trim();
+      if (!letters.includes(letter) || !action || isNeedEcho(action, inputNeeds?.get(letter))) continue;
+      let stage: string;
+      if (ALREADY_SUITS_RE.test(action)) {
+        stage = 'none';
+      } else {
+        const rawStage = String(a?.stage ?? '').trim();
+        const matched = rawStage && rawStage.toLowerCase() !== 'none'
+          ? stages.find((s) => s.toLowerCase() === rawStage.toLowerCase())
+          : undefined;
+        stage = matched ?? pickOfflineStage(action, stages);
+      }
+      const key = `${letter}|${stage.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      lines.push(`Need ${letter} | ${stage} | ${action}`);
+    }
+    return {
+      title: draft.title,
+      items: lines.length > 0 ? [...stageItems, { heading: 'For each need', text: lines.join('\n') }] : stageItems,
+    };
+  }
+
+  const baseDraft: Draft = 'adjustments' in draft ? { title: draft.title, items: draft.items } : draft;
   const at = draft.items.map((i) => isNeeds(i.heading)).lastIndexOf(true);
-  if (at < 0) return draft;
+  if (at < 0) return baseDraft;
   const text = draft.items[at].text;
-  if (/\bNeed\s+[A-Za-z]{1,2}\s*\|/.test(text)) return draft;
   const stages = draft.items
     .filter((_, i) => i !== at)
     .map((i) => i.heading.replace(STAGE_MIN_RE, '').trim())
     .filter(Boolean);
   const lines: string[] = [];
-  for (const m of text.matchAll(OFFLINE_COLON_NEED_RE)) {
-    const letter = m[1].toUpperCase();
-    const adj = m[2].trim();
-    if (!letters.includes(letter) || !adj) continue;
-    lines.push(`Need ${letter} | ${pickOfflineStage(adj, stages)} | ${adj}`);
+  let sawColonOrEcho = false;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const trimmedLine = rawLine.trim();
+    if (!trimmedLine) continue;
+    for (const chunk of trimmedLine.split(SPLIT_INLINE_NEED_RE)) {
+      const part = chunk.trim();
+      if (!part) continue;
+      const pipe = OFFLINE_PIPE_NEED_RE.exec(part);
+      if (pipe) {
+        const letter = pipe[1].toUpperCase();
+        const rawStage = pipe[2].trim();
+        const adj = pipe[3].trim();
+        if (!letters.includes(letter) || !adj || isNeedEcho(adj, inputNeeds?.get(letter))) {
+          sawColonOrEcho = true;
+          continue;
+        }
+        const needsStage = !rawStage || (rawStage.toLowerCase() === 'none' && !ALREADY_SUITS_RE.test(adj));
+        if (needsStage) sawColonOrEcho = true;
+        lines.push(`Need ${letter} | ${needsStage ? pickOfflineStage(adj, stages) : rawStage} | ${adj}`);
+        continue;
+      }
+      const colon = OFFLINE_COLON_NEED_RE.exec(part);
+      if (colon) {
+        sawColonOrEcho = true;
+        const letter = colon[1].toUpperCase();
+        const adj = colon[2].trim();
+        if (!letters.includes(letter) || !adj || isNeedEcho(adj, inputNeeds?.get(letter))) continue;
+        lines.push(`Need ${letter} | ${pickOfflineStage(adj, stages)} | ${adj}`);
+      }
+    }
   }
-  if (lines.length === 0) return draft;
+  if (!sawColonOrEcho) return baseDraft;
   return {
     title: draft.title,
     items: draft.items.map((item, i) => (i === at ? { ...item, text: lines.join('\n') } : item)),
@@ -160,7 +276,7 @@ export function offlineLessonPrompt(redacted: string): string {
   }
 
   const lines = [
-    'Return JSON with "title" and "items": 4 practical stages totalling the lesson minutes (Starter, Teach, Practise, Homework), plus one final item with exact heading "For each need" if needs are given.',
+    'Plan 4 short stages totalling the lesson minutes: Starter, Teach, Practise, Homework.',
     'Plain text only. Refer to pupils generally (a pupil, pairs, the class). NEVER use square brackets anywhere.',
     ...(lessonBlock ? ['', lessonBlock] : []),
     ...(notesPart ? ['', 'Class notes:', notesPart] : []),
@@ -169,9 +285,9 @@ export function offlineLessonPrompt(redacted: string): string {
     const letters = needs.map((n) => n.letter);
     lines.push(
       '',
-      'Inside the final "For each need" item, write one line for EVERY letter in "Need X: <one short classroom adjustment>" format:',
-      ...needs.map((n) => `Need ${n.letter}: ${n.line}`),
-      `Cover every letter: ${letters.join(', ')}.`,
+      'In adjustments, give one concrete teacher action starting with a verb for EVERY letter below (use stage "none" only if the lesson already suits it; do not copy the need text):',
+      ...needs.map((n) => `${n.letter} = ${n.line}`),
+      `Include all ${needs.length} letters: ${letters.join(', ')}.`,
     );
   }
   return lines.join('\n');
@@ -246,6 +362,7 @@ export async function streamContent(
   fallbackModel?: () => ReturnType<typeof modelFor> | null,
   validate?: (text: string, onDevice: boolean) => boolean,
   fallbackPrompt?: string,
+  validateRecovered?: (text: string) => boolean,
 ): Promise<{ text: string; onDevice: boolean }> {
   try {
     const result = await readStream(model, prompt, onChunk);
@@ -266,7 +383,29 @@ export async function streamContent(
     if (!recovered.onDevice) {
       throw new Error('The fallback draft did not run on the device.');
     }
+    const checkRecovered = validateRecovered ?? (validate ? (t: string) => validate(t, true) : undefined);
+    if (checkRecovered && !checkRecovered(recovered.text)) {
+      throw new Error('The fallback draft ended incomplete.');
+    }
     return recovered;
+  }
+}
+
+function validDraftStructure(raw: string): RawOfflineDraft | null {
+  try {
+    const parsed = JSON.parse(raw) as RawOfflineDraft | null;
+    if (
+      !parsed ||
+      !Array.isArray(parsed.items) ||
+      parsed.items.length === 0 ||
+      !parsed.items.every((i) => i && typeof i.heading === 'string' && i.heading.trim().length > 0 && typeof i.text === 'string' && i.text.trim().length > 0) ||
+      (parsed.adjustments !== undefined && !Array.isArray(parsed.adjustments))
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
   }
 }
 
@@ -282,13 +421,15 @@ export async function writeDraft(
   onProgressText?: (partialText: string) => void,
 ): Promise<DraftResult> {
   const isLesson = task.id === 'lesson';
-  const toldLetters = isLesson ? [...redacted.matchAll(NEEDS_LINE_RE)].map((m) => m[1]) : [];
+  const inputNeeds = isLesson ? new Map([...redacted.matchAll(NEEDS_LINE_RE)].map((m) => [m[1], m[2].trim()])) : new Map<string, string>();
+  const toldLetters = [...inputNeeds.keys()];
   const isOffline = typeof globalThis.navigator !== 'undefined' && globalThis.navigator.onLine === false;
+  const offlineSchema = toldLetters.length > 0 ? OFFLINE_LESSON_NEEDS_SCHEMA : OFFLINE_LESSON_SCHEMA;
   const opts = {
     system: draftSystem(task.id),
     schema: SCHEMA,
     cloudModel,
-    ...(isLesson ? { onDeviceSystem: OFFLINE_LESSON_SYSTEM, onDeviceSchema: OFFLINE_LESSON_SCHEMA } : {}),
+    ...(isLesson ? { onDeviceSystem: OFFLINE_LESSON_SYSTEM, onDeviceSchema: offlineSchema } : {}),
   };
   const model = modelFor('draft', opts);
   const { text, onDevice } = await streamContent(
@@ -297,45 +438,47 @@ export async function writeDraft(
     onProgressText,
     () =>
       onDeviceFallbackFor(
-        isLesson ? { ...opts, system: OFFLINE_LESSON_SYSTEM, schema: OFFLINE_LESSON_SCHEMA } : opts,
+        isLesson ? { ...opts, system: OFFLINE_LESSON_SYSTEM, schema: offlineSchema } : opts,
       ),
     (t, fromDevice) => {
-      try {
-        const parsed = JSON.parse(t) as Draft | null;
-        if (
-          !parsed ||
-          !Array.isArray(parsed.items) ||
-          parsed.items.length === 0 ||
-          !parsed.items.every((i) => i && typeof i.heading === 'string' && i.heading.trim().length > 0 && typeof i.text === 'string' && i.text.trim().length > 0)
-        ) {
-          return false;
-        }
-        if (fromDevice && isLesson) {
-          if (/\[Student\s+\d+\]/i.test(t) && !/\[Student\s+\d+\]/i.test(redacted)) return false;
-          if (toldLetters.length > 0) {
-            const normalized = normalizeOfflineNeeds(parsed, toldLetters);
-            if (splitVariations(normalized, toldLetters).missing.length > Math.floor(toldLetters.length / 3)) {
-              return false;
-            }
+      const parsed = validDraftStructure(t);
+      if (!parsed) return false;
+      if (fromDevice && isLesson) {
+        if (/\[Student\s+\d+\]/i.test(t) && !/\[Student\s+\d+\]/i.test(redacted)) return false;
+        if (toldLetters.length > 0) {
+          const normalized = normalizeOfflineNeeds(parsed, toldLetters, inputNeeds);
+          if (splitVariations(normalized, toldLetters).missing.length > Math.floor(toldLetters.length / 3)) {
+            return false;
           }
         }
-        return true;
-      } catch {
-        return false;
       }
+      return true;
     },
     isLesson ? offlineLessonPrompt(redacted) : undefined,
+    (t) => Boolean(validDraftStructure(t)) && !(isLesson && /\[Student\s+\d+\]/i.test(t) && !/\[Student\s+\d+\]/i.test(redacted)),
   );
-  const draft = JSON.parse(text) as Draft;
+  const draft = JSON.parse(text) as RawOfflineDraft;
   if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) {
     throw new Error('The model returned an empty draft.');
   }
-  const cleanDraft: Draft = {
+  const cleanDraft: RawOfflineDraft = {
     title: plainText(String(draft.title ?? task.label)),
     items: draft.items.map((i) => ({ heading: plainText(String(i.heading ?? '')), text: plainText(String(i.text ?? '')) })),
+    ...(Array.isArray(draft.adjustments)
+      ? {
+          adjustments: draft.adjustments.map((a) => ({
+            letter: plainText(String(a?.letter ?? '')),
+            stage: a?.stage == null ? undefined : plainText(String(a.stage)),
+            action: plainText(String(a?.action ?? '')),
+          })),
+        }
+      : {}),
   };
   return {
-    draft: onDevice && isLesson && toldLetters.length > 0 ? normalizeOfflineNeeds(cleanDraft, toldLetters) : cleanDraft,
+    draft:
+      onDevice && isLesson && toldLetters.length > 0
+        ? normalizeOfflineNeeds(cleanDraft, toldLetters, inputNeeds)
+        : { title: cleanDraft.title, items: cleanDraft.items },
     where: onDevice ? 'ON_DEVICE' : 'IN_CLOUD',
     model: onDevice ? ON_DEVICE_MODEL : cloudModel,
   };

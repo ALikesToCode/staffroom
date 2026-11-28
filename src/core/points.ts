@@ -288,7 +288,9 @@ export const pairLine = (a: string, b: string, together = true) => (together ? `
  */
 export function pairPoints(constraints: readonly Constraint[], entities: Entity[], items: readonly DraftItem[], note: string): Point[] {
   const apart = constraints.filter((c) => c.confirmed && c.kind === 'learning' && c.learn === 'group' && c.about && c.at !== undefined);
-  const together = items.flatMap((item, i) => (TOGETHER.test(item.text) ? [i] : []));
+  const together = items.flatMap((item, i) =>
+    stageOf(item, true) !== 'homework' && !/^homework$/i.test(stageName(item.heading).trim()) && TOGETHER.test(item.text) ? [i] : [],
+  );
   const practise = items.findIndex((item) => /^practi[sc]e$/i.test(stageName(item.heading).trim()));
   const stages = together.length > 0 ? together : items.length > 0 ? [practise >= 0 ? practise : 0] : [];
   const out: Point[] = [];

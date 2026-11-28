@@ -36,9 +36,9 @@ Executed on a synthetic **35-student** note (`2,177` characters across `16` para
 
 ## 4. Offline Streaming Fallback (`draft`, `PREFER_IN_CLOUD → ON_DEVICE`)
 
-- Condition: CDP `Network.emulateNetworkConditions({ offline: true, ... })` engaged before clicking `Approve and send` on `SAMPLE_NOTE` (12 needs).
-- Execution: `writeDraft()` routed offline lesson prompt (`OFFLINE_LESSON_SYSTEM` + `OFFLINE_LESSON_SCHEMA` + `offlineLessonPrompt()` + `normalizeOfflineNeeds()`).
-- Latency (`v8` live Chrome 158 capture): **41,303 ms** (`41.3 s`) with caution banner (`"The cloud draft failed, so the on-device model wrote this draft from the same approved text."`).
+- Condition: CDP `Network.emulateNetworkConditions({ offline: true, ... })` engaged before clicking `Approve and send` on `SAMPLE_NOTE` (`12` confirmed needs: `A`–`I`, `M`–`O`).
+- Execution: `writeDraft()` routed offline lesson prompt through `OFFLINE_LESSON_SYSTEM` + `OFFLINE_LESSON_NEEDS_SCHEMA` + `offlineLessonPrompt()` + `normalizeOfflineNeeds()`.
+- Latency (`v9` live Chrome 158 capture): **23,298 ms** (`23.3 s`) with offline caution banner (`"You were offline when you approved, so the on-device model wrote this draft from the same approved text."`).
 - Output: **`12 / 12` needs written for a stage (`0` missing)**, **`0` `[Student N]` bracket leaks**, local Return Gate check passed.
 
 ## 5. Live Hindi Layer A Verification (`Notes to parents`)

@@ -468,4 +468,25 @@ describe('Hinglish and Devanagari constraints', () => {
       ['other', 'freezes in written tests'],
     ]);
   });
+
+  it('matches Unicode word boundaries for Devanagari time-of-day cues', () => {
+    const note = 'मीनल आखिरी घंटी के बाद नहीं रुक सकती। प्रिया सुबह जल्दी नहीं आ सकती।';
+    const entities = buildVault(note, deterministicCandidates(note, ['मीनल', 'प्रिया']));
+    const reading = readConstraintAnswer(
+      note,
+      note,
+      JSON.stringify({
+        constraints: [
+          { student: 'मीनल', kind: 'time-after', quote: 'आखिरी घंटी के बाद नहीं रुक सकती' },
+          { student: 'प्रिया', kind: 'time-after', quote: 'सुबह जल्दी नहीं आ सकती' },
+        ],
+      }),
+      entities,
+    )!;
+    expect(reading.dropped).toBe(0);
+    expect(reading.constraints.map((c) => [c.kind, c.text])).toEqual([
+      ['time-after', 'आखिरी घंटी के बाद नहीं रुक सकती'],
+      ['time-before', 'सुबह जल्दी नहीं आ सकती'],
+    ]);
+  });
 });

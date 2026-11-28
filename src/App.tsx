@@ -112,6 +112,7 @@ import {
   NOTE_KEY,
   read,
   session,
+  SIGNOUT_BLOCKED_KEY,
   STEP,
   write,
   type Gaps,
@@ -175,9 +176,11 @@ export function App() {
   const [scanning, setScanning] = useState(false);
   const [scanPreview, setScanPreview] = useState<{ url: string; summary: string } | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [deskCleared, setDeskCleared] = useState<'ok' | 'signout-failed' | null>(null);
+  const [deskCleared, setDeskCleared] = useState<'ok' | 'signout-failed' | null>(() =>
+    read<boolean>(session, SIGNOUT_BLOCKED_KEY, false) ? 'signout-failed' : null,
+  );
   const deskClearedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const signOutBlockedRef = useRef(false);
+  const signOutBlockedRef = useRef(read<boolean>(session, SIGNOUT_BLOCKED_KEY, false));
   const recordsGenRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [nanoDiff, setNanoDiff] = useState<{ rulesOnly: number; nanoAdded: number } | null>(null);
@@ -802,7 +805,7 @@ export function App() {
     if (!policyReadyRef.current || sendingRef.current || replay) return;
     const sentPolicy = policyRef.current;
     const current = lockConstraints(applyLocks(rawEntities, sentPolicy.lockedKinds), constraints);
-    // The language the cloud is asked to write in. The rules read English only, so in any other they check nothing.
+    // The language the cloud is asked to write in. Run deterministic rules for English and Hindi; skip English-only Nano check for non-English drafts.
     const language = task === 'lesson' || task === 'parents' ? languageOf(lesson) : '';
     const approved = withLanguage(withLessonGoing(outgoingOf(note, current, constraints, task === 'lesson'), task === 'lesson' ? lesson : null, current, classList), task === 'parents' ? language : '');
     const { text, tokens } = approved;
@@ -1731,6 +1734,7 @@ export function App() {
     }
     const signedOut = await clearUserSession();
     signOutBlockedRef.current = !signedOut;
+    write(session, SIGNOUT_BLOCKED_KEY, true, signedOut);
     if (deskClearedTimer.current) {
       clearTimeout(deskClearedTimer.current);
       deskClearedTimer.current = null;
@@ -1745,6 +1749,7 @@ export function App() {
   const retrySignOut = async () => {
     const signedOut = await clearUserSession();
     signOutBlockedRef.current = !signedOut;
+    write(session, SIGNOUT_BLOCKED_KEY, true, signedOut);
     if (deskClearedTimer.current) {
       clearTimeout(deskClearedTimer.current);
       deskClearedTimer.current = null;
@@ -2229,15 +2234,13 @@ export function App() {
           receipts={receipts}
           keepCopies={keepCopies}
           setKeepCopies={(on) => {
-            if (on) {
-              signOutBlockedRef.current = false;
-              setDeskCleared((c) => (c === 'signout-failed' ? null : c));
-            }
+            if (on && signOutBlockedRef.current) return;
             setKeepCopies(on);
             if (on && !uid) void ensureUser();
             else if (on && uid && view === 'receipts') void refreshRecords(uid);
           }}
           signedIn={Boolean(uid) && deskCleared !== 'signout-failed'}
+          signOutBlocked={deskCleared === 'signout-failed'}
           records={deskCleared === 'signout-failed' ? { state: 'idle' } : records}
           onClear={() => {
             setReceipts([]);

@@ -562,7 +562,7 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
             <td>Multimodal scan &amp; offline draft fallback (28 Nov, Chrome 158)</td>
             <td>
               Local notebook photo OCR transcribed 231 chars in 3.1s (4.4s end-to-end) with 0 cloud requests and extracted 2 pupil names;
-              offline PREFER_IN_CLOUD draft fallback streamed on Gemini Nano in 41.3s with caution notice, 12/12 needs covered (0 missing), and 0 bracket leaks.
+              offline PREFER_IN_CLOUD draft fallback streamed on Gemini Nano in 23.3s with offline caution notice, 12/12 needs written for a stage (0 missing), and 0 bracket leaks.
             </td>
           </tr>
           <tr>
@@ -608,6 +608,7 @@ export function Receipts({
   keepCopies,
   setKeepCopies,
   signedIn,
+  signOutBlocked = false,
   canKeepCopies = configured,
   records,
   onClear,
@@ -616,6 +617,7 @@ export function Receipts({
   keepCopies: boolean;
   setKeepCopies: (v: boolean) => void;
   signedIn: boolean;
+  signOutBlocked?: boolean;
   canKeepCopies?: boolean;
   records: Records;
   onClear: () => void;
@@ -724,13 +726,19 @@ export function Receipts({
 
       <section className="account">
         <label className="switch">
-          <input type="checkbox" checked={keepCopies} disabled={!canKeepCopies} onChange={(e) => setKeepCopies(e.target.checked)} />
+          <input type="checkbox" checked={keepCopies} disabled={!canKeepCopies || signOutBlocked} onChange={(e) => setKeepCopies(e.target.checked)} />
           <span />
           Keep a copy of each receipt's record (no text) in my account (Firestore).
         </label>
         <p className="hint">
-          Counts only, written by this browser: your own note of a run, not proof of it to anyone else.
-          {!signedIn && (canKeepCopies ? ' Turning this on signs this browser back in anonymously.' : ' Not available: no Firebase project is connected.')}
+          {signOutBlocked
+            ? 'Sign-out failed after Clear desk — use Retry sign-out above before turning copies back on.'
+            : (
+                <>
+                  Counts only, written by this browser: your own note of a run, not proof of it to anyone else.
+                  {!signedIn && (canKeepCopies ? ' Turning this on signs this browser back in anonymously.' : ' Not available: no Firebase project is connected.')}
+                </>
+              )}
         </p>
         {signedIn && records.state === 'loading' && <p className="hint">Looking up the records kept in your account.</p>}
         {signedIn && records.state === 'failed' && <p className="caution">The records kept in your account could not be read just now.</p>}

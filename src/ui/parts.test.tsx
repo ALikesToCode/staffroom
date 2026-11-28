@@ -454,4 +454,22 @@ describe('AppHeader and ReviewCard', () => {
     expect(html).toContain('unanchored phrases (often paraphrases rather than exact words in your note)');
     expect(html).not.toContain('so they were not withheld');
   });
+
+  it('disables Keep a copy and hides remote records while Clear desk sign-out is blocked', () => {
+    const html = renderToStaticMarkup(
+      <Receipts
+        receipts={[]}
+        keepCopies={false}
+        setKeepCopies={() => {}}
+        signedIn={false}
+        signOutBlocked
+        canKeepCopies
+        records={{ state: 'idle' }}
+        onClear={() => {}}
+      />,
+    );
+    expect(html).toContain('disabled=""');
+    expect(html).toContain('Sign-out failed after Clear desk — use Retry sign-out above before turning copies back on.');
+    expect(html).not.toContain('Records in your account');
+  });
 });

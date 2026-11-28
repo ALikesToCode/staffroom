@@ -286,17 +286,53 @@ describe('naming the receipt', () => {
     expect(compact).toContain('NEVER use square brackets anywhere');
     expect(compact).toContain('Topic: Describing a Place');
     expect(compact).toContain('Class notes:\nClass notes here.');
-    expect(compact).toContain('Need X: <one short classroom adjustment>');
-    expect(compact).toContain('Need A: has missed lessons');
-    expect(compact).toContain('Need E: away on Tuesdays');
-    expect(compact).toContain('Cover every letter: A, E.');
+    expect(compact).toContain('In adjustments, give one concrete teacher action starting with a verb');
+    expect(compact).toContain('A = has missed lessons');
+    expect(compact).toContain('E = away on Tuesdays');
+    expect(compact).toContain('Include all 2 letters: A, E.');
 
     const res = await streamContent(cloudBroken, 'long cloud prompt', undefined, () => localOk, undefined, compact);
     expect(res.onDevice).toBe(true);
     expect(seenPrompts).toEqual([compact]);
   });
 
-  it('normalizes offline colon-formatted Need lines into pipe entries for splitVariations while leaving pipe drafts intact', () => {
+  it('normalizes structured offline adjustments, routes stage "none" concrete actions to stages, and drops verbatim echoes', () => {
+    const structuredDraft = {
+      title: 'Class 6 English — Describing a Place',
+      items: [
+        { heading: 'Starter (5 minutes)', text: 'Share favorite place words.' },
+        { heading: 'Teach (10 minutes)', text: 'Explain sensory details.' },
+        { heading: 'Practise (15 minutes)', text: 'Guide pairs to write a paragraph.' },
+        { heading: 'Homework (10 minutes)', text: 'Assign a short place description at home.' },
+      ],
+      adjustments: [
+        { letter: 'A', stage: 'none', action: 'Remind students that assignments must be completed before the end of the school day.' },
+        { letter: 'Need B', stage: 'Practise', action: 'Need B: Encourage students to write without online dictionaries.' },
+        { letter: 'E', stage: 'none', action: 'If a student is absent on Tuesdays, provide a written description task for them upon their return.' },
+        { letter: 'F', stage: 'Teach', action: 'This lesson already suits this need.' },
+        { letter: 'G', stage: 'Practise', action: 'finishes early and needs more to do' },
+      ],
+    };
+    const inputNeeds = new Map([
+      ['A', 'cannot stay after the last bell'],
+      ['B', 'no phone or internet at home'],
+      ['E', 'away on Tuesdays'],
+      ['F', 'finds written tests hard; can answer aloud'],
+      ['G', 'finishes early and needs more to do'],
+    ]);
+    const normalized = normalizeOfflineNeeds(structuredDraft, ['A', 'B', 'E', 'F', 'G'], inputNeeds);
+    expect('adjustments' in normalized).toBe(false);
+    const split = splitVariations(normalized, ['A', 'B', 'E', 'F', 'G']);
+    expect(split.missing).toEqual(['G']);
+    expect(split.none).toEqual(['F']);
+    expect(split.dropped).toBe(0);
+    expect(split.variations.find((v) => v.need === 'A')?.itemIndex).toBe(3); // Homework
+    expect(split.variations.find((v) => v.need === 'B')?.itemIndex).toBe(2); // Practise
+    expect(split.variations.find((v) => v.need === 'B')?.text).toBe('Encourage students to write without online dictionaries.');
+    expect(split.variations.find((v) => v.need === 'E')?.itemIndex).toBe(3); // Homework
+  });
+
+  it('normalizes mixed colon/pipe offline Need lines, rejects verbatim need echoes, and leaves pure pipe drafts intact', () => {
     const colonDraft = {
       title: 'Class 6 English — Describing a Place',
       items: [
@@ -308,23 +344,32 @@ describe('naming the receipt', () => {
           heading: 'For each need',
           text: [
             'Need A: Let the pupil leave on time and hand in work the next morning.',
-            'Need B: Print the picture cards instead of asking for phone photos.',
+            'Need B | Practise | Print the picture cards instead of asking for phone photos.',
             'Need C: Explain the starter orally in pairs.',
             'Need D: Give one extra extension prompt on the board.',
             'Need E: This lesson already suits this need.',
+            'Need G: finishes early and needs more to do',
           ].join('\n'),
         },
       ],
     };
-    const normalized = normalizeOfflineNeeds(colonDraft, ['A', 'B', 'C', 'D', 'E']);
-    const split = splitVariations(normalized, ['A', 'B', 'C', 'D', 'E']);
-    expect(split.missing).toEqual([]);
+    const inputNeeds = new Map([
+      ['A', 'cannot stay after the last bell'],
+      ['B', 'no phone or internet at home'],
+      ['C', 'cannot buy materials'],
+      ['D', 'needs extra challenge'],
+      ['E', 'away on Tuesdays'],
+      ['G', 'finishes early and needs more to do'],
+    ]);
+    const normalized = normalizeOfflineNeeds(colonDraft, ['A', 'B', 'C', 'D', 'E', 'G'], inputNeeds);
+    const split = splitVariations(normalized, ['A', 'B', 'C', 'D', 'E', 'G']);
+    expect(split.missing).toEqual(['G']); // echoed Need G dropped cleanly instead of inflated
     expect(split.dropped).toBe(0);
     expect(split.none).toEqual(['E']);
     expect(split.variations.find((v) => v.need === 'A')?.itemIndex).toBe(3); // Homework
-    expect(split.variations.find((v) => v.need === 'B')?.itemIndex).toBe(2); // Practise
+    expect(split.variations.find((v) => v.need === 'B')?.itemIndex).toBe(2); // Practise (preserved pipe entry)
     expect(split.variations.find((v) => v.need === 'C')?.itemIndex).toBe(0); // Starter
-    expect(split.variations.find((v) => v.need === 'D')?.itemIndex).toBe(1); // Teach (on the board)
+    expect(split.variations.find((v) => v.need === 'D')?.itemIndex).toBe(1); // Teach
 
     const pipeDraft = {
       title: 'Plan',
@@ -336,7 +381,7 @@ describe('naming the receipt', () => {
     expect(normalizeOfflineNeeds(pipeDraft, ['A'])).toBe(pipeDraft);
   });
 
-  it('retries with fallbackPrompt when internal PREFER_IN_CLOUD on-device reply fails validation', async () => {
+  it('retries with fallbackPrompt and fails closed if recovered fallback still violates validateRecovered', async () => {
     const internalOnDevice = {
       generateContentStream: async () => ({
         stream: {
@@ -379,5 +424,26 @@ describe('naming the receipt', () => {
     expect(res.onDevice).toBe(true);
     expect(JSON.parse(res.text).title).toBe('Clean');
     expect(seenFallback).toEqual(['compact bracket-free prompt']);
+
+    const badLocal = {
+      generateContentStream: async () => ({
+        stream: { async *[Symbol.asyncIterator]() {} },
+        response: Promise.resolve({
+          text: () => '{"title":"Still bad [Student 1]","items":[{"heading":"Starter","text":"x"}]}',
+          inferenceSource: 'on_device',
+        }),
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+    await expect(
+      streamContent(
+        internalOnDevice,
+        'prompt',
+        undefined,
+        () => badLocal,
+        (t, fromDevice) => !(fromDevice && /\[Student\s+\d+\]/i.test(t)),
+        'compact',
+        (t) => !/\[Student\s+\d+\]/i.test(t),
+      ),
+    ).rejects.toThrow(/fallback draft ended incomplete/);
   });
 });
