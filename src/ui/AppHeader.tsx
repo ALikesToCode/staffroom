@@ -111,7 +111,7 @@ export function AppHeader({
             className="pill action"
             type="button"
             onClick={onClearDesk}
-            title="Wipe notes, class list, saved lessons, and receipts from this browser (shared-PC reset)"
+            title="Notes clear when this tab closes unless kept. Click to wipe now and sign out."
           >
             Clear desk
           </button>

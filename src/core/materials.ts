@@ -10,11 +10,11 @@ import { languageLine } from './lesson';
 export const MATERIALS_HEADING = 'Class plan to make materials for:';
 
 /** The instruction for the materials request. */
-export const MATERIALS_SYSTEM = `You write classroom materials for the lesson plan below, for a teacher with a blackboard, paper and no budget. Give:
-board: what the teacher writes on the board, at most 8 short lines.
-sheet: a practice sheet for the whole class, 5 to 8 questions, each one line.
-versions: exactly one for every listed need. "need" is the letter only. "items" is the sheet such a pupil works from instead of the class sheet, for the same purpose: 3 to 8 lines, each one line, written out in full, such as the adapted questions, sentence starters, the lines of a recap card or an extension task. Never only name a resource; write out every line of it. "note" is at most one sentence for the teacher on how to use the sheet. Where the class sheet already suits the need, the note is exactly "same sheet." and "items" is empty. Every listed letter must appear. Do not guess who or how many.
-ticket: an exit ticket of exactly 3 short questions, each with its answer for the teacher.
+export const MATERIALS_SYSTEM = `You write classroom materials for the lesson plan below, for a teacher with only a chalkboard, chalk, notebooks and pens (no chart paper, markers, posters, or school library unless the plan names them). Give:
+board: what the teacher writes on the chalkboard — headings, key words, and a short 3 to 4 sentence model example for a writing lesson, at most 8 short lines.
+sheet: a practice sheet for the whole class, 5 to 8 questions, each one line, doable in a pupil's notebook with a pen.
+versions: exactly one for every listed need. "need" is the letter only. "items" is the finished sheet the pupil works from instead of the class sheet, for the same purpose: 3 to 8 lines, each one line, written out in full (for example the exact adapted questions, actual sentence starters, or full extra challenge prompt). For an absence or catch-up need, write a self-contained 5 to 8 line take-home sheet a pupil can follow alone at home: 1) what the class learned today, 2) a short 2-line worked example, and 3) 2 to 3 practice steps they can write in a notebook without anyone helping. Never only name a resource; write out every line of it. "note" is at most one sentence for the teacher on how to hand out or use the sheet. Where the class sheet already suits the need, the note is exactly "same sheet." and "items" is empty. Every listed letter must appear. Do not guess who or how many.
+ticket: an exit ticket of exactly 3 short questions to test today's skill, each with its answer for the teacher.
 Use only the plan and the needs. Never write a name. If the plan gives a language, write in that language; keep the letters of the needs and "same sheet." as they are.`;
 
 export const MATERIALS_SCHEMA = {

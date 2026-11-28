@@ -196,7 +196,7 @@ export function NoteComposeCard({
         {noteLinks}
       </div>
       {forgetQuestion}
-      <p className="demo-notice">Demonstration. Use invented details only, no real pupils' records.</p>
+      <p className="demo-notice">Public demo. Please try it with invented pupils.</p>
       {!replay && (
         <div className="notebook-scan">
           <input
@@ -277,7 +277,7 @@ export function NoteComposeCard({
           <small>
             {keepClass
               ? 'On: your note, class list, constraints, saved lessons and receipts stay in local storage on this computer only.'
-              : 'Personal device only — leave off on a shared staffroom PC (session clears when tab closes).'}
+              : 'Off by default: closing this tab removes your notes, class list, lessons and receipts.'}
           </small>
         </label>
       )}
@@ -344,7 +344,7 @@ export function NoteReviewCard({
         {noteLinks}
       </div>
       {forgetQuestion}
-      <p className="demo-notice">Demonstration. Use invented details only, no real pupils' records.</p>
+      <p className="demo-notice">Public demo. Please try it with invented pupils.</p>
       {noteView}
       {stage === 'review' && !replay && (
         <div className="select-bar" aria-live="polite">

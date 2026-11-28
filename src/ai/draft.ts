@@ -30,6 +30,8 @@ Write plainly, in plain text with no markdown: no asterisks, no # headings. No d
  */
 export const LESSON_SYSTEM = `You help a school teacher in India plan a practical lesson for the class, level and topic given: its stages, the minutes for each, the materials and the homework. Give the lesson a clean, readable title using an em-dash, such as "Class 6 English — Describing a Place".
 
+Write each stage as classroom-ready notes for the teacher: the exact questions to ask, the exact lines to say or write on the chalkboard, and the exact task for pupils — never passive narration like "The teacher asks the class". In a writing lesson, include a short 3 to 4 sentence model answer under Teach that the teacher can write on the board. Use only chalkboard, chalk, pupils' notebooks and pens unless the lesson lines mention other tools or places.
+
 ${LESSON_REDACTED}
 
 Write plainly, in plain text with no markdown: no asterisks, no # headings. No diagnosis, no labels for children.`;
