@@ -26,8 +26,8 @@ const RECORD_WHERE: Record<Where, string> = {
 const LABEL_WHERE: Record<LabelWhere | 'UNKNOWN', string> = {
   ON_DEVICE: 'Written on the device from the approved text',
   IN_CLOUD: 'Written in the cloud from the approved text',
-  FALLBACK: 'The task and the day: no model had named this receipt when it was signed off',
-  UNKNOWN: 'Not recorded for this receipt',
+  FALLBACK: 'The task and the day: no model had named this saved record when it was finished',
+  UNKNOWN: 'Not recorded for this saved record',
 };
 
 // ------------------------------------------------------------------ the on-device model, in the header
@@ -227,7 +227,7 @@ export function Inspect({
   };
 }) {
   return (
-    <Drawer title="How it ran (Inspect)" onClose={onClose}>
+    <Drawer title="How it ran" onClose={onClose}>
       <h3>Where each step runs</h3>
       <ul className="inspect-routes">
         {ROUTES.map((r) => (
@@ -267,9 +267,9 @@ export function Inspect({
       <pre className="wire small">{heading}</pre>
       <p className="hint">The shape of the answer is fixed too: a title and a list of items, each with a heading and a text.</p>
 
-      <h3>Naming the receipt</h3>
+      <h3>Naming the saved record</h3>
       <p className="hint">
-        One more call names the receipt. It runs on this device when it can. When it cannot, the cloud model is sent the line “Note:” and
+        One more call names the saved record. It runs on this device when it can. When it cannot, the cloud model is sent the line “Note:” and
         under it the first {labelChars.toLocaleString()} characters of your approved text, with this instruction:
       </p>
       <pre className="wire small">{labelSystem}</pre>
@@ -337,7 +337,7 @@ export function NetworkSection({
               <p className="hint">Per-step Resource Timing counts were not recorded in this capture.</p>
             )}
             <p className="hint">
-              Press <b>Try an invented class</b> on the Desk to inspect live Resource Timing for your own session.
+              Press <b>Try a sample class</b> on the Desk to inspect live Resource Timing for your own session.
             </p>
           </div>
         ) : (
@@ -406,7 +406,7 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
             </div>
             <div className="arch-step">
               <b>
-                <span className="n">5</span> Check and sign off
+                <span className="n">5</span> Check and finish
               </b>
               <p>Each step is checked against confirmed constraints by rule and withheld details by Nano.</p>
               <code>ONLY_ON_DEVICE</code>
@@ -450,7 +450,7 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
             </div>
             <div className="arch-step">
               <b>Firestore</b>
-              <p>Optional count-only receipt (no note, no draft, no names).</p>
+              <p>Optional count-only saved record (no note, no draft, no names).</p>
             </div>
           </div>
         </div>
@@ -505,7 +505,7 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
           </details>
         </li>
         <li>
-          <b>You.</b> Nothing is sent until you have read the exact text and pressed Approve.
+          <b>You.</b> Nothing is sent until you have read the exact text and pressed Send.
           <details>
             <summary>Details</summary>
             <p>If the text changes after you tick, the tick is cleared.</p>
@@ -561,7 +561,7 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
           <tr>
             <td>Multimodal scan &amp; offline draft fallback (28 Nov, Chrome 158)</td>
             <td>
-              Local notebook photo OCR transcribed 231 chars in 3.1s (4.4s end-to-end) with 0 cloud requests and extracted 2 pupil names;
+              Local notebook photo OCR transcribed 231 chars in 3 to 6 seconds (3.1 s eval median on the sample page; 6.3 s in the recorded run) with 0 cloud requests and extracted 2 pupil names;
               offline PREFER_IN_CLOUD draft fallback streamed on Gemini Nano in 23.3s with offline caution notice, 12/12 needs written for a stage (0 missing), and 0 bracket leaks.
             </td>
           </tr>
@@ -627,16 +627,16 @@ export function Receipts({
       <h2>Records</h2>
       <p className="lede">One line for each finished lesson, kept on this computer.</p>
       <details className="fold">
-        <summary>What a record holds</summary>
+        <summary>What a saved record holds</summary>
         <p>
-          A record holds the text you approved. If you approved your note as written, that is your note. It also holds counts of what was
+          A saved record holds the text you approved. If you approved your note as written, that is your note. It also holds counts of what was
           hidden, which model ran where, and how many items you kept and how many you struck. It does not hold the draft or anything you
           kept private.
         </p>
       </details>
 
       {receipts.length === 0 ? (
-        <p className="empty">No records yet. Finish a run on the Desk.</p>
+        <p className="empty">No saved records yet. Finish a run on the Desk.</p>
       ) : (
         <ul className="receipts">
           {receipts.map((r) => {
@@ -700,7 +700,7 @@ export function Receipts({
                                   .join(', ')})`
                               : ''
                           }. ${r.constraints.shared ?? 0} told to the cloud as a need, without the reason. ${r.check.conflictsByRule ?? 0} ${(r.check.conflictsByRule ?? 0) === 1 ? 'item' : 'items'} found in conflict by rule, ${r.check.doubtsByModel ?? 0} doubted by the on-device model only. The words of a constraint are not kept here.`
-                        : 'Not recorded for this receipt'}
+                        : 'Not recorded for this saved record'}
                     </dd>
                     <dt>Sign-off</dt>
                     <dd>
@@ -728,7 +728,7 @@ export function Receipts({
         <label className="switch">
           <input type="checkbox" checked={keepCopies} disabled={!canKeepCopies || signOutBlocked} onChange={(e) => setKeepCopies(e.target.checked)} />
           <span />
-          Keep a copy of each receipt's record (no text) in my account (Firestore).
+          Keep a count-only copy of each saved record (no text) in my account (Firestore).
         </label>
         <p className="hint">
           {signOutBlocked
@@ -749,7 +749,7 @@ export function Receipts({
               {records.unreadable > 0 &&
                 `. ${records.unreadable} older ${records.unreadable === 1 ? 'entry is' : 'entries are'} in an earlier form and ${records.unreadable === 1 ? 'is' : 'are'} not listed`}
             </summary>
-            <p className="hint">A receipt here and its record in your account have the same record id, so you can pair the two.</p>
+            <p className="hint">A saved record here and its copy in your account have the same record id, so you can pair the two.</p>
             {records.list.length > 0 && (
               <ul className="record-list">
                 {records.list.map((r) => {
@@ -777,7 +777,7 @@ export function Receipts({
       </section>
       {receipts.length > 0 && (
         <button className="link" onClick={onClear}>
-          Delete the receipts kept in this browser
+          Delete the saved records kept in this browser
         </button>
       )}
     </main>

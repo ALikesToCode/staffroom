@@ -215,8 +215,9 @@ export function ResultItem({
       {c && checkWhere === 'ON_DEVICE' && c.verdict !== 'not checked' && !edited && factCount > 0 && (
         <details className="against">
           <summary>
-            Checked against {factCount} private {factCount === 1 ? 'detail' : 'details'}, on this device only
+            Checked against {factCount} distinct withheld {factCount === 1 ? 'passage' : 'passages'}, on this device only
           </summary>
+          <p className="hint">Distinct note passages withheld (overlapping items grouped once).</p>
           <p>{facts.flatMap((f) => f.details.map((d) => `“${d.surfaces[0]}”`)).join(', ')}</p>
         </details>
       )}
@@ -333,7 +334,7 @@ export function ResultItem({
           )}
           <span className="hint state">
             {keptValue === null
-              ? 'Choose before you sign off.'
+              ? 'Choose before you finish.'
               : conflict && keptValue === false
                 ? 'Struck to begin with. Keep it only if you still want it.'
                 : ''}

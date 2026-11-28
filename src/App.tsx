@@ -34,7 +34,7 @@ import { canFit, FIT_CHILD_FAILED, FIT_FAILED, fitForChild, fitInputFor, fitLess
 import { useInstall, useUpdate } from './ui/pwa';
 import { checkNeed, needIsTyped, needLine, outgoingOf, sharedNeeds, type Need } from './core/needs';
 import { askAgain, entryLine, lessonNeedIsTyped, lessonNeedLine, lessonNeeds, needLabel, needOutcomes, planWithNeeds, proposeLearning, secondAsk, splitVariations, variationLine, withSecondReading, type LessonNeed, type NeedsReading, type Variation } from './core/lessonNeeds';
-import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_SOURCE, replayBanner, replayNext, replayPrev, sourceOf, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
+import { asRecordedRun, captureRun, RECORDED_FILE, RECORDED_SOURCE, REPLAY_STAGES, replayBanner, replayNext, replayPrev, sourceOf, type RecordedFit, type RecordedRun, type ReplayStage } from './core/recorded';
 import { familyAfterRewrite, familyFor } from './core/family';
 import { repeatsForChild, repeatsPrivate } from './core/repeats';
 import {
@@ -85,7 +85,7 @@ import {
 } from './ai/draft';
 import { anythingToCheck, checkDidNotRun, checkOnDevice, keepNoConflict, noConflictFound, NOTHING_WITHHELD, startsKept } from './ai/check';
 import { afterBellActivities, combineChecks, ruleCheckItem } from './core/conflicts';
-import { RouteChip, Stepper } from './ui/parts';
+import { REPLAY_LESSON_STEPS, REPLAY_STEPS, RouteChip, Stepper } from './ui/parts';
 import { AppHeader } from './ui/AppHeader';
 import { ReviewCard } from './ui/ReviewCard';
 import { PrintSheet } from './ui/PrintSheet';
@@ -2298,13 +2298,10 @@ export function App() {
       {view === 'desk' && !landing && (
         <main className="desk">
           <Stepper
-            step={STEP[stage]}
+            step={replay ? REPLAY_STAGES.indexOf(stage as ReplayStage) : STEP[stage]}
             lesson={task === 'lesson'}
-            onStep={
-              replay
-                ? (i) => jumpReplay(i === 0 ? 'write' : i === 1 ? 'review' : i === 4 ? 'signed' : 'result')
-                : undefined
-            }
+            steps={replay ? (task === 'lesson' ? REPLAY_LESSON_STEPS : REPLAY_STEPS) : undefined}
+            onStep={replay ? (i) => jumpReplay(REPLAY_STAGES[i]) : undefined}
           />
           {error && (
             <p className="alert" role="alert">
@@ -2453,7 +2450,6 @@ export function App() {
                   setKeepClass={setKeepClass}
                   device={device}
                   download={download}
-                  nextInReplay={nextInReplay}
                   task={task}
                   lesson={lesson}
                   runGuard={() => runGuard()}
@@ -2484,7 +2480,7 @@ export function App() {
                     <h3>
                       What stays private &amp; what is sent{' '}
                       <small>
-                        {confirmedCount} of {constraints.length} confirmed
+                        {confirmedCount} of {constraints.length} {isLesson ? 'constraints & needs' : 'constraints'} confirmed
                       </small>
                     </h3>
                     {!replay && constraints.length - confirmedCount > 0 && (
@@ -2752,7 +2748,7 @@ export function App() {
                 : 'Not recorded in this capture'
               : (stage === 'result' || stage === 'signed') && label
                 ? label.where === 'FALLBACK'
-                  ? 'No model has named this receipt: it has the task and the day'
+                  ? 'No model has named this saved record: it has the task and the day'
                   : WHERE_RAN[label.where]
                 : undefined,
           }}

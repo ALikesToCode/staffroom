@@ -191,9 +191,12 @@ export function fitSummary(children: number, suggested: number, hits: readonly L
   const against = steps + placed.filter((p) => p.state === 'offered' && p.why !== undefined).length;
   const out: string[] = [];
   if (children > 0) out.push(`${count(children, 'child has', 'children have')} private notes.`);
-  if (needs > 0) out.push(`${onDevice ? 'The on-device draft' : 'The cloud'} wrote for ${count(needs, 'need', 'needs')} without knowing whose.`);
-  if (placed.length > 0) out.push(`${count(placed.length, 'line', 'lines')} placed beside ${count(beside, 'child', 'children')} on this device.`);
-  if (pairs > 0) out.push(`${count(pairs, 'seating line', 'seating lines')} added on this device.`);
+  if (needs > 0) {
+    out.push(
+      `${onDevice ? 'On-device' : 'Cloud'} lines placed for ${count(needs, 'need', 'needs')} (${count(placed.length, 'line', 'lines')} beside ${count(beside, 'child', 'children')}, without ${onDevice ? 'names' : 'the cloud knowing whose'}).`,
+    );
+  }
+  if (pairs > 0) out.push(`${count(pairs, 'local seating line', 'local seating lines')} added on this device in place of the group-work need.`);
   if (unanswered > 0) out.push(`${onDevice ? 'The on-device draft' : 'The cloud'} wrote nothing for ${count(unanswered, 'need', 'needs')}.`);
   if (suggested > 0) out.push(`${count(suggested, 'point', 'points')} suggested on this device.`);
   if (against > 0) out.push(`${against === 1 ? '1 goes' : `${against} go`} against a constraint you confirmed.`);

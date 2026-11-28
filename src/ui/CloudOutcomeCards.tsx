@@ -140,7 +140,7 @@ export function CloudOutcomeCards({
               {needsReply?.second && (
                 <p className="hint">
                   {result.where === 'ON_DEVICE' ? 'The on-device model' : 'The cloud'} was asked once more for the needs its first reply left
-                  out. Inspect shows the exact text of that second request.
+                  out. How it ran shows the exact text of that second request.
                 </p>
               )}
             </article>

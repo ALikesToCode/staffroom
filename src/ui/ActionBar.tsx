@@ -95,6 +95,15 @@ export function ActionBar({
 }: ActionBarProps) {
   return (
     <>
+      {stage === 'write' && replay && (
+        <div className="action-bar device-bar">
+          <span className="hint">Recorded run: the next screen shows what the guard found on the day.</span>
+          <button className="primary" onClick={nextInReplay}>
+            Next
+          </button>
+        </div>
+      )}
+
       {stage === 'review' && (
         <div className="action-bar cloud-bar">
           {replay ? (
@@ -158,7 +167,7 @@ export function ActionBar({
         <div className="action-bar device-bar">
           {replay ? (
             <>
-              <span className="hint">Recorded run: in a live run you keep or strike each item here, then sign off. Nothing is signed off now.</span>
+              <span className="hint">Recorded run: in a live run you review each item here, then finish. Nothing is saved now.</span>
               <button className="secondary" onClick={prevInReplay}>
                 Back
               </button>

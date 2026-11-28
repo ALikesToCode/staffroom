@@ -168,9 +168,22 @@ export function RouteChip({ route, where }: { route: RouteId; where?: Where }) {
 export const STEPS = ['Write', 'Check what leaves', 'Draft', 'Checked here', 'Finish'];
 /** The same five, as a lesson meets them. */
 export const LESSON_STEPS = ['Write', 'Check what leaves', 'Lesson', 'For each child', 'Finish'];
+/** The four interactive screens of a recorded run replay (no waiting steps). */
+export const REPLAY_STEPS = ['Write', 'Check what leaves', 'Checked here', 'Finish'];
+export const REPLAY_LESSON_STEPS = ['Write', 'Check what leaves', 'Lesson & each child', 'Finish'];
 
-export function Stepper({ step, lesson = false, onStep }: { step: number; lesson?: boolean; onStep?: (index: number) => void }) {
-  const steps = lesson ? LESSON_STEPS : STEPS;
+export function Stepper({
+  step,
+  lesson = false,
+  steps: customSteps,
+  onStep,
+}: {
+  step: number;
+  lesson?: boolean;
+  steps?: readonly string[];
+  onStep?: (index: number) => void;
+}) {
+  const steps = customSteps ?? (lesson ? LESSON_STEPS : STEPS);
   return (
     <ol className="stepper" aria-label="Progress">
       {steps.map((s, i) => (

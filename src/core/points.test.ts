@@ -255,7 +255,7 @@ describe('needs the cloud left out, and two children who work better apart', () 
     const deduped = dedupePairVariations(placed, paired, s.needs, s.constraints);
     expect(deduped.some((p) => p.need === groupNeed.letter)).toBe(false);
     expect(deduped.some((p) => p.need === otherNeed.letter)).toBe(true);
-    expect(fitSummary(5, 0, [], [...deduped, ...paired])).toContain('2 seating lines added on this device.');
+    expect(fitSummary(5, 0, [], [...deduped, ...paired])).toContain('2 local seating lines added on this device in place of the group-work need.');
   });
 
   it('attributes on-device drafts honestly across fitSummary, placeVariations, missingPoints, preserves danda, and dedupes missing pair needs', async () => {
@@ -268,7 +268,7 @@ describe('needs the cloud left out, and two children who work better apart', () 
     const placedLocal = placeVariations([{ itemIndex: 0, need: otherNeed.letter, text: 'Send home a printed summary.' }], s.needs, s.entities, items, s.constraints, s.note, true);
     expect(placedLocal[0]?.source).toBe('model');
     expect(fitSummary(5, 0, [], placedLocal, true)).toBe(
-      `5 children have private notes. The on-device draft wrote for 1 need without knowing whose. ${placedLocal.length} ${placedLocal.length === 1 ? 'line' : 'lines'} placed beside ${new Set(placedLocal.map((p) => p.childId)).size} ${new Set(placedLocal.map((p) => p.childId)).size === 1 ? 'child' : 'children'} on this device.`,
+      `5 children have private notes. On-device lines placed for 1 need (${placedLocal.length} ${placedLocal.length === 1 ? 'line' : 'lines'} beside ${new Set(placedLocal.map((p) => p.childId)).size} ${new Set(placedLocal.map((p) => p.childId)).size === 1 ? 'child' : 'children'}, without names).`,
     );
 
     const missingLocal = missingPoints([groupNeed.letter, otherNeed.letter], s.needs, s.entities, s.constraints, s.note, true);

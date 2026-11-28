@@ -223,7 +223,7 @@ export function MaterialsCard({
         </p>
       )}
       <details className="materials-inspect">
-        <summary>Inspect exact outgoing text (no names · {request.length.toLocaleString()} chars)</summary>
+        <summary>See exact outgoing text (no names · {request.length.toLocaleString()} chars)</summary>
         <pre className="wire">
           <CloudText text={request} activeNeed={activeNeed} onHoverNeed={onHoverNeed} />
         </pre>

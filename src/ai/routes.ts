@@ -38,7 +38,7 @@ export const ROUTES = [
   },
   {
     id: 'label',
-    job: 'Name the receipt',
+    job: 'Name the saved record',
     mode: InferenceMode.PREFER_ON_DEVICE,
     why: 'A small job on redacted text: free, and needing no network, on the device when it can; in the cloud when it cannot.',
   },

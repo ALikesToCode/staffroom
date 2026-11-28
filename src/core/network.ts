@@ -50,7 +50,7 @@ export const STEP_NAME: Record<StepId, string> = {
   draft: 'Draft',
   check: 'Check',
   fit: 'Fit',
-  label: 'Name the receipt',
+  label: 'Name the saved record',
   materials: 'Materials',
 };
 

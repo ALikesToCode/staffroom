@@ -80,16 +80,23 @@ export function Hero({
                 e.target.value = '';
               }}
             />
-            <button
-              className="primary big"
-              type="button"
-              onClick={() => (onPhotoFile ? fileRef.current?.click() : onWrite())}
-            >
-              Take a photo of my notebook
-              <span className="btn-hi" aria-hidden="true">
-                नोटबुक की फोटो लें
-              </span>
-            </button>
+            <div className="hero-cta-row">
+              <button
+                className="primary big"
+                type="button"
+                onClick={() => (onPhotoFile ? fileRef.current?.click() : onWrite())}
+              >
+                Take a photo of my notebook
+                <span className="btn-hi" aria-hidden="true">
+                  नोटबुक की फोटो लें
+                </span>
+              </button>
+              {onWatch && (
+                <button className="secondary" type="button" onClick={onWatch}>
+                  Watch a recorded run
+                </button>
+              )}
+            </div>
             <div className="hero-links">
               <button className="link" type="button" onClick={onWrite}>
                 Type instead
@@ -97,11 +104,6 @@ export function Hero({
               <button className="link" type="button" onClick={onTry}>
                 Try a sample class
               </button>
-              {onWatch && (
-                <button className="link" type="button" onClick={onWatch}>
-                  Watch a recorded run
-                </button>
-              )}
             </div>
           </div>
         )}

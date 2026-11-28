@@ -292,13 +292,13 @@ export function ResultPanel({
               <span className="stamp">{keptCount === 0 ? 'Whole draft rejected by teacher' : 'Finished by teacher'}</span>
               {storeFailed ? (
                 <p className="caution" role="alert">
-                  This browser could not store the record. Copy what you need before you leave this page.
+                  This browser could not store the saved record. Copy what you need before you leave this page.
                 </p>
               ) : (
                 <p className="receipt-line">
-                  Record saved.{' '}
+                  Saved record written.{' '}
                   <button className="link" onClick={() => setView('receipts')}>
-                    See the record
+                    See the saved record
                   </button>
                 </p>
               )}
@@ -356,12 +356,12 @@ export function ResultPanel({
               )}
               {copyState === 'pending' && (
                 <p className="hint">
-                  {online ? 'Saving the record to your account.' : 'The record will be saved when the network is back. Keep this tab open.'}
+                  {online ? 'Saving a count-only copy to your account.' : 'The copy will be saved when the network is back. Keep this tab open.'}
                 </p>
               )}
-              {copyState === 'saved' && <p className="hint">The receipt's record (no text) was written to your account by this browser.</p>}
+              {copyState === 'saved' && <p className="hint">A count-only copy of this saved record (no text) was written to your account by this browser.</p>}
               {copyState === 'failed' && (
-                <p className="caution">The record could not be saved to your account. The receipt is still kept in this browser.</p>
+                <p className="caution">The copy could not be saved to your account. The saved record is still kept in this browser.</p>
               )}
             </div>
           )}
@@ -382,7 +382,7 @@ export function ResultPanel({
                 .filter((v) => v.say)
                 .map((v) => `${v.say} `)
                 .join('')}
-              You cannot sign off or copy it until you tick that you have read it.
+              You cannot finish or copy it until you tick that you have read it.
             </p>
           )}
           {checkWhere === 'SKIPPED' && <p className="hint">No private detail was withheld, so no model was asked.</p>}
@@ -404,8 +404,8 @@ export function ResultPanel({
           {/* What the device caught comes first: conflicts, then doubts. The rest follow the constraints. */}
           {flagged.length > 0 && <ol className="items">{flagged.map(resultItem)}</ol>}
           {sent && sent.constraints.some((c) => c.confirmed) && (
-            <div className="strip" role="group" aria-label="Constraints you confirmed">
-              <h4>Constraints you confirmed</h4>
+            <div className="strip" role="group" aria-label={isLesson ? 'Constraints & needs you confirmed' : 'Constraints you confirmed'}>
+              <h4>{isLesson ? 'Constraints & needs you confirmed' : 'Constraints you confirmed'}</h4>
               <ul>
                 {sent.constraints
                   .filter((c) => c.confirmed)
@@ -439,7 +439,7 @@ export function ResultPanel({
             <div className="strip">
               <h4>For these children</h4>
               <ForTheseChildren stages={draft.items} adjustments={acceptedNow} />
-              <p className="hint">Kept on this device with the lesson. Never sent, and not in any record.</p>
+              <p className="hint">Kept on this device with the lesson. Never sent, and not in any saved record.</p>
             </div>
           )}
 
@@ -473,7 +473,7 @@ export function ResultPanel({
                   {previewOpen ? 'Hide copy preview' : 'Preview class & teacher copies'}
                 </button>
               )}
-              <span className="hint">No receipt was written.</span>
+              <span className="hint">No saved record was written.</span>
               <button className="secondary small" onClick={leaveReplay}>
                 Leave the recorded run
               </button>
@@ -496,7 +496,7 @@ export function ResultPanel({
           namesFor={needNames}
           onSend={() => void makeMaterials()}
           onPrint={stage === 'signed' && !replay ? printMaterials : undefined}
-          noPrint={replay ? 'From the recorded run.' : 'Sign off the lesson to print these.'}
+          noPrint={replay ? 'From the recorded run.' : 'Finish the lesson to print these.'}
           activeNeed={activeNeed}
           onHoverNeed={setActiveNeed}
         />

@@ -53,7 +53,7 @@ describe('the network as the browser records it', () => {
     ];
     const [fit, label] = stepReports(steps, addRequests([], [model(2100)]));
     expect(fit.summary).toBe('Fit (on this device): 1 request to the model host (1 while another step was running too)');
-    expect(fit.requests[0]).toMatch(/Name the receipt was running too, and the record cannot tell which made it$/);
+    expect(fit.requests[0]).toMatch(/Name the saved record was running too, and the record cannot tell which made it$/);
     expect(label.requests[0]).toMatch(/Fit was running too/);
   });
 });

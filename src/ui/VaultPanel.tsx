@@ -234,7 +234,7 @@ export function NoteLinks({
     <span className="head-links">
       {replay ? null : editing ? (
         <button className="link" onClick={loadSample}>
-          Fill in the invented class
+          Fill in the sample class
         </button>
       ) : (
         !busy &&
@@ -275,15 +275,15 @@ export function ForgetQuestion({
     <div className="confirm" role="group" aria-label="Forget this note">
       <p>
         Your note, class list, vault and results will be cleared. This browser also keeps {receiptsCount}{' '}
-        {receiptsCount === 1 ? 'receipt' : 'receipts'}, and a receipt holds the text you approved. Delete{' '}
+        {receiptsCount === 1 ? 'saved record' : 'saved records'}, and a saved record holds the text you approved. Delete{' '}
         {receiptsCount === 1 ? 'it' : 'them'} too?
       </p>
       <div className="actions">
         <button className="secondary small" disabled={busy} onClick={() => forgetNote(true)}>
-          Forget the note and delete receipts
+          Forget the note and delete saved records
         </button>
         <button className="secondary small" disabled={busy} onClick={() => forgetNote(false)}>
-          Forget the note, keep receipts
+          Forget the note, keep saved records
         </button>
         <button className="link" onClick={() => setForgetAsk(false)}>
           Cancel

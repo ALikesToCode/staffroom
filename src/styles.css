@@ -1762,6 +1762,19 @@ details > summary {
   gap: 14px;
 }
 
+.hero-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.hero .actions .secondary {
+  min-height: 50px;
+  background: var(--paper-card);
+}
+
 .hero-links {
   display: flex;
   flex-wrap: wrap;

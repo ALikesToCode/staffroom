@@ -319,7 +319,7 @@ describe('what the cloud wrote for a need', () => {
 
   it('says in one line what the cloud wrote for and what the device placed, leaving out what is zero', () => {
     const placed = placeVariations(variations, needs, entities, draft.items, all, SAMPLE_NOTE);
-    expect(fitSummary(5, 0, [], placed)).toBe('5 children have private notes. The cloud wrote for 4 needs without knowing whose. 5 lines placed beside 4 children on this device. 1 goes against a constraint you confirmed.');
-    expect(fitSummary(5, 0, [], placed.slice(0, 1))).toBe('5 children have private notes. The cloud wrote for 1 need without knowing whose. 1 line placed beside 1 child on this device.');
+    expect(fitSummary(5, 0, [], placed)).toBe('5 children have private notes. Cloud lines placed for 4 needs (5 lines beside 4 children, without the cloud knowing whose). 1 goes against a constraint you confirmed.');
+    expect(fitSummary(5, 0, [], placed.slice(0, 1))).toBe('5 children have private notes. Cloud lines placed for 1 need (1 line beside 1 child, without the cloud knowing whose).');
   });
 });

@@ -102,10 +102,10 @@ export function ConstraintsPanel({
             All ({constraints.length})
           </button>
           <button type="button" className={filter === 'told' ? 'filter-chip on' : 'filter-chip'} onClick={() => setFilter('told')}>
-            What is sent ({toldCount})
+            Shared child items ({toldCount})
           </button>
           <button type="button" className={filter === 'stays' ? 'filter-chip on' : 'filter-chip'} onClick={() => setFilter('stays')}>
-            Stays on this computer ({staysCount})
+            Private only ({staysCount})
           </button>
         </div>
       )}

@@ -569,7 +569,7 @@ function LessonCard({
               </button>
               {sample && (
                 <button className="secondary small" onClick={fillSample}>
-                  Fill an invented result
+                  Fill a sample result
                 </button>
               )}
               <span className="hint">
@@ -629,7 +629,7 @@ export function Lessons({
       <h2>Lessons</h2>
       <p className="lede">Finished lessons, kept on this computer only. Mark how it went, then plan the next one.</p>
       {lessons.length === 0 ? (
-        <p className="empty">No lesson has been signed off on this device.</p>
+        <p className="empty">No lesson has been finished on this device.</p>
       ) : (
         <>
           <ul className="lesson-list">

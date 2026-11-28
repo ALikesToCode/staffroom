@@ -137,7 +137,7 @@ describe('a recorded lesson', () => {
     const saved = captureRun({ ...run, task: 'lesson', lesson, needs, needChildren: { G: [student] }, variations, needOutcomes, materials }, new Date(run.recordedAt), 'x');
     const back = asRecordedRun(JSON.parse(JSON.stringify(saved)))!;
     expect(back.needOutcomes).toEqual(needOutcomes);
-    expect(needsAccount(back.needOutcomes!)).toBe('For each need: 1 written for a stage, 1 already suited, 1 missing');
+    expect(needsAccount(back.needOutcomes!)).toBe('Of 3 needs sent: 1 got a stage line, 1 already suited, 1 missing');
     expect(needOutcomes).toEqual(outcomesOf(['A', 'B', 'G'], variations, ['A']));
     expect([back.materials!.same, back.materials!.missing]).toEqual([['A'], ['B']]);
     expect(back.materials).not.toHaveProperty('dropped');

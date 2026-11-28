@@ -66,7 +66,7 @@ export function ReviewCard({
           <b>Going to Google&apos;s Gemini:</b>{' '}
           {isLesson
             ? needsCount > 0
-              ? `your lesson topic and ${needsCount} ${needsCount === 1 ? 'need' : 'needs'}, without names.`
+              ? `your lesson topic and ${needsCount} distinct ${needsCount === 1 ? 'need' : 'needs'} (shared needs merged under one letter, without names).`
               : 'your lesson topic only, without names.'
             : `your approved note for ${taskLabel.toLowerCase()}, without names.`}
         </p>

@@ -306,10 +306,11 @@ export function needOutcomes(letters: readonly string[], variations: readonly Pi
   return Object.fromEntries(letters.map((l) => [l, variations.some((v) => v.need === l) ? 'for a stage' : none.includes(l) ? 'already suits' : 'missing'] as const));
 }
 
-/** One line that accounts for every need told: "For each need: 7 written for a stage, 4 already suited, 0 missing". */
+/** One line that accounts for every need told: "Of 12 needs sent: 8 got a stage line, 4 already suited, 0 missing". */
 export function needsAccount(outcomes: Record<string, NeedOutcome>): string {
   const n = (o: NeedOutcome) => Object.values(outcomes).filter((x) => x === o).length;
-  return `For each need: ${n('for a stage')} written for a stage, ${n('already suits')} already suited, ${n('missing')} missing`;
+  const total = Object.keys(outcomes).length;
+  return `Of ${total} ${total === 1 ? 'need' : 'needs'} sent: ${n('for a stage')} got a stage line, ${n('already suits')} already suited, ${n('missing')} missing`;
 }
 
 /** True when so many needs went unanswered that the cloud is asked once more: over a third of those told. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildVault } from '../core/vault';
-import { CloudText, DeviceText, Stepper } from './parts';
+import { CloudText, DeviceText, REPLAY_LESSON_STEPS, Stepper } from './parts';
 import { Caught, ConstraintsPanel } from './Constraints';
 import type { Constraint } from '../core/types';
 import { App } from '../App';
@@ -189,12 +189,12 @@ describe('the lesson as the first job', () => {
       ['link', 'Type instead'],
     ]);
     expect(without).toContain('This browser cannot run the local model');
-    // With the model, the primary button is notebook photo first, with plain secondary links.
+    // With the model, the primary button is notebook photo first and recorded run is a visible secondary button.
     expect(buttons(renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} onWatch={() => {}} noModel={false} />))).toEqual([
       ['primary big', 'Take a photo of my notebook'],
+      ['secondary', 'Watch a recorded run'],
       ['link', 'Type instead'],
       ['link', 'Try a sample class'],
-      ['link', 'Watch a recorded run'],
     ]);
     // With no recorded run to watch, nothing offers one.
     expect(renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} noModel />)).not.toContain('Watch a recorded run');
@@ -291,10 +291,14 @@ describe('NetworkSection', () => {
 });
 
 describe('Stepper and CopyPreview', () => {
-  it('renders interactive step buttons when onStep is supplied', () => {
+  it('renders interactive step buttons when onStep is supplied and supports 4-step replay mode', () => {
     const html = renderToStaticMarkup(<Stepper step={2} lesson onStep={() => {}} />);
     expect(html).toContain('<button type="button" class="step-btn"');
     expect(html).toContain('Lesson');
+    const replayHtml = renderToStaticMarkup(<Stepper step={2} lesson steps={REPLAY_LESSON_STEPS} onStep={() => {}} />);
+    expect(replayHtml.match(/<li /g)).toHaveLength(4);
+    expect(replayHtml).toContain('Lesson &amp; each child');
+    expect(replayHtml).not.toContain('>For each child<');
   });
 
   it('keeps student names out of the anonymous class copy inside CopyPreview', () => {

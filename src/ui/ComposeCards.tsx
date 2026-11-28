@@ -155,7 +155,6 @@ export function NoteComposeCard({
   setKeepClass,
   device,
   download,
-  nextInReplay,
   task,
   lesson,
   runGuard,
@@ -183,7 +182,6 @@ export function NoteComposeCard({
   setKeepClass: (v: boolean) => void;
   device: DeviceStatus;
   download: number | null;
-  nextInReplay: () => void;
   task: TaskId;
   lesson: LessonFields;
   runGuard: () => void;
@@ -278,8 +276,8 @@ export function NoteComposeCard({
           Keep this class in this browser
           <small>
             {keepClass
-              ? 'On: your note, class list, constraints, saved lessons and receipts stay in local storage on this computer only.'
-              : 'Off by default: closing this tab removes your notes, class list, lessons and receipts.'}
+              ? 'On: your note, class list, constraints, saved lessons and saved records stay in local storage on this computer only.'
+              : 'Off by default: closing this tab removes your notes, class list, lessons and saved records.'}
           </small>
         </label>
       )}
@@ -292,14 +290,7 @@ export function NoteComposeCard({
       {(device === 'downloadable' || device === 'downloading') && download === null && (
         <p className="notice">The first run downloads the on-device model (several GB) and can take a few minutes.</p>
       )}
-      {replay ? (
-        <div className="actions">
-          <button className="primary" onClick={nextInReplay}>
-            Next
-          </button>
-          <span className="hint">Recorded run: the next screen shows what the guard found on the day.</span>
-        </div>
-      ) : (
+      {replay ? null : (
         <div className="actions">
           <button
             className="primary big"
@@ -388,7 +379,7 @@ export function GuardingCard({
   const pct = download !== null ? Math.round(download * 100) : null;
   return (
     <article className="card guarding-card">
-      <Spinner label={pct !== null ? `Downloading Gemini Nano in Chrome (${pct}%)…` : progress || 'Running the guard on this device…'} />
+      <Spinner label={pct !== null ? `Downloading Gemini Nano in Chrome (${pct}%)…` : progress || 'Hiding private details on this computer…'} />
       {pct !== null && (
         <>
           <progress className="model-progress" max={100} value={pct} aria-label="On-device model download progress" />
