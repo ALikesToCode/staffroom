@@ -1,6 +1,14 @@
+import {
+  assertLabelBoundary,
+  assertLessonBoundary,
+  assertMaterialsBoundary,
+  type LabelBoundaryPayload,
+  type LessonBoundaryPayload,
+  type MaterialsBoundaryPayload,
+} from '../core/boundary';
 import { ALREADY_SUITS_RE, splitVariations } from '../core/lessonNeeds';
 import { MATERIALS_SCHEMA, MATERIALS_SYSTEM, readMaterials, type Materials } from '../core/materials';
-import type { Draft, LabelWhere, Task, TaskId, Where } from '../core/types';
+import type { Draft, Entity, LabelWhere, Task, TaskId, Where } from '../core/types';
 import { ON_DEVICE_MODEL } from '../core/receipts';
 import { plainText } from '../core/text';
 import { modelFor, onDeviceFallbackFor } from './routes';
@@ -13,7 +21,7 @@ const REDACTED = `The teacher's notes have been redacted before they reached you
  * one that was never sent ("a description of [Place 1]"), which the return
  * gate rightly stops; so a lesson is given no example to copy.
  */
-const LESSON_REDACTED = `The teacher's notes were redacted before they reached you, and only their sentences about the class as a whole were kept. A word in square brackets stands for a person or place whose identity is withheld; [withheld] marks a private detail you are not allowed to know. Do not guess what either is. Never write a square-bracketed word that is not in the notes, and do not use one as an example in a whole-class step.`;
+const LESSON_REDACTED = `Nothing from the teacher's private notebook was sent to you. You receive only the lettered classroom needs and the Lesson lines below. Never invent or write any square-bracketed tags or withheld markers.`;
 
 /** The system instruction sent with a support plan, messages to parents and a hand-over. Shown to the teacher word for word before they approve. */
 export const DRAFT_SYSTEM = `You help a school teacher in India with practical, kind, specific classroom advice.
@@ -45,8 +53,15 @@ export function draftSystem(task: TaskId): string {
 export const DRAFT_FORMAT =
   'Return a title and a list of items. Each item has a short heading and the text. In the title, in every heading and in every text, write each stand-in exactly as it is in the notes, with its square brackets: [Student 1], never Student 1. Where the notes say [withheld], something was kept from you: do not write [withheld] in your answer and do not guess what it was.';
 
-/** The fixed line written above the approved text in every draft prompt. */
+/** Fixed output shape instruction for lesson requests (no notebook text or stand-ins exist on the lesson path). */
+export const LESSON_DRAFT_FORMAT =
+  'Return a title and a list of items. Each item has a short heading and the text. Never write square brackets or withheld markers.';
+
+/** The fixed line written above the approved text in every non-lesson draft prompt. */
 export const DRAFT_NOTES_HEADING = "The teacher's redacted notes:";
+
+/** The fixed line written above lesson needs and metadata in a lesson request. */
+export const LESSON_NOTES_HEADING = 'Lesson needs and lines (no notebook text):';
 
 /**
  * The whole prompt for a draft: the task instruction, the two fixed lines
@@ -56,7 +71,9 @@ export const DRAFT_NOTES_HEADING = "The teacher's redacted notes:";
  * describes it and does not quote it.
  */
 export function draftPrompt(redacted: string, task: Task): string {
-  return `${task.instruction}\n\n${DRAFT_FORMAT}\n\n${DRAFT_NOTES_HEADING}\n${redacted}`;
+  const format = task.id === 'lesson' ? LESSON_DRAFT_FORMAT : DRAFT_FORMAT;
+  const heading = task.id === 'lesson' ? LESSON_NOTES_HEADING : DRAFT_NOTES_HEADING;
+  return `${task.instruction}\n\n${format}\n\n${heading}\n${redacted}`;
 }
 
 /** System instruction for offline on-device lesson plans: bracket-free and focused on concrete lettered adjustments. */
@@ -464,13 +481,26 @@ export function isRecoveredDraftValid(
  * PREFER_IN_CLOUD: the cloud model writes it, and the on-device model takes
  * over when the cloud cannot be reached.
  */
+export interface LessonBoundaryGuard {
+  payload: LessonBoundaryPayload;
+  entities: Entity[];
+  classList: readonly string[];
+}
+
 export async function writeDraft(
   redacted: string,
   task: Task,
   cloudModel: string,
   onProgressText?: (partialText: string) => void,
   onFallbackStart?: () => void,
+  boundaryGuard?: LessonBoundaryGuard,
 ): Promise<DraftResult> {
+  if (task.id !== 'lesson') {
+    throw new Error('Only lesson planning is active so no notebook text can leave this device.');
+  }
+  if (boundaryGuard) {
+    assertLessonBoundary(boundaryGuard.payload, redacted, boundaryGuard.entities, boundaryGuard.classList);
+  }
   const isLesson = task.id === 'lesson';
   const inputNeeds = isLesson ? new Map([...redacted.matchAll(NEEDS_LINE_RE)].map((m) => [m[1], m[2].trim()])) : new Map<string, string>();
   const toldLetters = [...inputNeeds.keys()];
@@ -547,12 +577,21 @@ export interface MaterialsResult {
  * plan and the needs by letter. The route is the draft's, PREFER_IN_CLOUD.
  * A reply that is not whole is refused: nothing of it is shown.
  */
+export interface MaterialsBoundaryGuard {
+  payload: MaterialsBoundaryPayload;
+  entities: Entity[];
+}
+
 export async function writeMaterials(
   text: string,
   letters: readonly string[],
   cloudModel: string,
   onProgressText?: (partialText: string) => void,
+  boundaryGuard?: MaterialsBoundaryGuard,
 ): Promise<MaterialsResult> {
+  if (boundaryGuard) {
+    assertMaterialsBoundary(boundaryGuard.payload, text, boundaryGuard.entities);
+  }
   const opts = { system: MATERIALS_SYSTEM, schema: MATERIALS_SCHEMA, cloudModel };
   const model = modelFor('draft', opts);
   const { text: raw, onDevice } = await streamContent(
@@ -592,10 +631,25 @@ export interface LabelResult {
  * Where the call ran is read from the response and returned, like every
  * other call.
  */
-export async function labelReceipt(redacted: string, fallback: string, cloudModel?: string): Promise<LabelResult> {
+export interface LabelBoundaryGuard {
+  payload: LabelBoundaryPayload;
+  entities: Entity[];
+  classList: readonly string[];
+}
+
+export async function labelReceipt(
+  redacted: string,
+  fallback: string,
+  cloudModel?: string,
+  boundaryGuard?: LabelBoundaryGuard,
+): Promise<LabelResult> {
   try {
+    const prompt = labelPrompt(redacted);
+    if (boundaryGuard) {
+      assertLabelBoundary(boundaryGuard.payload, prompt, boundaryGuard.entities, boundaryGuard.classList);
+    }
     const model = modelFor('label', { system: LABEL_SYSTEM, cloudModel });
-    const result = await model.generateContent(labelPrompt(redacted));
+    const result = await model.generateContent(prompt);
     const where: LabelWhere = result.response.inferenceSource === 'on_device' ? 'ON_DEVICE' : 'IN_CLOUD';
     const title = result.response.text().trim().split('\n')[0].replace(/^["'\s]+|["'.\s]+$/g, '');
     // An unusable title is replaced by the task name. The call still ran, so where it ran is still recorded.

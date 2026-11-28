@@ -396,7 +396,7 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
               <b>
                 <span className="n">2</span> What leaves
               </b>
-              <p>Teacher reads the exact outgoing text, checks the exit gate, and ticks approval before anything leaves.</p>
+              <p>Nothing from your notebook leaves. Teacher picks only lettered needs from the catalogue and ticks before sending.</p>
             </div>
             <div className="arch-step">
               <b>
@@ -418,8 +418,8 @@ export function How({ policy, device }: { policy: Policy; device: DeviceStatus }
           <div className="arch-wire">
             <b>↓ Sent across the door</b>
             <p>
-              Class, subject, topic, length; class-level sentences; <code>Need A: cannot stay after the last bell</code> by letter. No name, no
-              reason, no count.
+              Class, subject, topic, length; <code>Need A: cannot stay after the last bell</code> by letter from the fixed catalogue. Zero
+              sentences from the notebook, no name, no reason, no count.
             </p>
           </div>
           <div className="arch-wire">

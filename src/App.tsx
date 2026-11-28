@@ -44,7 +44,6 @@ import {
   classPlanText,
   lessonCounts,
   lessonHits,
-  lessonReady,
   loadLessons,
   nextLessonFields,
   NO_LESSON,
@@ -72,12 +71,19 @@ import { MODEL_HOST, STEPS_MAX, type StepId, type StepMark, type StepWhere } fro
 import { stageName } from './core/lesson';
 import { NOTE_MAX } from './core/text';
 import {
+  buildLessonPayload,
+  matchCatalogueNeed,
+  type MaterialsBoundaryPayload,
+} from './core/boundary';
+import {
   DRAFT_FORMAT,
   DRAFT_NOTES_HEADING,
   draftSystem,
   LABEL_CHARS,
   LABEL_SYSTEM,
   labelReceipt,
+  LESSON_DRAFT_FORMAT,
+  LESSON_NOTES_HEADING,
   writeDraft,
   writeMaterials,
   type MaterialsResult,
@@ -467,8 +473,21 @@ export function App() {
   );
   // The redacted note, with the needs the teacher chose to tell under it. The gate runs on both.
   const going = useMemo(
-    () => withLanguage(withLessonGoing(outgoingOf(note, entities, sent?.constraints ?? constraints, task === 'lesson'), task === 'lesson' ? lesson : null, entities, classList), task === 'parents' ? languageOf(lesson) : ''),
+    () =>
+      withLanguage(
+        withLessonGoing(
+          outgoingOf(note, entities, sent?.constraints ?? constraints, task === 'lesson', task === 'lesson' ? lesson : undefined),
+          task === 'lesson' ? lesson : null,
+          entities,
+          classList,
+        ),
+        task === 'parents' ? languageOf(lesson) : '',
+      ),
     [note, entities, sent, constraints, task, lesson, classList],
+  );
+  const lessonBoundary = useMemo(
+    () => (task === 'lesson' && !replay ? buildLessonPayload(lesson, going.lessonNeeds ?? [], sent?.constraints ?? constraints) : null),
+    [task, replay, lesson, going.lessonNeeds, sent, constraints],
   );
   // In a replay the text shown is the text that was sent on the day, as recorded.
   const outgoing = replay ? replay.outgoing : going.text;
@@ -809,7 +828,13 @@ export function App() {
       // For a lesson the line has a letter and no child. One not yet told is shown as it would be told.
       const all = c.confirmed && c.share ? (going.lessonNeeds ?? []) : lessonNeeds(constraints.map((x) => (x.id === c.id ? { ...x, confirmed: true, share: true } : x)), entities);
       const need = all.find((n) => n.constraintIds.includes(c.id));
-      return { typed: lessonNeedIsTyped(c), line: need ? needLabel(need) : undefined, issues: need?.issues ?? [], sensitive: need?.sensitive ?? [] };
+      return {
+        typed: lessonNeedIsTyped(c),
+        line: need ? needLabel(need) : undefined,
+        issues: need?.issues ?? [],
+        sensitive: need?.sensitive ?? [],
+        custom: Boolean(need?.line && !matchCatalogueNeed(c, need.line, lesson)),
+      };
     }
     const line = needLine(c, entities);
     return { typed: needIsTyped(c), line, issues: line ? checkNeed(line, entities) : [] };
@@ -820,12 +845,13 @@ export function App() {
   const approveAndSend = async () => {
     // Everything is worked out again at the moment of sending: the current locks, the text they give,
     // and the gate on exactly that text. It is sent only if it is the text the teacher ticked as read.
-    if (!policyReadyRef.current || sendingRef.current || replay) return;
+    if (!policyReadyRef.current || sendingRef.current || replay || task !== 'lesson') return;
     const sentPolicy = policyRef.current;
     const current = lockConstraints(applyLocks(rawEntities, sentPolicy.lockedKinds), constraints);
     // The language the cloud is asked to write in. Run deterministic rules for English and Hindi; skip English-only Nano check for non-English drafts.
-    const language = task === 'lesson' || task === 'parents' ? languageOf(lesson) : '';
-    const approved = withLanguage(withLessonGoing(outgoingOf(note, current, constraints, task === 'lesson'), task === 'lesson' ? lesson : null, current, classList), task === 'parents' ? language : '');
+    const language = languageOf(lesson);
+    const approved = withLanguage(withLessonGoing(outgoingOf(note, current, constraints, true, lesson), lesson, current, classList), '');
+    const boundaryBuilt = buildLessonPayload(lesson, approved.lessonNeeds ?? [], constraints);
     const { text, tokens } = approved;
     const stopped = approved.violations;
     // The tick was for one text, one set of locks and one drafting model. Any of them changed: no send.
@@ -839,7 +865,7 @@ export function App() {
       !(guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0) ||
       (unreadKey !== null && unreadKey === approvalKey(text, sentPolicy.lockedKinds, sentPolicy.cloudModel, false, guardGaps.unread));
     const same = read && written && unreadOk;
-    if (stage !== 'review' || !same || stopped.length > 0) {
+    if (stage !== 'review' || !same || stopped.length > 0 || boundaryBuilt.unackedCustomLetters.length > 0) {
       setReadKey(null);
       setAsWrittenKey(null);
       setUnreadKey(null);
@@ -875,6 +901,7 @@ export function App() {
             cloudModel,
             (partial) => !gone() && setStreamPreview(partial),
             () => !gone() && setDraftFallback(true),
+            { payload: boundaryBuilt.payload, entities: current, classList },
           ),
         (d) => (d.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'),
       );
@@ -908,7 +935,19 @@ export function App() {
       second = again;
       setProgress(drafted.where === 'ON_DEVICE' ? 'Asking this device once more for the needs it left out' : 'Asking the cloud once more for the needs it left out');
       try {
-        const more = await timed('draft', () => writeDraft(again, currentTask, cloudModel), (d) => (d.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'));
+        const more = await timed(
+          'draft',
+          () =>
+            writeDraft(
+              again,
+              currentTask,
+              cloudModel,
+              undefined,
+              undefined,
+              { payload: { ...boundaryBuilt.payload, missingLetters: split.missing }, entities: current, classList },
+            ),
+          (d) => (d.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'),
+        );
         if (gone()) return;
         split = withSecondReading(split, more.draft);
         // The return gate reads the second reply too.
@@ -1039,11 +1078,15 @@ export function App() {
     setLabel({ title: plain, where: 'FALLBACK' });
     sendingRef.current = false;
     setStage('result');
-    const labelSource =
-      task === 'lesson' && lessonReady(lesson)
-        ? [lesson.klass, lesson.subject, lesson.topic].filter(Boolean).join(' — ')
-        : `${currentTask.label}\n${text}`;
-    void timed('label', () => labelReceipt(labelSource, plain, cloudModel), (named) => (named.where === 'FALLBACK' ? 'NONE' : named.where)).then((named) => {
+    const labelSource = [lesson.klass, lesson.subject, lesson.topic]
+      .map((s) => s.replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .join(' — ');
+    void timed(
+      'label',
+      () => labelReceipt(labelSource, plain, cloudModel, { payload: { kind: 'label', lesson }, entities: current, classList }),
+      (named) => (named.where === 'FALLBACK' ? 'NONE' : named.where),
+    ).then((named) => {
       if (gone() || signingRef.current) return;
       // The title is model-written and is kept with the receipt, so it passes the same checks as outgoing text
       // (names, withheld items, patterns, sensitive words) or the plain title stays.
@@ -1560,6 +1603,12 @@ export function App() {
     if (!sent || !materialsRequest || materialsBusy || replay || materialsStopped.length > 0) return;
     const text = materialsRequest;
     const run = runRef.current;
+    const materialsPayload: MaterialsBoundaryPayload = {
+      kind: 'materials',
+      classPlan,
+      needs: buildLessonPayload(lesson, sent.lessonNeeds, sent.constraints).payload.needs,
+      language: sent.language,
+    };
     setMaterialsBusy(true);
     setMaterialsStreamChars(0);
     setMaterialsFail(null);
@@ -1572,6 +1621,7 @@ export function App() {
             sent.lessonNeeds.map((n) => n.letter),
             sent.policy.cloudModel,
             (partial) => runRef.current === run && setMaterialsStreamChars(partial.length),
+            { payload: materialsPayload, entities: sent.entities },
           ),
         (g) => (g.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'),
       );
@@ -2491,7 +2541,7 @@ export function App() {
                   </div>
                   <p className="hint">
                     {isLesson
-                      ? 'Each need gets a letter, so no name is sent. Names and reasons stay on this computer; only the letter and short need are sent to the cloud.'
+                      ? 'Nothing from your notebook is sent. Each need gets a letter from the list (no names or reasons); or tick "Send my own wording" to approve a line you wrote yourself.'
                       : 'Private facts that rule something out. A confirmed one stays on this computer, and every step of the draft is checked against it here.'}
                   </p>
                   {guardWhere === 'ON_DEVICE' && nanoDiff && !replay && (
@@ -2594,6 +2644,7 @@ export function App() {
                     notSentCount={going.notSent ?? 0}
                     needsCount={replay ? (replay.needs?.length ?? 0) : (going.lessonNeeds?.length ?? 0)}
                     withheldCount={withheld.length}
+                    customNeeds={!replay && isLesson ? lessonBoundary?.customLetters : undefined}
                   />
                 </div>
               )}
@@ -2680,8 +2731,8 @@ export function App() {
           onClose={() => setInspecting(false)}
           taskInstruction={currentTask.instruction}
           system={draftSystem(currentTask.id)}
-          format={DRAFT_FORMAT}
-          heading={DRAFT_NOTES_HEADING}
+          format={isLesson ? LESSON_DRAFT_FORMAT : DRAFT_FORMAT}
+          heading={isLesson ? LESSON_NOTES_HEADING : DRAFT_NOTES_HEADING}
           labelSystem={LABEL_SYSTEM}
           labelChars={LABEL_CHARS}
           secondRequest={needsReply?.second ?? undefined}

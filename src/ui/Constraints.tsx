@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { Constraint, ConstraintKind, Entity, ItemCheck } from '../core/types';
 import { CloudText } from './parts';
 import { ALL_KINDS as CONSTRAINT_KINDS, CONSTRAINT_LABEL, kindLabel } from '../core/constraints';
+import { CLASSROOM_ACTION_CATALOGUE, classroomActionKeyOf } from '../core/boundary';
+import { LEARNING_LINE } from '../core/lessonNeeds';
 
 export interface ConstraintActions {
   onConfirm: (id: string) => void;
@@ -24,6 +26,8 @@ export interface NeedView {
   issues: { what: string; why: string }[];
   /** For a lesson: words from the sensitive list in the line. */
   sensitive?: string[];
+  /** For a lesson: true when the active line does not come from the fixed boundary catalogue. */
+  custom?: boolean;
 }
 
 const FOUND_BY: Record<Constraint['source'], string> = {
@@ -205,33 +209,84 @@ function ConstraintRow({
   onHoverNeed?: (letter: string | null) => void;
 }) {
   const [editingNeed, setEditingNeed] = useState(false);
+  const [writingCustom, setWritingCustom] = useState(false);
   const nothingToTell = !need.typed && !need.line;
   const telling = Boolean(c.share) && c.confirmed;
   const letter = telling && need.line ? /^Need ([A-Z]{1,2}):/.exec(need.line)?.[1] : undefined;
   const traced = Boolean(letter && activeNeed === letter);
   const detail = constraintDetail(c);
+  const defaultLearnLine = c.kind === 'learning' && c.learn && !c.learn.startsWith('ticket-') ? LEARNING_LINE[c.learn] : undefined;
+  const currentLine = c.need?.replace(/\s+/g, ' ').trim() ?? '';
+  const inCatalogue = Boolean(
+    currentLine &&
+      (classroomActionKeyOf(currentLine) !== undefined || (defaultLearnLine !== undefined && currentLine === defaultLearnLine)),
+  );
+  const isCustom =
+    need.custom !== undefined
+      ? Boolean(lesson && need.custom)
+      : Boolean(lesson && need.typed && currentLine.length > 0 && !inCatalogue);
+  const showCustomBox = writingCustom || (currentLine.length > 0 && !inCatalogue && isCustom);
   const nanoBadge =
     c.source === 'on-device model' ? (
       <span className="source-badge nano">Found by Gemini Nano</span>
     ) : c.source === 'rule' && c.alsoModel ? (
       <span className="source-badge both">Rule + Gemini Nano</span>
     ) : null;
+  const catalogueValue = showCustomBox ? '__custom__' : inCatalogue ? currentLine : '';
   const needInput = need.typed && (
     <div className="need-edit-box">
-      <label className="field">
-        {lesson ? 'The need, in your words: no name and no reason' : 'The need, in your words'}
-        <input
-          type="text"
-          defaultValue={c.need ?? ''}
-          maxLength={200}
-          disabled={!editable}
-          onBlur={(e) => actions.onNeed(c.id, e.target.value)}
-          key={lesson ? (c.need ?? '') : undefined}
-          placeholder={lesson ? (c.kind === 'health' ? 'For example: must avoid flashing or flickering light' : 'Say what such a pupil needs, not why and not who') : c.kind === 'health' ? 'For example: No flashing lights for [Student 2]' : 'Say what the school must do, not why'}
-          spellCheck={false}
-          autoComplete="off"
-        />
-      </label>
+      {lesson && editable && (
+        <label className="field">
+          Choose a classroom action (catalogue)
+          <select
+            value={catalogueValue}
+            disabled={!editable}
+            aria-label={`Choose classroom action for ${who}`}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '__custom__') {
+                setWritingCustom(true);
+              } else {
+                setWritingCustom(false);
+                actions.onNeed(c.id, v);
+              }
+            }}
+          >
+            <option value="">Choose what the teacher should do…</option>
+            {defaultLearnLine && <option value={defaultLearnLine}>{defaultLearnLine}</option>}
+            {Object.entries(CLASSROOM_ACTION_CATALOGUE).map(([k, line]) => (
+              <option key={k} value={line}>
+                {line}
+              </option>
+            ))}
+            <option value="__custom__">Write my own wording…</option>
+          </select>
+        </label>
+      )}
+      {(!lesson || showCustomBox) && (
+        <label className="field">
+          {lesson ? 'Your own wording (no name, no reason)' : 'The need, in your words'}
+          <input
+            type="text"
+            defaultValue={c.need ?? ''}
+            maxLength={200}
+            disabled={!editable}
+            onBlur={(e) => actions.onNeed(c.id, e.target.value)}
+            key={lesson ? (c.need ?? '') : undefined}
+            placeholder={
+              lesson
+                ? c.kind === 'health'
+                  ? 'For example: must avoid flashing or flickering light'
+                  : 'Say what the pupil needs in class, not why and not who'
+                : c.kind === 'health'
+                  ? 'For example: No flashing lights for [Student 2]'
+                  : 'Say what the school must do, not why'
+            }
+            spellCheck={false}
+            autoComplete="off"
+          />
+        </label>
+      )}
       {editingNeed && (
         <button type="button" className="link" onClick={() => setEditingNeed(false)}>
           Done editing
@@ -349,10 +404,13 @@ function ConstraintRow({
           {telling && need.line ? (
             <p className="goes">
               <span className="pair-label">What is sent</span>
-              <span className="need-line">{need.line}</span>
+              <span className="need-line">
+                {need.line}
+                {isCustom && <span className="custom-tag">Your own words</span>}
+              </span>
               {editable && need.typed && !editingNeed && (
                 <button type="button" className="link edit-need-btn" onClick={() => setEditingNeed(true)}>
-                  Edit wording
+                  {inCatalogue || !c.need ? 'Change wording' : 'Edit wording'}
                 </button>
               )}
             </p>
@@ -364,10 +422,12 @@ function ConstraintRow({
           )}
         </div>
       )}
-      {lesson && telling && (need.sensitive ?? []).length > 0 && (
+      {lesson && telling && ((need.sensitive ?? []).length > 0 || isCustom) && (
         <label className="read-it">
           <input type="checkbox" checked={Boolean(c.needAck)} disabled={!editable} onChange={(e) => actions.onNeedAck?.(c.id, e.target.checked)} />
-          Send this need as worded. It has a word that may give the reason (“{need.sensitive!.join('”, “')}”).
+          {(need.sensitive ?? []).length > 0
+            ? `Send my own wording as worded. It has a word that may give the reason (“${need.sensitive!.join('”, “')}”).`
+            : 'Send my own wording (not from the catalogue).'}
         </label>
       )}
       {telling && need.typed && (!lesson || !c.confirmed || !need.line || editingNeed) && needInput}

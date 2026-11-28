@@ -20,7 +20,18 @@ import {
 } from './vault';
 import { checkOutgoing, checkReply, safeTitle } from './gate';
 import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE, TASKS } from './samples';
-import { DRAFT_FORMAT, DRAFT_NOTES_HEADING, DRAFT_SYSTEM, draftPrompt, draftSystem, LABEL_CHARS, labelPrompt, LESSON_SYSTEM } from '../ai/draft';
+import {
+  DRAFT_FORMAT,
+  DRAFT_NOTES_HEADING,
+  DRAFT_SYSTEM,
+  draftPrompt,
+  draftSystem,
+  LABEL_CHARS,
+  labelPrompt,
+  LESSON_DRAFT_FORMAT,
+  LESSON_NOTES_HEADING,
+  LESSON_SYSTEM,
+} from '../ai/draft';
 import { NOTE_MAX, plainText } from './text';
 
 /** The sample note as it goes out when no model read it: class list, patterns, sensitive words and capitalised words only. */
@@ -1236,10 +1247,10 @@ describe('the instruction sent with a draft', () => {
     for (const said of [LESSON_SYSTEM, TASKS[0].instruction]) expect(said).not.toMatch(/money|cost|buy|pay|phone|internet|online|after school|bell|free\b/i);
     expect(LESSON_SYSTEM).toContain('plain text with no markdown');
     expect(LESSON_SYSTEM).toContain('No diagnosis, no labels for children.');
-    expect(LESSON_SYSTEM).toContain('Never write a square-bracketed word that is not in the notes');
-    // No example stand-in to copy: the lesson's notes seldom hold one.
+    expect(LESSON_SYSTEM).toContain("Nothing from the teacher's private notebook was sent to you.");
+    expect(LESSON_SYSTEM).toContain('Never invent or write any square-bracketed tags or withheld markers.');
+    // No example stand-in to copy: the lesson's notes never hold one.
     expect(LESSON_SYSTEM).not.toMatch(/\[(?:Student|Adult|Place|Contact|ID)\b/);
-    expect(LESSON_SYSTEM).toContain('[withheld] marks a private detail you are not allowed to know.');
   });
 
   it('keeps "nothing that costs money" for the other tasks', () => {
@@ -1253,9 +1264,13 @@ describe('the instruction sent with a draft', () => {
 
 describe('draft prompt', () => {
   it('is the task instruction, two fixed lines and the approved text, and nothing else', () => {
-    const task = TASKS[0];
-    expect(draftPrompt('[Student 1] reads well.', task)).toBe(
-      `${task.instruction}\n\n${DRAFT_FORMAT}\n\n${DRAFT_NOTES_HEADING}\n[Student 1] reads well.`,
+    const lessonTask = TASKS[0];
+    expect(draftPrompt('Lesson lines', lessonTask)).toBe(
+      `${lessonTask.instruction}\n\n${LESSON_DRAFT_FORMAT}\n\n${LESSON_NOTES_HEADING}\nLesson lines`,
+    );
+    const otherTask = TASKS[1];
+    expect(draftPrompt('[Student 1] reads well.', otherTask)).toBe(
+      `${otherTask.instruction}\n\n${DRAFT_FORMAT}\n\n${DRAFT_NOTES_HEADING}\n[Student 1] reads well.`,
     );
   });
 

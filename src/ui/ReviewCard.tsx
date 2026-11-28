@@ -20,6 +20,7 @@ export interface ReviewCardProps {
   notSentCount: number;
   needsCount?: number;
   withheldCount?: number;
+  customNeeds?: readonly string[];
 }
 
 export function ReviewCard({
@@ -38,6 +39,7 @@ export function ReviewCard({
   notSentCount,
   needsCount = 0,
   withheldCount = 0,
+  customNeeds,
 }: ReviewCardProps) {
   return (
     <article className="card outbox waiting">
@@ -71,7 +73,10 @@ export function ReviewCard({
             : `your approved note for ${taskLabel.toLowerCase()}, without names.`}
         </p>
         <p>
-          <b>Staying on this computer:</b> {withheldCount} {withheldCount === 1 ? 'name or private detail' : 'names and private details'}.
+          <b>Staying on this computer:</b> {withheldCount} {withheldCount === 1 ? 'name or private detail' : 'names and private details'}
+          {isLesson && notSentCount > 0
+            ? ` · all ${notSentCount} ${notSentCount === 1 ? 'sentence' : 'sentences'} of your notebook`
+            : ''}.
         </p>
       </div>
 
@@ -102,11 +107,20 @@ export function ReviewCard({
           matching words were hidden. Read the text around each private detail and mark what is left.
         </p>
       )}
-      <p className="hint">
-        {replay ? 'The exact text that was sent on the day' : 'The exact text that will be sent'}, for: {taskLabel.toLowerCase()}.
+      <p className={isLesson ? 'boundary-say' : 'hint'}>
+        {isLesson ? (
+          <b>Nothing from your notebook is sent. Only these lines.</b>
+        ) : (
+          `${replay ? 'The exact text that was sent on the day' : 'The exact text that will be sent'}, for: ${taskLabel.toLowerCase()}.`
+        )}
       </p>
       <div className="wire">
-        <CloudText text={outgoing} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? onHoverNeed : undefined} />
+        <CloudText
+          text={outgoing}
+          activeNeed={isLesson ? activeNeed : undefined}
+          onHoverNeed={isLesson ? onHoverNeed : undefined}
+          customNeeds={isLesson ? customNeeds : undefined}
+        />
       </div>
       {!replay && notSentCount > 0 && <p className="hint">{notSentLine(notSentCount)}</p>}
       {violations.length > 0 && (

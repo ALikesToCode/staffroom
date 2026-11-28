@@ -44,18 +44,21 @@ export function CloudText({
   text,
   activeNeed,
   onHoverNeed,
+  customNeeds,
 }: {
   text: string;
   activeNeed?: string | null;
   onHoverNeed?: (letter: string | null) => void;
+  customNeeds?: readonly string[];
 }) {
-  if (!onHoverNeed && activeNeed === undefined) return <TokenBars text={text} />;
+  if (!onHoverNeed && activeNeed === undefined && (!customNeeds || customNeeds.length === 0)) return <TokenBars text={text} />;
   const lines = text.split('\n');
   return (
     <>
       {lines.map((line, i) => {
         const m = NEED_WIRE_RE.exec(line);
         const letter = m?.[1];
+        const isCustom = Boolean(letter && customNeeds?.includes(letter));
         const sep = i < lines.length - 1 ? '\n' : '';
         if (!letter) {
           return (
@@ -76,6 +79,7 @@ export function CloudText({
               onBlur={() => onHoverNeed?.(null)}
             >
               <TokenBars text={line} />
+              {isCustom && <span className="custom-tag">Your own words</span>}
             </span>
             {sep}
           </Fragment>

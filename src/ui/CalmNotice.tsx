@@ -21,7 +21,11 @@ export function CalmNotice({ stage, guardWhere, checkWhere, guardGaps, isLesson,
           {guardGaps.unread.length > 0
             ? `The on-device model was asked and could not read any of the ${guardGaps.unread.length} ${guardGaps.unread.length === 1 ? 'part' : 'parts'} of your note`
             : 'No on-device model ran here'}
-          , so no model has read your note. Anything you have not marked yourself is sent as written.
+          {isLesson ? (
+            ' — this browser uses rules only to find needs. It finds fewer needs, and still sends nothing from your notebook.'
+          ) : (
+            ', so no model has read your note. Anything you have not marked yourself is sent as written.'
+          )}
         </p>
         <details>
           <summary>Details</summary>

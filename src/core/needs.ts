@@ -3,7 +3,9 @@ import type { Violation } from './gate';
 import { checkOutgoing } from './gate';
 import { findByRule, findPossibleNames, sensitiveWords, sentences, wholeWordMatcher } from './rules';
 import { LOOKALIKE_RE, PRIVATE_TOKEN, redactWithTokens, RESERVED, TOKEN_RE } from './vault';
+import { customNeedAckViolations } from './boundary';
 import { lessonNeeds, needLabel, withLessonNeeds, type LessonNeed } from './lessonNeeds';
+import type { LessonFields } from './lesson';
 
 // A confirmed constraint can be told to the cloud as a need, without its reason: "cannot stay after the
 // last bell", and not why. The teacher chooses, one constraint at a time. A need line is outgoing text:
@@ -134,8 +136,20 @@ const ONE_PERSON =
 const MOSTLY_WITHHELD = 4;
 const wordsBesideStandIns = (s: string) => s.split(PRIVATE_TOKEN).join(' ').replace(TOKEN_RE, ' ').match(/\p{L}+/gu)?.length ?? 0;
 
-/** Said under the exact text of a lesson: how many sentences of the note stay here. A count only. */
-export const notSentLine = (n: number) => `Not sent: ${n} ${n === 1 ? 'sentence' : 'sentences'} about one pupil. Their needs go by letter.`;
+/** Said under the exact text of a lesson: how many sentences of the notebook stay on the device. */
+export const notSentLine = (n: number) =>
+  n === 1 ? 'The 1 sentence of your notebook stays on this computer.' : `All ${n} sentences of your notebook stay on this computer.`;
+
+/** Count total non-empty sentences in the teacher's raw notebook. */
+export function countNoteSentences(note: string): number {
+  let total = 0;
+  for (const para of note.split(/\n[ \t]*\n/)) {
+    for (const line of para.split('\n')) {
+      total += sentences(line).length;
+    }
+  }
+  return total;
+}
 
 /**
  * For a lesson, the redacted note keeps only what is about the class. A
@@ -198,30 +212,35 @@ export interface Outgoing {
  * the screen and for the moment of sending. For a lesson the note keeps
  * only its sentences about the class (see classSentences).
  */
-export function outgoingOf(note: string, entities: Entity[], constraints: Constraint[], lesson = false): Outgoing {
-  const redaction = redactWithTokens(note, entities);
+export function outgoingOf(
+  note: string,
+  entities: Entity[],
+  constraints: Constraint[],
+  lesson = false,
+  lessonFields?: Pick<LessonFields, 'topic' | 'lastTime'>,
+): Outgoing {
   const mergeViolations = (gate: Violation[], needIssues: Violation[]): Violation[] => {
     const seen = new Set(gate.map((v) => v.what.toLowerCase()));
     return [...gate, ...needIssues.filter((v) => !seen.has(v.what.toLowerCase()))];
   };
   if (lesson) {
-    // A lesson is told its needs by letter, with no child in any line, and no sentence about one pupil. Whose each need is stays here.
+    // Structural boundary: ZERO notebook prose leaves on the lesson path. Only fixed-catalogue
+    // needs by letter (or explicitly acknowledged custom teacher wording) cross to the cloud.
     const byLetter = lessonNeeds(constraints, entities);
-    const kept = classSentences(redaction.text, entities);
-    const text = withLessonNeeds(kept.text, byLetter);
+    const text = withLessonNeeds('', byLetter);
+    const ackIssues = customNeedAckViolations(byLetter, constraints, lessonFields);
+    const needIssues = [...byLetter.flatMap((n) => n.issues), ...ackIssues];
     return {
       text,
-      // Only the stand-ins that are still in the text may come back.
-      tokens: redaction.tokens.filter((t) => kept.text.includes(t)),
-      // Leaving a sentence out withholds nothing from the sentences that are sent, so they still need the as-written tick.
-      noteAsWritten: redaction.tokens.length === 0,
-      notSent: kept.notSent,
-      // One entry for each constraint behind a need, so that a rule hit can say the cloud was told it.
+      tokens: [],
+      noteAsWritten: false,
+      notSent: countNoteSentences(note),
       needs: byLetter.flatMap((n) => n.constraintIds.map((id) => ({ id, line: needLabel(n), issues: n.issues }))),
       lessonNeeds: byLetter,
-      violations: mergeViolations(checkOutgoing(text, entities, note), byLetter.flatMap((n) => n.issues)),
+      violations: mergeViolations(checkOutgoing(text, entities), needIssues),
     };
   }
+  const redaction = redactWithTokens(note, entities);
   const needs = sharedNeeds(constraints, entities);
   const tokens = new Set(redaction.tokens);
   const known = new Set(entities.filter((e) => e.kind !== 'private' && e.withheld).map((e) => e.token));

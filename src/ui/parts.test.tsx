@@ -560,5 +560,68 @@ describe('AppHeader and ReviewCard', () => {
       <Hero onTry={() => {}} onWrite={() => {}} onWatch={() => {}} noModel={false} needsDownload />,
     );
     expect(heroHtml).toContain('First run downloads Gemini Nano in Chrome (several GB)');
+
+    const noNanoHeroHtml = renderToStaticMarkup(
+      <Hero onTry={() => {}} onWrite={() => {}} onWatch={() => {}} noModel needsDownload={false} />,
+    );
+    expect(noNanoHeroHtml).toContain('Without Gemini Nano, this browser uses rules only to find needs');
+    expect(noNanoHeroHtml).toContain('still sends nothing from your notebook');
+
+    const reviewHtml = renderToStaticMarkup(
+      <ReviewCard
+        violations={[]}
+        nothingWithheld={false}
+        partOfNote
+        guardWhere="NOT_RUN"
+        guardGaps={{ unread: [], dropped: 0, partial: 0 }}
+        notePartsCount={1}
+        replay={false}
+        taskLabel="Lesson plan"
+        outgoing={'Needs in this class (no names and no reasons are given; a need may be one pupil\'s or several):\nNeed A: cannot stay after the last bell\nNeed R: needs water breaks'}
+        isLesson
+        activeNeed={null}
+        onHoverNeed={() => {}}
+        notSentCount={5}
+        needsCount={2}
+        withheldCount={4}
+        customNeeds={['R']}
+      />,
+    );
+    expect(reviewHtml).toContain('Nothing from your notebook is sent. Only these lines.');
+    expect(reviewHtml).toContain('All 5 sentences of your notebook stay on this computer.');
+    expect(reviewHtml).toContain('Your own words');
+
+    const healthC: Constraint = {
+      id: 'h-custom',
+      kind: 'health',
+      text: 'has epilepsy',
+      source: 'rule',
+      confirmed: true,
+      share: true,
+      need: 'needs water breaks',
+    };
+    const constraintsHtml = renderToStaticMarkup(
+      <ConstraintsPanel
+        constraints={[healthC]}
+        students={[]}
+        editable
+        selection=""
+        actions={{
+          onConfirm: () => {},
+          onUnconfirm: () => {},
+          onRemove: () => {},
+          onKind: () => {},
+          onTriggers: () => {},
+          onAdd: () => {},
+          onShare: () => {},
+          onNeed: () => {},
+          onNeedAck: () => {},
+        }}
+        needOf={() => ({ typed: true, line: 'needs water breaks', issues: [], sensitive: [] })}
+        lesson
+      />,
+    );
+    expect(constraintsHtml).toContain('Send my own wording (not from the catalogue).');
+    expect(constraintsHtml).toContain('Your own words');
   });
 });

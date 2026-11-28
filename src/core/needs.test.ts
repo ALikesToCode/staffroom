@@ -173,18 +173,17 @@ describe('a lesson request', () => {
   ]);
   const learning = (id: string, about: string): Constraint => ({ id, kind: 'learning', learn: 'early', text: 'x', source: 'teacher', confirmed: true, share: true, about, need: 'finishes early and needs more to do' });
 
-  it('sends only the sentences about the class, keeping its lines and paragraphs, and the needs by letter', () => {
+  it('sends zero notebook sentences — only the needs by letter — while other tasks keep redaction', () => {
     const out = outgoingOf(note, vault, [learning('l', vault[1].id)], true);
     expect(out.text).toBe(
-      `The class is behind on fractions. The class visits [Place 1] on Friday.\n\nThe hall is shut this week.\n\n${LESSON_NEEDS_HEADING}\nNeed G: finishes early and needs more to do\nUnder "For each need", give an entry for every one of these letters: G.`,
+      `${LESSON_NEEDS_HEADING}\nNeed G: finishes early and needs more to do\nUnder "For each need", give an entry for every one of these letters: G.`,
     );
-    expect(out.notSent).toBe(2);
-    // Only a stand-in still in the text may come back.
-    expect(out.tokens).toEqual(['[Place 1]']);
+    expect(out.notSent).toBe(5);
+    expect(out.tokens).toEqual([]);
     expect(out.noteAsWritten).toBe(false);
     expect(out.violations).toEqual([]);
-    expect(notSentLine(out.notSent!)).toBe('Not sent: 2 sentences about one pupil. Their needs go by letter.');
-    expect(notSentLine(1)).toBe('Not sent: 1 sentence about one pupil. Their needs go by letter.');
+    expect(notSentLine(out.notSent!)).toBe('All 5 sentences of your notebook stay on this computer.');
+    expect(notSentLine(1)).toBe('The 1 sentence of your notebook stays on this computer.');
     // The other tasks still send the whole redacted note.
     expect(outgoingOf(note, vault, []).text).toContain('[Student 1] reads well.');
     expect(outgoingOf(note, vault, []).notSent).toBeUndefined();
@@ -199,13 +198,12 @@ describe('a lesson request', () => {
     expect(classSentences('[withheld] to [Place 1] and [withheld]. The class visits [Place 1] in [withheld] each year.', vault)).toEqual({ text: 'The class visits [Place 1] in [withheld] each year.', notSent: 1 });
   });
 
-  it('still asks for the as-written tick when nothing is withheld, though a sentence about one pupil is left out', () => {
+  it('never sends notebook text or asks for an as-written tick on a lesson even when nothing is withheld', () => {
     const out = outgoingOf('priya walks home alone. she is quiet.', [], [], true);
-    expect(out.notSent).toBe(1);
+    expect(out.notSent).toBe(2);
     expect(out.tokens).toEqual([]);
-    // "priya" was not found, so it is sent as written: the teacher must say that is what they mean.
-    expect(out.text.startsWith('priya walks home alone.')).toBe(true);
-    expect(out.noteAsWritten).toBe(true);
+    expect(out.text).toBe('');
+    expect(out.noteAsWritten).toBe(false);
   });
 
   it('with nothing about the class, sends the needs alone', () => {
@@ -214,9 +212,10 @@ describe('a lesson request', () => {
     expect(out.tokens).toEqual([]);
   });
 
-  it('still stops what the exit gate stops, in the sentences that are sent and in the need lines', () => {
+  it('never leaks raw phone numbers from the note, and stops unsafe or unacked typed need lines', () => {
     const out = outgoingOf('Ring the office on 98765 43210 before the trip.', [], [], true);
-    expect(out.violations.map((v) => v.what)).toEqual(['98765 43210']);
+    expect(out.text).toBe('');
+    expect(out.violations).toEqual([]);
     const typed = outgoingOf(note, vault, [{ ...learning('l', vault[0].id), need: 'has epilepsy' }], true);
     expect(typed.violations.map((v) => v.what)).toEqual(['epilepsy']);
     // Hinglish and Devanagari singular pronouns are treated as single-pupil sentences too, while nearby words ("वहाँ") stay intact and retain Devanagari danda.

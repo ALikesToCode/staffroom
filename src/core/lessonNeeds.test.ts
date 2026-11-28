@@ -118,16 +118,16 @@ describe('the needs a lesson is told', () => {
     expect(outgoingOf(SAMPLE_NOTE, entities, all).text).not.toMatch(/Need [A-Z]:|written tests hard/);
   });
 
-  it('carries no sentence about one pupil: what is about the class, then every need by letter', () => {
+  it('carries zero sentences from the notebook: only needs by letter leave the device', () => {
     const going = outgoingOf(SAMPLE_NOTE, entities, all, true);
-    const note = going.text.slice(0, going.text.indexOf(LESSON_NEEDS_HEADING));
     expect(going.text).not.toContain('[Student');
-    expect(note).not.toMatch(/\b(?:he|she|his|her)\b|\[withheld\]|\[Place|\[ID|\[Adult|\[Contact/i);
-    // The class-level sentences of the note are still sent.
-    expect(note.trim()).toBe('Class 6B, week of 16 November. Notes for myself.');
-    expect(going.notSent).toBe(15);
+    expect(going.text).not.toContain('Notes for myself');
+    expect(going.text).not.toContain('Class 6B, week of 16 November');
+    expect(going.text.startsWith(LESSON_NEEDS_HEADING)).toBe(true);
+    expect(going.notSent).toBe(17);
     for (const n of going.lessonNeeds!) expect(going.text).toContain(`\n${needLabel(n)}\n`);
     expect(going.tokens).toEqual([]);
+    expect(going.noteAsWritten).toBe(false);
     expect(going.violations).toEqual([]);
   });
 

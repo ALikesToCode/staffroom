@@ -4139,3 +4139,20 @@ li.child-hit.is-traced,
   overflow: hidden;
   accent-color: var(--ink);
 }
+
+.boundary-say {
+  font-size: 0.96rem;
+  color: var(--slate-ink);
+}
+
+.custom-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font: 600 0.78rem/1.4 var(--sans);
+  background: var(--amber-soft);
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  vertical-align: middle;
+}

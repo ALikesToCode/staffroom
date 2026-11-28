@@ -110,7 +110,7 @@ export function Hero({
 
         {noModel ? (
           <p className="hint hero-mode">
-            This browser cannot run the local model, so names and numbers are hidden by rule here. The cloud lesson works the same.
+            This browser cannot run the local model. Without Gemini Nano, this browser uses rules only to find needs — it finds fewer needs, and still sends nothing from your notebook.
           </p>
         ) : (
           <p className="hint hero-mode">

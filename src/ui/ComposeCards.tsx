@@ -14,14 +14,12 @@ import {
   ruleSupportedLanguage,
   type LessonFields,
 } from '../core/lesson';
-import { TASKS } from '../core/samples';
 import { NOTE_MAX } from '../core/text';
 import type { Kind, TaskId } from '../core/types';
 import { KIND_LABEL, Spinner } from './parts';
 
 export function TaskComposeCard({
   task,
-  setTask,
   lesson,
   setLesson,
   replay,
@@ -34,16 +32,10 @@ export function TaskComposeCard({
 }) {
   return (
     <article className="card">
-      <fieldset className="tasks">
-        <legend>What do you want help with?</legend>
-        {TASKS.map((t) => (
-          <label key={t.id} className={task === t.id ? 'task on' : 'task'}>
-            <input type="radio" name="task" checked={task === t.id} disabled={replay} onChange={() => setTask(t.id)} />
-            <strong>{t.label}</strong>
-            <span>{t.blurb}</span>
-          </label>
-        ))}
-      </fieldset>
+      <div className="card-head">
+        <h3>Tomorrow&apos;s lesson</h3>
+      </div>
+      <p className="hint">Nothing from your notebook crosses to the cloud — only these lesson lines and lettered needs.</p>
       {(task === 'lesson' || task === 'parents') && (
         <div className="write-in">
           <label className="lesson-field">
@@ -283,8 +275,7 @@ export function NoteComposeCard({
       )}
       {noModel && !replay && (
         <p className="notice">
-          No on-device model in this browser, so the guard runs by rule: your class list, patterns, a short list of sensitive words and
-          capitalised words. Mark other private details yourself.
+          Without Gemini Nano, this browser uses rules only to find needs — it finds fewer needs, and still sends nothing from your notebook.
         </p>
       )}
       {(device === 'downloadable' || device === 'downloading') && download === null && (
