@@ -1608,6 +1608,7 @@ export function App() {
       classPlan,
       needs: buildLessonPayload(lesson, sent.lessonNeeds, sent.constraints).payload.needs,
       language: sent.language,
+      lesson,
     };
     setMaterialsBusy(true);
     setMaterialsStreamChars(0);

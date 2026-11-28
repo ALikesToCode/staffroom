@@ -103,7 +103,14 @@ describe('naming the receipt', () => {
   it('records a fallback when neither model answers', async () => {
     delete (globalThis as { LanguageModel?: unknown }).LanguageModel;
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('offline'))));
-    expect(await labelReceipt('[Student 1] reads well.', 'Support plan for next week')).toEqual({
+    const lesson = { klass: 'Class 6', subject: 'English', topic: 'Describing a place' };
+    expect(
+      await labelReceipt('Class 6 — English — Describing a place', 'Support plan for next week', undefined, {
+        payload: { kind: 'label', lesson },
+        entities: [],
+        classList: [],
+      }),
+    ).toEqual({
       title: 'Support plan for next week',
       where: 'FALLBACK',
     });

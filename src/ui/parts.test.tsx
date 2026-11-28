@@ -442,7 +442,7 @@ describe('AppHeader and ReviewCard', () => {
   });
 
   it('shows the honest Exit gate label and calm unanchored phrase caution inside ReviewCard', () => {
-    const html = renderToStaticMarkup(
+    const lessonHtml = renderToStaticMarkup(
       <ReviewCard
         violations={[]}
         nothingWithheld={false}
@@ -452,19 +452,38 @@ describe('AppHeader and ReviewCard', () => {
         notePartsCount={1}
         replay={false}
         taskLabel="Class lesson"
-        outgoing="[Student 1] reads well."
+        outgoing="Needs in this class (no names and no reasons are given; a need may be one pupil's or several):\nNeed A: cannot stay after the last bell"
         isLesson
+        activeNeed={null}
+        onHoverNeed={() => {}}
+        notSentCount={3}
+      />,
+    );
+    expect(lessonHtml).toContain('No names or numbers found. Please read it once.');
+    expect(lessonHtml).toContain('Exit gate: 0 found');
+    expect(lessonHtml).toContain('Going to Google&#x27;s Gemini:');
+    expect(lessonHtml).toContain('Staying on this computer:');
+    expect(lessonHtml).toContain('The on-device model also listed 2 unanchored phrases. Nothing from your notebook is sent; check the needs list on the left if any pupil adjustment is missing.');
+    expect(lessonHtml).not.toContain('so they were not withheld');
+
+    const noteHtml = renderToStaticMarkup(
+      <ReviewCard
+        violations={[]}
+        nothingWithheld={false}
+        partOfNote={false}
+        guardWhere="ON_DEVICE"
+        guardGaps={{ unread: [], dropped: 2, partial: 0 }}
+        notePartsCount={1}
+        replay={false}
+        taskLabel="Support plan"
+        outgoing="[Student 1] reads well."
+        isLesson={false}
         activeNeed={null}
         onHoverNeed={() => {}}
         notSentCount={0}
       />,
     );
-    expect(html).toContain('No names or numbers found. Please read it once.');
-    expect(html).toContain('Exit gate: 0 found');
-    expect(html).toContain('Going to Google&#x27;s Gemini:');
-    expect(html).toContain('Staying on this computer:');
-    expect(html).toContain('unanchored phrases (often paraphrases rather than exact words in your note)');
-    expect(html).not.toContain('so they were not withheld');
+    expect(noteHtml).toContain('unanchored phrases (often paraphrases rather than exact words in your note)');
   });
 
   it('disables Keep a copy and hides remote records while Clear desk sign-out is blocked', () => {
@@ -590,6 +609,31 @@ describe('AppHeader and ReviewCard', () => {
     expect(reviewHtml).toContain('Nothing from your notebook is sent. Only these lines.');
     expect(reviewHtml).toContain('All 5 sentences of your notebook stay on this computer.');
     expect(reviewHtml).toContain('Your own words');
+
+    const customStopHtml = renderToStaticMarkup(
+      <ReviewCard
+        violations={[{ what: 'Need R', why: 'your own words — tick "Send my own wording" next to this need before sending' }]}
+        nothingWithheld={false}
+        partOfNote
+        guardWhere="ON_DEVICE"
+        guardGaps={{ unread: [0], dropped: 1, partial: 1 }}
+        notePartsCount={2}
+        replay={false}
+        taskLabel="Lesson plan"
+        outgoing={'Needs in this class (no names and no reasons are given; a need may be one pupil\'s or several):\nNeed R: needs water breaks'}
+        isLesson
+        activeNeed={null}
+        onHoverNeed={() => {}}
+        notSentCount={2}
+        needsCount={1}
+        withheldCount={1}
+        customNeeds={['R']}
+      />,
+    );
+    expect(customStopHtml).toContain('1 custom need must be ticked before sending');
+    expect(customStopHtml).not.toContain('must be hidden first');
+    expect(customStopHtml).toContain('Nothing from your notebook is sent, though some pupil needs in that part may not have been spotted.');
+    expect(customStopHtml).toContain('Nothing from your notebook is sent; check the needs list on the left');
 
     const healthC: Constraint = {
       id: 'h-custom',

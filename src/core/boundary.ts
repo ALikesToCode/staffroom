@@ -108,6 +108,7 @@ export interface MaterialsBoundaryPayload {
   classPlan: string;
   needs: LessonBoundaryNeed[];
   language: string;
+  lesson?: BoundaryLessonContext;
 }
 
 export interface LabelBoundaryPayload {
@@ -404,7 +405,7 @@ export function validateMaterialsBoundary(
   outgoingText: string,
   entities: Entity[],
 ): BoundaryValidation {
-  const errors = validateNeedList(payload.needs, { topic: '' }, entities);
+  const errors = validateNeedList(payload.needs, payload.lesson ?? { topic: '' }, entities);
   for (const v of checkOutgoing(payload.classPlan, entities)) {
     errors.push(`Materials class plan blocked (${v.what}): ${v.why}`);
   }

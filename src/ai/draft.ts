@@ -16,10 +16,10 @@ import { modelFor, onDeviceFallbackFor } from './routes';
 const REDACTED = `The teacher's notes have been redacted before they reached you. Text in square brackets such as [Student 1], [Adult 1] or [Place 1] stands for a person or place whose identity is withheld. Always refer to them by exactly the same stand-in, brackets included. [withheld] marks a private detail you are not allowed to know. Do not guess what it is and do not ask for it.`;
 
 /**
- * For a lesson only the note's sentences about the class are sent, so there
- * is seldom a stand-in in it. Given examples of stand-ins, the cloud wrote
- * one that was never sent ("a description of [Place 1]"), which the return
- * gate rightly stops; so a lesson is given no example to copy.
+ * On the lesson path, zero notebook text or stand-ins leave the device — only
+ * fixed-catalogue lettered needs (or explicitly acknowledged custom teacher lines)
+ * and the validated lesson lines. Tell the cloud model not to invent square-bracketed
+ * tags or withheld markers.
  */
 const LESSON_REDACTED = `Nothing from the teacher's private notebook was sent to you. You receive only the lettered classroom needs and the Lesson lines below. Never invent or write any square-bracketed tags or withheld markers.`;
 
@@ -491,16 +491,17 @@ export async function writeDraft(
   redacted: string,
   task: Task,
   cloudModel: string,
-  onProgressText?: (partialText: string) => void,
-  onFallbackStart?: () => void,
-  boundaryGuard?: LessonBoundaryGuard,
+  onProgressText: ((partialText: string) => void) | undefined,
+  onFallbackStart: (() => void) | undefined,
+  boundaryGuard: LessonBoundaryGuard,
 ): Promise<DraftResult> {
   if (task.id !== 'lesson') {
     throw new Error('Only lesson planning is active so no notebook text can leave this device.');
   }
-  if (boundaryGuard) {
-    assertLessonBoundary(boundaryGuard.payload, redacted, boundaryGuard.entities, boundaryGuard.classList);
+  if (!boundaryGuard) {
+    throw new Error('Boundary refused lesson send: missing boundary guard.');
   }
+  assertLessonBoundary(boundaryGuard.payload, redacted, boundaryGuard.entities, boundaryGuard.classList);
   const isLesson = task.id === 'lesson';
   const inputNeeds = isLesson ? new Map([...redacted.matchAll(NEEDS_LINE_RE)].map((m) => [m[1], m[2].trim()])) : new Map<string, string>();
   const toldLetters = [...inputNeeds.keys()];
@@ -586,12 +587,13 @@ export async function writeMaterials(
   text: string,
   letters: readonly string[],
   cloudModel: string,
-  onProgressText?: (partialText: string) => void,
-  boundaryGuard?: MaterialsBoundaryGuard,
+  onProgressText: ((partialText: string) => void) | undefined,
+  boundaryGuard: MaterialsBoundaryGuard,
 ): Promise<MaterialsResult> {
-  if (boundaryGuard) {
-    assertMaterialsBoundary(boundaryGuard.payload, text, boundaryGuard.entities);
+  if (!boundaryGuard) {
+    throw new Error('Boundary refused materials send: missing boundary guard.');
   }
+  assertMaterialsBoundary(boundaryGuard.payload, text, boundaryGuard.entities);
   const opts = { system: MATERIALS_SYSTEM, schema: MATERIALS_SCHEMA, cloudModel };
   const model = modelFor('draft', opts);
   const { text: raw, onDevice } = await streamContent(
@@ -640,14 +642,15 @@ export interface LabelBoundaryGuard {
 export async function labelReceipt(
   redacted: string,
   fallback: string,
-  cloudModel?: string,
-  boundaryGuard?: LabelBoundaryGuard,
+  cloudModel: string | undefined,
+  boundaryGuard: LabelBoundaryGuard,
 ): Promise<LabelResult> {
   try {
     const prompt = labelPrompt(redacted);
-    if (boundaryGuard) {
-      assertLabelBoundary(boundaryGuard.payload, prompt, boundaryGuard.entities, boundaryGuard.classList);
+    if (!boundaryGuard) {
+      throw new Error('Boundary refused label send: missing boundary guard.');
     }
+    assertLabelBoundary(boundaryGuard.payload, prompt, boundaryGuard.entities, boundaryGuard.classList);
     const model = modelFor('label', { system: LABEL_SYSTEM, cloudModel });
     const result = await model.generateContent(prompt);
     const where: LabelWhere = result.response.inferenceSource === 'on_device' ? 'ON_DEVICE' : 'IN_CLOUD';

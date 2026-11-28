@@ -4,7 +4,7 @@ import { SAMPLE_CLASS_LIST, SAMPLE_NOTE_BASE as SAMPLE_NOTE } from './samples';
 import { buildVault, deterministicCandidates, possibleNameCandidates, redact } from './vault';
 import { approvalKey } from './policy';
 import { confirmConstraint, constraintCounts, proposeConstraints, setConstraintKind, setNeed, setShare, unconfirmConstraint } from './constraints';
-import { checkNeed, classSentences, NEEDS_HEADING, needLine, needTemplate, notSentLine, outgoingOf, sharedNeeds, withNeeds } from './needs';
+import { checkNeed, NEEDS_HEADING, needLine, needTemplate, notSentLine, outgoingOf, sharedNeeds, withNeeds } from './needs';
 import { LESSON_NEEDS_HEADING } from './lessonNeeds';
 import { ruleCheckItem } from './conflicts';
 
@@ -189,13 +189,26 @@ describe('a lesson request', () => {
     expect(outgoingOf(note, vault, []).notSent).toBeUndefined();
   });
 
-  it('leaves out a sentence that says he or she, names a pupil the teacher released, or is nothing but withheld items', () => {
+  it('holds back every sentence of English, Hinglish, and Hindi notes on the lesson path', () => {
     const released = vault.map((e) => (e.surfaces[0] === 'Asha' ? { ...e, withheld: false } : e));
-    expect(classSentences('Asha reads well. Her mother rang. [withheld]. The class sings.', released)).toEqual({ text: 'The class sings.', notSent: 3 });
-    expect(classSentences('Then he left. The room is cold!', vault)).toEqual({ text: 'The room is cold!', notSent: 1 });
-    // A word that only holds "he" is no pronoun.
-    expect(classSentences('The theme is the harvest.', vault)).toEqual({ text: 'The theme is the harvest.', notSent: 0 });
-    expect(classSentences('[withheld] to [Place 1] and [withheld]. The class visits [Place 1] in [withheld] each year.', vault)).toEqual({ text: 'The class visits [Place 1] in [withheld] each year.', notSent: 1 });
+    expect(outgoingOf('Asha reads well. Her mother rang. The class sings.', released, [], true)).toMatchObject({
+      text: '',
+      notSent: 3,
+      noteAsWritten: false,
+      tokens: [],
+    });
+    expect(outgoingOf('Uska phone band hai. Class reads aloud today.', vault, [], true)).toMatchObject({
+      text: '',
+      notSent: 2,
+      noteAsWritten: false,
+      tokens: [],
+    });
+    expect(outgoingOf('वह घर जाती है। वहाँ चित्र लगाएँ।', vault, [], true)).toMatchObject({
+      text: '',
+      notSent: 2,
+      noteAsWritten: false,
+      tokens: [],
+    });
   });
 
   it('never sends notebook text or asks for an as-written tick on a lesson even when nothing is withheld', () => {
@@ -218,9 +231,6 @@ describe('a lesson request', () => {
     expect(out.violations).toEqual([]);
     const typed = outgoingOf(note, vault, [{ ...learning('l', vault[0].id), need: 'has epilepsy' }], true);
     expect(typed.violations.map((v) => v.what)).toEqual(['epilepsy']);
-    // Hinglish and Devanagari singular pronouns are treated as single-pupil sentences too, while nearby words ("वहाँ") stay intact and retain Devanagari danda.
-    expect(classSentences('Uska phone band hai. Class reads aloud today.', vault)).toEqual({ text: 'Class reads aloud today.', notSent: 1 });
-    expect(classSentences('वह घर जाती है। वहाँ चित्र लगाएँ।', vault)).toEqual({ text: 'वहाँ चित्र लगाएँ।', notSent: 1 });
     // Full exit gate scans assembled withLessonNeeds() output without duplicating typed-need alerts.
     const leakedNumber = outgoingOf(note, vault, [{ ...learning('l', vault[0].id), need: 'Ring 98765 43210' }], true);
     expect(leakedNumber.violations.map((v) => v.what)).toEqual(['98765 43210']);

@@ -2,7 +2,7 @@ import type { Constraint, Entity } from './types';
 import type { Violation } from './gate';
 import { checkOutgoing } from './gate';
 import { findByRule, findPossibleNames, sensitiveWords, sentences, wholeWordMatcher } from './rules';
-import { LOOKALIKE_RE, PRIVATE_TOKEN, redactWithTokens, RESERVED, TOKEN_RE } from './vault';
+import { LOOKALIKE_RE, redactWithTokens, RESERVED, TOKEN_RE } from './vault';
 import { customNeedAckViolations } from './boundary';
 import { lessonNeeds, needLabel, withLessonNeeds, type LessonNeed } from './lessonNeeds';
 import type { LessonFields } from './lesson';
@@ -128,14 +128,6 @@ export function withNeeds(text: string, lines: string[]): string {
   return `${text}\n\n${NEEDS_HEADING}\n${unique.map((l) => `- ${l}`).join('\n')}`;
 }
 
-/** He or she: a sentence that says it is about one person, most likely one pupil or a pupil's parent. */
-const ONE_PERSON =
-  /(?<![\p{L}\p{M}])(?:he|she|him|his|her|hers|himself|herself|woh|uska|uski|uske|usse|usko|वह|वो|उसने|उसका|उसकी|उसके|उसको|उसे|उससे)(?![\p{L}\p{M}])/iu;
-
-/** A sentence with a withheld detail and fewer words than this besides its stand-ins ("[withheld] to [Place 1] and [withheld].") is a fragment about one pupil. */
-const MOSTLY_WITHHELD = 4;
-const wordsBesideStandIns = (s: string) => s.split(PRIVATE_TOKEN).join(' ').replace(TOKEN_RE, ' ').match(/\p{L}+/gu)?.length ?? 0;
-
 /** Said under the exact text of a lesson: how many sentences of the notebook stay on the device. */
 export const notSentLine = (n: number) =>
   n === 1 ? 'The 1 sentence of your notebook stays on this computer.' : `All ${n} sentences of your notebook stay on this computer.`;
@@ -151,53 +143,15 @@ export function countNoteSentences(note: string): number {
   return total;
 }
 
-/**
- * For a lesson, the redacted note keeps only what is about the class. A
- * sentence is not sent when it holds the stand-in of a pupil, an adult, a
- * contact or an identity number, or a pupil's or adult's name the teacher
- * released; when it says he or she; or when it is withheld items with
- * fewer than four other words ("[withheld] to [Place 1] and [withheld].").
- * What the cloud needs about one pupil goes as a need, by letter.
- * The note keeps its lines and paragraphs; a sentence that is kept is
- * kept character for character.
- */
-export function classSentences(redacted: string, entities: Entity[]): { text: string; notSent: number } {
-  const ofOne = entities.filter((e) => e.kind !== 'place' && e.kind !== 'private');
-  const tokens = ofOne.filter((e) => e.withheld).map((e) => e.token);
-  const names = wholeWordMatcher(ofOne.filter((e) => !e.withheld && (e.kind === 'student' || e.kind === 'adult')).flatMap((e) => e.surfaces));
-  const aboutOne = (s: string) =>
-    tokens.some((t) => s.includes(t)) ||
-    (names?.test(s) ?? false) ||
-    ONE_PERSON.test(s) ||
-    (s.includes(PRIVATE_TOKEN) && wordsBesideStandIns(s) < MOSTLY_WITHHELD);
-  let notSent = 0;
-  const paragraphs = redacted.split(/\n[ \t]*\n/).map((para) =>
-    para
-      .split('\n')
-      .map((line) => {
-        const kept: string[] = [];
-        for (const s of sentences(line)) {
-          const whole = s.text + (/^[.!?।॥]*/.exec(line.slice(s.end))?.[0] ?? '');
-          if (aboutOne(s.text)) notSent++;
-          else kept.push(whole);
-        }
-        return kept.join(' ');
-      })
-      .filter(Boolean)
-      .join('\n'),
-  );
-  return { text: paragraphs.filter(Boolean).join('\n\n'), notSent };
-}
-
 /** Everything that would be sent, and whether it may be. */
 export interface Outgoing {
   /** The exact text: the redacted note, then the needs. */
   text: string;
   /** Every stand-in written into it, in the note or in a need line. Only these may come back and be restored. */
   tokens: string[];
-  /** True when not one stand-in was written into the note part: what is sent of the note is as written. For a lesson, sentences may still be left out (notSent). */
+  /** True when not one stand-in was written into the note part: what is sent of the note is as written. For a lesson, this is always false because zero notebook prose is sent. */
   noteAsWritten: boolean;
-  /** For a lesson: how many sentences of the note were left out because they are about one pupil. Absent for the other tasks. */
+  /** For a lesson: total sentences of the notebook kept on the device (every sentence stays on the device). Absent for the other tasks. */
   notSent?: number;
   needs: Need[];
   /** For a lesson: the needs by letter, with (on the device only) whose each is. Absent for the other tasks. */
@@ -207,10 +161,9 @@ export interface Outgoing {
 }
 
 /**
- * Work out the outgoing text: the redacted note, with the needs the
- * teacher chose to tell appended. This is the one place it is made, for
- * the screen and for the moment of sending. For a lesson the note keeps
- * only its sentences about the class (see classSentences).
+ * Work out the outgoing text: for non-lesson tasks, the redacted note with shared
+ * needs appended; for a lesson, zero notebook prose — only fixed-catalogue needs
+ * by letter (plus any explicitly ticked custom lines).
  */
 export function outgoingOf(
   note: string,

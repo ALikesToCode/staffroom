@@ -41,6 +41,8 @@ export function ReviewCard({
   withheldCount = 0,
   customNeeds,
 }: ReviewCardProps) {
+  const customAckOnly = violations.length > 0 && violations.every((v) => v.what.startsWith('Need ') && v.why.includes('your own words'));
+  const hasCustomAck = violations.some((v) => v.what.startsWith('Need ') && v.why.includes('your own words'));
   return (
     <article className="card outbox waiting">
       <div className="card-head">
@@ -54,7 +56,11 @@ export function ReviewCard({
           ) : (
             <>
               <span>
-                {violations.length} {violations.length === 1 ? 'name or number' : 'names or numbers'} must be hidden first
+                {customAckOnly
+                  ? `${violations.length} ${violations.length === 1 ? 'custom need' : 'custom needs'} must be ticked before sending`
+                  : hasCustomAck
+                    ? `${violations.length} ${violations.length === 1 ? 'item' : 'items'} must be checked before sending`
+                    : `${violations.length} ${violations.length === 1 ? 'name or number' : 'names or numbers'} must be hidden first`}
               </span>
               <code className="gate-tag">Exit gate: {violations.length} stopped</code>
             </>
@@ -90,21 +96,23 @@ export function ReviewCard({
       )}
       {guardWhere === 'ON_DEVICE' && guardGaps.unread.length > 0 && (
         <p className="caution">
-          The on-device model could not read {guardGaps.unread.length} of the {notePartsCount} parts of your note (
-          {guardGaps.unread.map((i) => `part ${i + 1}`).join(', ')}). They are listed on the computer side, under what is hidden. Check{' '}
-          {guardGaps.unread.length === 1 ? 'it' : 'them'} yourself before you send.
+          {isLesson
+            ? `The on-device model could not read ${guardGaps.unread.length} of the ${notePartsCount} parts of your note (${guardGaps.unread.map((i) => `part ${i + 1}`).join(', ')}). Nothing from your notebook is sent, though some pupil needs in ${guardGaps.unread.length === 1 ? 'that part' : 'those parts'} may not have been spotted.`
+            : `The on-device model could not read ${guardGaps.unread.length} of the ${notePartsCount} parts of your note (${guardGaps.unread.map((i) => `part ${i + 1}`).join(', ')}). They are listed on the computer side, under what is hidden. Check ${guardGaps.unread.length === 1 ? 'it' : 'them'} yourself before you send.`}
         </p>
       )}
       {guardGaps.dropped > 0 && (
         <p className="caution">
-          The on-device model also listed {guardGaps.dropped} unanchored {guardGaps.dropped === 1 ? 'phrase' : 'phrases'} (often
-          paraphrases rather than exact words in your note). Read the text below to be sure no real name or private detail remains.
+          {isLesson
+            ? `The on-device model also listed ${guardGaps.dropped} unanchored ${guardGaps.dropped === 1 ? 'phrase' : 'phrases'}. Nothing from your notebook is sent; check the needs list on the left if any pupil adjustment is missing.`
+            : `The on-device model also listed ${guardGaps.dropped} unanchored ${guardGaps.dropped === 1 ? 'phrase' : 'phrases'} (often paraphrases rather than exact words in your note). Read the text below to be sure no real name or private detail remains.`}
         </p>
       )}
       {guardGaps.partial > 0 && (
         <p className="caution">
-          {guardGaps.partial} private {guardGaps.partial === 1 ? 'detail was' : 'details were'} matched to your note only in part. The
-          matching words were hidden. Read the text around each private detail and mark what is left.
+          {isLesson
+            ? `${guardGaps.partial} private ${guardGaps.partial === 1 ? 'detail was' : 'details were'} matched to your note only in part. Nothing from your notebook is sent; check the needs list on the left if any pupil adjustment is missing.`
+            : `${guardGaps.partial} private ${guardGaps.partial === 1 ? 'detail was' : 'details were'} matched to your note only in part. The matching words were hidden. Read the text around each private detail and mark what is left.`}
         </p>
       )}
       <p className={isLesson ? 'boundary-say' : 'hint'}>

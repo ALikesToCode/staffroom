@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { writeDraft, writeMaterials, labelReceipt } from '../ai/draft';
+import { describe, expect, it, vi } from 'vitest';
+import { writeDraft, writeMaterials, labelReceipt, type LessonBoundaryGuard, type MaterialsBoundaryGuard, type LabelBoundaryGuard } from '../ai/draft';
 import { readConstraintAnswer } from '../ai/constraints';
 import { proposeConstraints, setNeed, setNeedAck, setShare } from './constraints';
 import { NO_LESSON, withLessonGoing, type LessonFields, type SavedLesson } from './lesson';
@@ -220,59 +220,84 @@ describe('structural notebook boundary', () => {
     expect(customNeedAckViolations([{ letter: 'R', line: note, constraintIds: [proposed.id], children: [], others: [], issues: [], sensitive: [] }], [proposed], BASE_LESSON)).toHaveLength(1);
   });
 
-  it('rejects non-lesson tasks and any tampered lesson, secondAsk, materials, or label payload at send time', async () => {
-    for (const nonLesson of TASKS.filter((t) => t.id !== 'lesson')) {
-      await expect(writeDraft('anything', nonLesson, 'gemini-2.5-flash')).rejects.toThrow(/Only lesson planning is active/);
+  it('rejects non-lesson tasks, missing guards, and any tampered lesson, secondAsk, materials, or label payload at send time', async () => {
+    const fetchSpy = vi.fn(() => Promise.reject(new Error('network must not be touched when boundary fails')));
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      const c: Constraint = { id: 'c-after', kind: 'time-after', text: 'x', source: 'rule', confirmed: true, share: true };
+      const vault = buildVault('Aarav Sharma goes home early.', [{ kind: 'student', text: 'Aarav Sharma', source: 'class list' }]);
+      const going = outgoingOf('Aarav Sharma goes home early.', vault, [c], true, BASE_LESSON);
+      const full = withLessonGoing(going, BASE_LESSON, vault, ['Aarav Sharma']);
+      const built = buildLessonPayload(BASE_LESSON, going.lessonNeeds ?? [], [c]);
+
+      for (const nonLesson of TASKS.filter((t) => t.id !== 'lesson')) {
+        await expect(
+          writeDraft('anything', nonLesson, 'gemini-2.5-flash', undefined, undefined, {
+            payload: built.payload,
+            entities: vault,
+            classList: ['Aarav Sharma'],
+          }),
+        ).rejects.toThrow(/Only lesson planning is active/);
+      }
+
+      // Runtime refusal when boundaryGuard is omitted via untyped JS caller.
+      await expect(
+        writeDraft(full.text, TASKS[0], 'gemini-2.5-flash', undefined, undefined, undefined as unknown as LessonBoundaryGuard),
+      ).rejects.toThrow(/missing boundary guard/);
+      await expect(
+        writeMaterials('anything', ['A'], 'gemini-2.5-flash', undefined, undefined as unknown as MaterialsBoundaryGuard),
+      ).rejects.toThrow(/missing boundary guard/);
+      expect(
+        await labelReceipt('Class 6B — English — Describing a place', 'Lesson plan', 'gemini-2.5-flash', undefined as unknown as LabelBoundaryGuard),
+      ).toEqual({ title: 'Lesson plan', where: 'FALLBACK' });
+      expect(fetchSpy).not.toHaveBeenCalled();
+
+      // 1-character or notebook-line tampering is rejected.
+      expect(() => assertLessonBoundary(built.payload, `Private note sentence.\n\n${full.text}`, vault, ['Aarav Sharma'])).toThrow(/canonical boundary builder/);
+      expect(validateLessonBoundary({ ...built.payload, missingLetters: ['Z'] }, secondAsk(full.text, ['Z']), vault, ['Aarav Sharma']).ok).toBe(false);
+
+      // Valid missing-letter retry passes.
+      const retryPayload = { ...built.payload, missingLetters: [built.payload.needs[0].letter] };
+      expect(assertLessonBoundary(retryPayload, secondAsk(full.text, [built.payload.needs[0].letter]), vault, ['Aarav Sharma'])).toBe(
+        buildLessonRequestText(retryPayload),
+      );
+
+      // Tampered lesson field with student name is rejected.
+      const badLesson: LessonFields = { ...BASE_LESSON, topic: 'Poem by Aarav Sharma' };
+      const badBuilt = buildLessonPayload(badLesson, going.lessonNeeds ?? [], [c]);
+      expect(validateLessonBoundary(badBuilt.payload, buildLessonRequestText(badBuilt.payload), vault, ['Aarav Sharma']).ok).toBe(false);
+
+      // Materials validator rejects withheld tokens/names and tampered text.
+      const cleanPlan = 'Class 6B — Describing a place\n\nStarter (5 minutes)\nWrite three words on the board.';
+      const matPayload = { kind: 'materials' as const, classPlan: cleanPlan, needs: built.payload.needs, language: '', lesson: BASE_LESSON };
+      const matReq = materialsText(cleanPlan, going.lessonNeeds ?? [], '');
+      expect(assertMaterialsBoundary(matPayload, buildMaterialsRequestText(matPayload), vault)).toBe(matReq);
+      expect(() => assertMaterialsBoundary(matPayload, `${matReq}\nAarav has fits.`, vault)).toThrow(/canonical boundary builder/);
+      const dirtyMat = { ...matPayload, classPlan: `${cleanPlan} [Student 1]` };
+      expect(validateMaterialsBoundary(dirtyMat, buildMaterialsRequestText(dirtyMat), vault).ok).toBe(false);
+
+      // WriteMaterials / labelReceipt reject invalid guards before hitting network.
+      await expect(
+        writeMaterials(`${matReq}\nextra note`, ['A'], 'gemini-2.5-flash', undefined, { payload: matPayload, entities: vault }),
+      ).rejects.toThrow(/Boundary refused materials send/);
+
+      const labelPayload = { kind: 'label' as const, lesson: BASE_LESSON };
+      const goodPrompt = buildLabelRequestText(labelPayload);
+      expect(goodPrompt).toBe('Note:\nClass 6B — English — Describing a place');
+      expect(assertLabelBoundary(labelPayload, goodPrompt, vault, ['Aarav Sharma'])).toBe(goodPrompt);
+      expect(validateLabelBoundary(labelPayload, `${goodPrompt}\nraw notebook line`, vault, ['Aarav Sharma']).ok).toBe(false);
+
+      // Invalid label guard triggers fallback cleanly instead of leaking notebook.
+      const labeled = await labelReceipt('Tampered notebook note text', 'Lesson plan', 'gemini-2.5-flash', {
+        payload: labelPayload,
+        entities: vault,
+        classList: ['Aarav Sharma'],
+      });
+      expect(labeled).toEqual({ title: 'Lesson plan', where: 'FALLBACK' });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
     }
-
-    const c: Constraint = { id: 'c-after', kind: 'time-after', text: 'x', source: 'rule', confirmed: true, share: true };
-    const vault = buildVault('Aarav Sharma goes home early.', [{ kind: 'student', text: 'Aarav Sharma', source: 'class list' }]);
-    const going = outgoingOf('Aarav Sharma goes home early.', vault, [c], true, BASE_LESSON);
-    const full = withLessonGoing(going, BASE_LESSON, vault, ['Aarav Sharma']);
-    const built = buildLessonPayload(BASE_LESSON, going.lessonNeeds ?? [], [c]);
-
-    // 1-character or notebook-line tampering is rejected.
-    expect(() => assertLessonBoundary(built.payload, `Private note sentence.\n\n${full.text}`, vault, ['Aarav Sharma'])).toThrow(/canonical boundary builder/);
-    expect(validateLessonBoundary({ ...built.payload, missingLetters: ['Z'] }, secondAsk(full.text, ['Z']), vault, ['Aarav Sharma']).ok).toBe(false);
-
-    // Valid missing-letter retry passes.
-    const retryPayload = { ...built.payload, missingLetters: [built.payload.needs[0].letter] };
-    expect(assertLessonBoundary(retryPayload, secondAsk(full.text, [built.payload.needs[0].letter]), vault, ['Aarav Sharma'])).toBe(
-      buildLessonRequestText(retryPayload),
-    );
-
-    // Tampered lesson field with student name is rejected.
-    const badLesson: LessonFields = { ...BASE_LESSON, topic: 'Poem by Aarav Sharma' };
-    const badBuilt = buildLessonPayload(badLesson, going.lessonNeeds ?? [], [c]);
-    expect(validateLessonBoundary(badBuilt.payload, buildLessonRequestText(badBuilt.payload), vault, ['Aarav Sharma']).ok).toBe(false);
-
-    // Materials validator rejects withheld tokens/names and tampered text.
-    const cleanPlan = 'Class 6B — Describing a place\n\nStarter (5 minutes)\nWrite three words on the board.';
-    const matPayload = { kind: 'materials' as const, classPlan: cleanPlan, needs: built.payload.needs, language: '' };
-    const matReq = materialsText(cleanPlan, going.lessonNeeds ?? [], '');
-    expect(assertMaterialsBoundary(matPayload, buildMaterialsRequestText(matPayload), vault)).toBe(matReq);
-    expect(() => assertMaterialsBoundary(matPayload, `${matReq}\nAarav has fits.`, vault)).toThrow(/canonical boundary builder/);
-    const dirtyMat = { ...matPayload, classPlan: `${cleanPlan} [Student 1]` };
-    expect(validateMaterialsBoundary(dirtyMat, buildMaterialsRequestText(dirtyMat), vault).ok).toBe(false);
-
-    // WriteMaterials / labelReceipt reject invalid guards before hitting network.
-    await expect(
-      writeMaterials(`${matReq}\nextra note`, ['A'], 'gemini-2.5-flash', undefined, { payload: matPayload, entities: vault }),
-    ).rejects.toThrow(/Boundary refused materials send/);
-
-    const labelPayload = { kind: 'label' as const, lesson: BASE_LESSON };
-    const goodPrompt = buildLabelRequestText(labelPayload);
-    expect(goodPrompt).toBe('Note:\nClass 6B — English — Describing a place');
-    expect(assertLabelBoundary(labelPayload, goodPrompt, vault, ['Aarav Sharma'])).toBe(goodPrompt);
-    expect(validateLabelBoundary(labelPayload, `${goodPrompt}\nraw notebook line`, vault, ['Aarav Sharma']).ok).toBe(false);
-
-    // Invalid label guard triggers fallback cleanly instead of leaking notebook.
-    const labeled = await labelReceipt('Tampered notebook note text', 'Lesson plan', 'gemini-2.5-flash', {
-      payload: labelPayload,
-      entities: vault,
-      classList: ['Aarav Sharma'],
-    });
-    expect(labeled).toEqual({ title: 'Lesson plan', where: 'FALLBACK' });
   });
 
   it('requires every backing constraint to match the catalogue before treating a shared need letter as catalogue-sourced', () => {
