@@ -287,7 +287,7 @@ export const pairLine = (a: string, b: string, together = true) => (together ? `
  * none) to seat them apart. Offered, like every line.
  */
 const isHomeworkStage = (item: DraftItem) =>
-  stageOf(item, true) === 'homework' || /\b(?:homework|home\s+task|take[- ]home)\b/i.test(stageName(item.heading));
+  stageOf(item, true) === 'homework' || /\b(?:homework|home\s+(?:task|learning|work)|take[- ]home)\b/i.test(stageName(item.heading));
 
 export function pairPoints(constraints: readonly Constraint[], entities: Entity[], items: readonly DraftItem[], note: string): Point[] {
   const apart = constraints.filter((c) => c.confirmed && c.kind === 'learning' && c.learn === 'group' && c.about && c.at !== undefined);

@@ -74,7 +74,7 @@ All benchmarks below were run in **Chrome `158.0.8127.88` (Linux)** with Gemini 
 
 ## Challenges
 
-1. **Keeping generic nouns, kinship words, and overlapping constraints crisp**: Generic words like `"home"`, `"school"`, and bare kinship labels previously caused false holds, dropping `0/24` harmless holds in `guard-combined-v2.json` via cleaner `KINSHIP_ONLY` filtering, curriculum/health context exemption, and `isRedundantWithLearning` overlap folding.
+1. **Keeping generic nouns, kinship words, and overlapping constraints crisp**: Generic words like `"home"`, `"school"`, and bare kinship labels previously caused false holds, reducing harmless holds to `0/24` in `guard-combined-v2.json` via cleaner `KINSHIP_ONLY` filtering, curriculum/health context exemption, and `isRedundantWithLearning` overlap folding.
 2. **Making Gemini Nano load-bearing offline AND online**: Online, Paragraph 5 (`Tanvi Rao`'s Tuesday clinic visit) reliably surfaces an un-overlapped `Found by Gemini Nano` (`days-away`) catch (`Need E: away on Tuesdays`) mapped back to a take-home summary sheet for `Tanvi Rao`. Offline, asking 3B Nano for unstructured pipe/colon text timed out or dropped needs; switching `offlineLessonPrompt` to grammar-constrained `OFFLINE_LESSON_NEEDS_SCHEMA` (`adjustments` with stage enum + verb actions) plus deterministic `normalizeOfflineNeeds()` achieved **`12/12` needs written for a stage (`0` missing, `0` bracket leaks) in `23.3s`**.
 3. **Shared-PC sign-out safety & non-English drafting**: Closing the post-`Clear desk` receipt gap via `signout-failed` retry & `signOutBlockedRef` gating, plus Layer A Devanagari Hindi conflict rules (`HINDI_RULE_ONLY`), keeps both shared workstations and bilingual classrooms safe without silent failures.
 

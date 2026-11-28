@@ -503,5 +503,8 @@ describe('Hinglish and Devanagari constraints', () => {
       ['time-after', 'आखिरी घंटी के बाद नहीं रुक सकती'],
       ['time-before', 'सुबह जल्दी नहीं आ सकती'],
     ]);
+    expect(proposeConstraints('मीनल शाम को देर तक नहीं रुक सकती।', entities).map((c) => [c.kind, c.text])).toEqual([
+      ['time-after', 'शाम को देर तक नहीं रुक सकती'],
+    ]);
   });
 });

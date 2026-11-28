@@ -144,6 +144,12 @@ function isNeedEcho(adj: string, inputNeed?: string): boolean {
 
 function pickOfflineStage(text: string, stages: readonly string[]): string {
   if (/^(?:this\s+lesson\s+already\s+suits|already\s+suited|no\s+change\s+needed)/i.test(text.trim())) return 'none';
+  const explicit = /\b(?:during|in|for|at)\s+(?:the\s+)?(starter|teach|practi[sc]e|homework)\b/i.exec(text);
+  if (explicit) {
+    const want = explicit[1].toLowerCase();
+    const matched = stages.find((s) => (want.startsWith('practi') ? /^practi[sc]e$/i.test(s) : s.toLowerCase() === want));
+    if (matched) return matched;
+  }
   if (
     /homework|at\s+home|take[- ]home|before\s+(?:the\s+)?(?:last|final)\s+bell|before\s+the\s+end\s+of\s+the\s+school\s+day|stay\s+after\s+school|assignment|submitted|absent|(?:upon|on)\s+(?:his|her|their)\s+return|next\s+(?:day|morning)|hand\s*in/i.test(
       text,
@@ -415,6 +421,18 @@ function validDraftStructure(raw: string): RawOfflineDraft | null {
   }
 }
 
+function studentBrackets(s: string): Set<string> {
+  return new Set((s.match(/\[Student\s+\d+\]/gi) ?? []).map((m) => m.toLowerCase().replace(/\s+/g, ' ')));
+}
+
+function hasInventedStudentBracket(raw: string, redacted: string): boolean {
+  const allowed = studentBrackets(redacted);
+  for (const tok of studentBrackets(raw)) {
+    if (!allowed.has(tok)) return true;
+  }
+  return false;
+}
+
 /**
  * Validate a recovered on-device fallback draft: requires valid JSON structure,
  * zero newly invented `[Student N]` brackets, and for lessons with needs, at least half
@@ -429,7 +447,7 @@ export function isRecoveredDraftValid(
 ): boolean {
   const parsed = validDraftStructure(raw);
   if (!parsed) return false;
-  if (isLesson && /\[Student\s+\d+\]/i.test(raw) && !/\[Student\s+\d+\]/i.test(redacted)) return false;
+  if (isLesson && hasInventedStudentBracket(raw, redacted)) return false;
   if (isLesson && toldLetters.length > 0) {
     const normalized = normalizeOfflineNeeds(parsed, toldLetters, inputNeeds);
     if (splitVariations(normalized, toldLetters).missing.length > Math.floor(toldLetters.length / 2)) {
@@ -475,7 +493,7 @@ export async function writeDraft(
       const parsed = validDraftStructure(t);
       if (!parsed) return false;
       if (fromDevice && isLesson) {
-        if (/\[Student\s+\d+\]/i.test(t) && !/\[Student\s+\d+\]/i.test(redacted)) return false;
+        if (hasInventedStudentBracket(t, redacted)) return false;
         if (toldLetters.length > 0) {
           const normalized = normalizeOfflineNeeds(parsed, toldLetters, inputNeeds);
           if (splitVariations(normalized, toldLetters).missing.length > Math.floor(toldLetters.length / 3)) {

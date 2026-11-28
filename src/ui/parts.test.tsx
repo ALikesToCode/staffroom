@@ -507,6 +507,22 @@ describe('AppHeader and ReviewCard', () => {
       writeSignOutBlocked(false);
       expect(readSignOutBlocked()).toBe(false);
       expect(localMock.getItem(SIGNOUT_BLOCKED_KEY)).toBeNull();
+
+      // Local storage is authoritative when accessible (no stale session desync)
+      sessionMock.setItem(SIGNOUT_BLOCKED_KEY, 'true');
+      expect(readSignOutBlocked()).toBe(false);
+
+      // Falls back gracefully to sessionStorage if localStorage throws
+      Object.defineProperty(globalThis, 'localStorage', {
+        get() {
+          throw new Error('localStorage disabled');
+        },
+        configurable: true,
+      });
+      writeSignOutBlocked(true);
+      expect(readSignOutBlocked()).toBe(true);
+      writeSignOutBlocked(false);
+      expect(readSignOutBlocked()).toBe(false);
     } finally {
       Object.defineProperty(globalThis, 'localStorage', { value: origLocal, configurable: true });
       Object.defineProperty(globalThis, 'sessionStorage', { value: origSession, configurable: true });

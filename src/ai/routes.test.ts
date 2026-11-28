@@ -456,11 +456,14 @@ describe('naming the receipt', () => {
         { heading: 'Practise (15 minutes)', text: 'Read in pairs.' },
         { heading: 'Homework (10 minutes)', text: 'Write three lines at home.' },
       ],
-      adjustments: [{ letter: 'E', stage: 'none', action: 'Let her return to the text with a partner.' }],
+      adjustments: [
+        { letter: 'E', stage: 'none', action: 'Let her return to the text with a partner.' },
+        { letter: 'H', stage: 'none', action: 'On her return, read in pairs during Practise.' },
+      ],
     };
-    const normalized = normalizeOfflineNeeds(returnDraft, ['E']);
-    const split = splitVariations(normalized, ['E']);
-    expect(split.variations[0]?.itemIndex).toBe(2); // Practise, not Homework
+    const normalized = normalizeOfflineNeeds(returnDraft, ['E', 'H']);
+    const split = splitVariations(normalized, ['E', 'H']);
+    expect(split.variations.map((v) => v.itemIndex)).toEqual([2, 2]); // Practise for both
 
     const cloudErr = new Error('mid-stream reset');
     const rej = Promise.reject(cloudErr);
@@ -521,5 +524,11 @@ describe('naming the receipt', () => {
       ],
     });
     expect(isRecoveredDraftValid(halfNeeds, true, 'Need A: x\nNeed B: y\nNeed C: z\nNeed D: w', ['A', 'B', 'C', 'D'])).toBe(true);
+
+    const inventedStudentBracket = JSON.stringify({
+      title: 'Plan [Student 99]',
+      items: [{ heading: 'Starter', text: 'Go.' }],
+    });
+    expect(isRecoveredDraftValid(inventedStudentBracket, true, '[Student 1] reads well.', [])).toBe(false);
   });
 });

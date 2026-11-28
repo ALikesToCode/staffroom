@@ -32,7 +32,6 @@ export interface CloudOutcomeCardsProps {
   } | null;
 }
 
-// Keep unused type reference avoided: export clean component.
 export function CloudOutcomeCards({
   stage,
   online,
@@ -63,7 +62,7 @@ export function CloudOutcomeCards({
                     : `Offline — streaming on-device draft from Gemini Nano (${streamPreview.length} chars)…`
                   : online
                     ? 'Cloud failed — falling back to Gemini Nano on this device…'
-                    : 'Offline — trying cloud first; falling back to Gemini Nano on this device…'
+                    : 'Offline — falling back to Gemini Nano on this device…'
                 : online
                   ? streamPreview
                     ? `Streaming draft from ${cloudModel} (${streamPreview.length} chars)…`

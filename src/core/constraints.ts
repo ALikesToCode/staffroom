@@ -126,6 +126,7 @@ const PATTERNS: { kind: ConstraintKind; re: RegExp }[] = (
     ['time-after', `(?:leaves?|goes home|is collected|is picked up)\\s+(?:school\\s+)?(?:at|with|straight after)\\s+the\\s+(?:last|final)\\s+bell${REST}`],
     ['time-after', `(?:आखिरी|अंतिम)\\s+घंटी\\s+के\\s+बाद[^;।॥]*?(?:नहीं\\s+(?:रुक|ठहर)|जाना\\s+पड़ता)[^;।॥]*`],
     ['time-after', `(?:स्कूल|छुट्टी)\\s+के\\s+बाद[^;।॥]*?नहीं\\s+(?:रुक|ठहर)[^;।॥]*`],
+    ['time-after', `शाम\\s+को\\s+(?:देर\\s+तक|जल्दी)[^;।॥]*?(?:नहीं\\s+(?:रुक|ठहर)|जाना\\s+पड़ता)[^;।॥]*`],
     [
       'time-before',
       `(?:now\\s+)?(?:helps?|works?|is helping|is working|has to help|has to work|sells?|delivers?)\\b[^;]{0,80}?\\bbefore\\s+(?:school|the first bell|class(?:es)?)\\b`,

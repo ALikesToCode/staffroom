@@ -44,13 +44,23 @@ export const SIGNOUT_BLOCKED_KEY = 'staffroom.signoutBlocked';
 
 /** Read whether Clear desk failed to end the anonymous Auth session across tabs or reloads. */
 export function readSignOutBlocked(): boolean {
-  return read<boolean>(local, SIGNOUT_BLOCKED_KEY, false) || read<boolean>(session, SIGNOUT_BLOCKED_KEY, false);
+  try {
+    const raw = local().getItem(SIGNOUT_BLOCKED_KEY);
+    return raw !== null && JSON.parse(raw) === true;
+  } catch {
+    return read<boolean>(session, SIGNOUT_BLOCKED_KEY, false);
+  }
 }
 
 /** Persist or clear the fail-closed signout-blocked marker across browser-wide and tab storage. */
 export function writeSignOutBlocked(blocked: boolean): void {
-  write(local, SIGNOUT_BLOCKED_KEY, true, !blocked);
-  write(session, SIGNOUT_BLOCKED_KEY, true, !blocked);
+  try {
+    if (blocked) local().setItem(SIGNOUT_BLOCKED_KEY, JSON.stringify(true));
+    else local().removeItem(SIGNOUT_BLOCKED_KEY);
+    write(session, SIGNOUT_BLOCKED_KEY, true, true);
+  } catch {
+    write(session, SIGNOUT_BLOCKED_KEY, true, !blocked);
+  }
 }
 
 export interface KeptClass {

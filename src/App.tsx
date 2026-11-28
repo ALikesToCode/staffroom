@@ -113,6 +113,7 @@ import {
   read,
   readSignOutBlocked,
   session,
+  SIGNOUT_BLOCKED_KEY,
   STEP,
   write,
   writeSignOutBlocked,
@@ -371,12 +372,25 @@ export function App() {
     const stop = watchUser((u) => setUid(u?.uid ?? null));
     const on = () => setOnline(true);
     const off = () => setOnline(false);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== null && e.key !== SIGNOUT_BLOCKED_KEY) return;
+      const blocked = readSignOutBlocked();
+      signOutBlockedRef.current = blocked;
+      setDeskCleared(blocked ? 'signout-failed' : null);
+      if (blocked) {
+        recordsGenRef.current += 1;
+        setKeepCopies(false);
+        setRecords({ state: 'idle' });
+      }
+    };
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
+    window.addEventListener('storage', onStorage);
     return () => {
       stop();
       window.removeEventListener('online', on);
       window.removeEventListener('offline', off);
+      window.removeEventListener('storage', onStorage);
     };
   }, []);
 
@@ -411,7 +425,9 @@ export function App() {
 
   /** Read the records kept in the teacher's account. They hold no text, so there is none to show. */
   const refreshRecords = useCallback(async (user: string) => {
-    if (signOutBlockedRef.current) {
+    const isBlocked = () => signOutBlockedRef.current || readSignOutBlocked();
+    if (isBlocked()) {
+      signOutBlockedRef.current = true;
       recordsGenRef.current += 1;
       setRecords({ state: 'idle' });
       return;
@@ -420,10 +436,10 @@ export function App() {
     setRecords((r) => (r.state === 'ready' ? r : { state: 'loading' }));
     try {
       const { records: list, unreadable } = await loadReceiptCopies(user);
-      if (recordsGenRef.current !== gen || signOutBlockedRef.current) return;
+      if (recordsGenRef.current !== gen || isBlocked()) return;
       setRecords({ state: 'ready', list, unreadable });
     } catch {
-      if (recordsGenRef.current !== gen || signOutBlockedRef.current) return;
+      if (recordsGenRef.current !== gen || isBlocked()) return;
       setRecords({ state: 'failed' });
     }
   }, []);
@@ -1100,7 +1116,7 @@ export function App() {
     setStage('signed');
     setSigning(false);
     setCopyState('idle');
-    if (keepCopies && uid && !signOutBlockedRef.current) {
+    if (keepCopies && uid && !(signOutBlockedRef.current || readSignOutBlocked())) {
       // Independent of the local store. With no network the write waits, and finishes when the network is back.
       setCopyState('pending');
       // The write can finish long after this run was cleared. Its outcome is shown only while this run is on screen.
@@ -2246,7 +2262,11 @@ export function App() {
           receipts={receipts}
           keepCopies={keepCopies}
           setKeepCopies={(on) => {
-            if (on && signOutBlockedRef.current) return;
+            if (on && (signOutBlockedRef.current || readSignOutBlocked())) {
+              signOutBlockedRef.current = true;
+              setDeskCleared('signout-failed');
+              return;
+            }
             setKeepCopies(on);
             if (on && !uid) void ensureUser();
             else if (on && uid && view === 'receipts') void refreshRecords(uid);

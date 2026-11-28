@@ -2287,6 +2287,12 @@ describe('sensitive rule refinements', () => {
       'Riya uses an inhaler.',
       'Riya is autistic and is making a poster on planets.',
       'Aarav has TB and missed the lesson on nutrition.',
+      'Aman is diabetic and is writing an essay on the solar system.',
+      'Kabir, who is epileptic, sits near the door.',
+      'Meena, an asthmatic, skips PE.',
+      'Riya wrote an essay about living with epilepsy herself.',
+      'The class is preparing a lesson on asthma after Riya began using an inhaler.',
+      "Chapter on asthma; Riya's inhaler broke in class.",
     ]) {
       expect(findSensitive(disclosure).map((h) => h.category)).toEqual(['health']);
     }
