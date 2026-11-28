@@ -92,7 +92,7 @@ import { PrintSheet } from './ui/PrintSheet';
 import { CalmNotice } from './ui/CalmNotice';
 import { ForgetQuestion, NoteLinks, NoteView, VaultPanel } from './ui/VaultPanel';
 import { ResultItem } from './ui/ResultItem';
-import { NoteComposeCard, NoteReviewCard, TaskComposeCard } from './ui/ComposeCards';
+import { NoteComposeCard, NoteReviewCard, GuardingCard, TaskComposeCard } from './ui/ComposeCards';
 import { CloudOutcomeCards } from './ui/CloudOutcomeCards';
 import { ResultPanel } from './ui/ResultPanel';
 import { ActionBar } from './ui/ActionBar';
@@ -2281,7 +2281,15 @@ export function App() {
         />
       )}
 
-      {landing && <Hero onTry={trySample} onWrite={() => setComposing(true)} onWatch={watch} noModel={noModel} />}
+      {landing && (
+        <Hero
+          onTry={trySample}
+          onWrite={() => setComposing(true)}
+          onWatch={watch}
+          noModel={noModel}
+          needsDownload={device === 'downloadable' || device === 'downloading'}
+        />
+      )}
 
       {view === 'desk' && !landing && (
         <main className="desk">
@@ -2450,16 +2458,19 @@ export function App() {
               )}
 
               {(stage === 'guarding' || stage === 'review') && (
-                <NoteReviewCard
-                  noteLinks={noteLinks}
-                  forgetQuestion={forgetQuestion}
-                  noteView={noteView}
-                  stage={stage}
-                  replay={Boolean(replay)}
-                  selection={selection}
-                  selectionNote={selectionNote}
-                  withholdSelection={withholdSelection}
-                />
+                <>
+                  {stage === 'guarding' && <GuardingCard download={download} progress={progress} onWatch={watch} />}
+                  <NoteReviewCard
+                    noteLinks={noteLinks}
+                    forgetQuestion={forgetQuestion}
+                    noteView={noteView}
+                    stage={stage}
+                    replay={Boolean(replay)}
+                    selection={selection}
+                    selectionNote={selectionNote}
+                    withholdSelection={withholdSelection}
+                  />
+                </>
               )}
 
               {/* ---- the constraints: below the highlighted note on Review */}

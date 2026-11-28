@@ -17,7 +17,7 @@ import {
 import { TASKS } from '../core/samples';
 import { NOTE_MAX } from '../core/text';
 import type { Kind, TaskId } from '../core/types';
-import { KIND_LABEL } from './parts';
+import { KIND_LABEL, Spinner } from './parts';
 
 export function TaskComposeCard({
   task,
@@ -364,6 +364,40 @@ export function NoteReviewCard({
           ) : (
             <span className="hint">Missed something? Select it in your note to withhold it.</span>
           )}
+        </div>
+      )}
+    </article>
+  );
+}
+
+/** Shown in the device lane while downloading Gemini Nano on first run or running the local guard. */
+export function GuardingCard({
+  download,
+  progress,
+  onWatch,
+}: {
+  download: number | null;
+  progress: string;
+  onWatch?: (() => void) | null;
+}) {
+  const pct = download !== null ? Math.round(download * 100) : null;
+  return (
+    <article className="card guarding-card">
+      <Spinner label={pct !== null ? `Downloading Gemini Nano in Chrome (${pct}%)…` : progress || 'Running the guard on this device…'} />
+      {pct !== null && (
+        <>
+          <progress className="model-progress" max={100} value={pct} aria-label="On-device model download progress" />
+          <p className="hint">
+            Chrome is downloading the on-device model (several GB) for this first run and keeps it on this computer. You can watch a recorded
+            run while you wait.
+          </p>
+        </>
+      )}
+      {onWatch && (
+        <div className="actions">
+          <button type="button" className="secondary small" onClick={onWatch}>
+            Watch a recorded run
+          </button>
         </div>
       )}
     </article>

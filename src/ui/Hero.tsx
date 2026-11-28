@@ -11,6 +11,7 @@ export function Hero({
   onWrite,
   onWatch,
   noModel,
+  needsDownload = false,
 }: {
   onTry: () => void;
   onWrite: () => void;
@@ -18,6 +19,8 @@ export function Hero({
   onWatch?: () => void;
   /** True when this browser has no on-device model. */
   noModel: boolean;
+  /** True when the on-device model can be downloaded on first run. */
+  needsDownload?: boolean;
 }) {
   return (
     <main className="hero">
@@ -57,10 +60,16 @@ export function Hero({
             )}
           </div>
         )}
-        {noModel && (
+        {noModel ? (
           <p className="hint hero-mode">
             This browser has no on-device model, so the guard and the check run by rule here. The cloud draft works the same.
           </p>
+        ) : (
+          needsDownload && (
+            <p className="hint hero-mode">
+              The first run downloads Gemini Nano in Chrome (several GB) and keeps it on this device{onWatch ? ', or watch a recorded run while you wait' : ''}.
+            </p>
+          )
         )}
       </div>
 

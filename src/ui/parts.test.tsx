@@ -10,6 +10,8 @@ import { CopyPreview } from './PrintPreview';
 import { Drawer, NetworkSection, Receipts } from './pages';
 import { AppHeader } from './AppHeader';
 import { ReviewCard } from './ReviewCard';
+import { GuardingCard } from './ComposeCards';
+import { Hero } from './Hero';
 import { addRequests } from '../core/network';
 import type { Materials } from '../core/materials';
 import { readSignOutBlocked, SIGNOUT_BLOCKED_KEY, writeSignOutBlocked } from '../app/storage';
@@ -527,5 +529,27 @@ describe('AppHeader and ReviewCard', () => {
       Object.defineProperty(globalThis, 'localStorage', { value: origLocal, configurable: true });
       Object.defineProperty(globalThis, 'sessionStorage', { value: origSession, configurable: true });
     }
+  });
+
+  it('shows plain-English download progress and Watch a recorded run while guarding or awaiting Nano download', () => {
+    const dlHtml = renderToStaticMarkup(
+      <GuardingCard download={0.42} progress="ignored" onWatch={() => {}} />,
+    );
+    expect(dlHtml).toContain('Downloading Gemini Nano in Chrome (42%)…');
+    expect(dlHtml).toContain('value="42"');
+    expect(dlHtml).toContain('Chrome is downloading the on-device model (several GB)');
+    expect(dlHtml).toContain('Watch a recorded run');
+
+    const runHtml = renderToStaticMarkup(
+      <GuardingCard download={null} progress="Gemini Nano is reading part 2 of 4 on this device" onWatch={() => {}} />,
+    );
+    expect(runHtml).toContain('Gemini Nano is reading part 2 of 4 on this device');
+    expect(runHtml).not.toContain('<progress');
+    expect(runHtml).toContain('Watch a recorded run');
+
+    const heroHtml = renderToStaticMarkup(
+      <Hero onTry={() => {}} onWrite={() => {}} onWatch={() => {}} noModel={false} needsDownload />,
+    );
+    expect(heroHtml).toContain('The first run downloads Gemini Nano in Chrome (several GB)');
   });
 });
