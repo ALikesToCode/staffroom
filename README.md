@@ -10,7 +10,7 @@ A teacher photographs a page of her notebook. Her computer hides every child's n
 
 ## Try it
 
-- **Any browser, no setup.** Open **https://staffroom-hybrid-8a71.web.app** and click **Watch a recorded run** (or **Watch a recorded run with Gemini Nano** if your browser does not support it). It replays a real Chrome and Gemini Nano run, step by step.
+- **Any browser, no setup.** Open **https://staffroom-hybrid-8a71.web.app** and click **Watch a recorded run** (labelled **Watch a recorded run with Gemini Nano** on browsers without an on-device model). It replays a real Chrome and Gemini Nano run, step by step.
 - **Chrome 158+ with Gemini Nano.** Requires desktop Chrome 158 or newer with Built-in AI ready — see Chrome's [Prompt API hardware & disk requirements](https://developer.chrome.com/docs/ai/prompt-api) (`>= 22 GB` free disk and either `> 4 GB` VRAM or `16 GB` RAM + `4+` CPU cores). Click **Try a sample class**, press **Hide private details**, tick **I have read it**, and click **Send**. For the handwriting scan, click **Type instead**, then **Try sample notebook photo**.
 
 ## How each step picks a model

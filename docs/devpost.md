@@ -10,7 +10,7 @@ A teacher photographs a page of her notebook. Her computer hides every child's n
 
 ## Try it
 
-- **Any browser, no setup.** Open https://staffroom-hybrid-8a71.web.app and click **Watch a recorded run** (or **Watch a recorded run with Gemini Nano** if your browser does not support it). It replays a real Chrome and Gemini Nano run, step by step.
+- **Any browser, no setup.** Open https://staffroom-hybrid-8a71.web.app and click **Watch a recorded run** (labelled **Watch a recorded run with Gemini Nano** on browsers without an on-device model). It replays a real Chrome and Gemini Nano run, step by step.
 - **Chrome with Gemini Nano.** Desktop Chrome 158 or newer with Built-in AI ready (no experimental flags needed; on first visit Chrome downloads Gemini Nano over an unmetered connection). Click **Try a sample class**, press **Hide private details**, tick **I have read it**, click **Send**, and watch the lesson arrive. For the handwriting scan, click **Type instead**, then **Try sample notebook photo**.
 
 Category: Web/Chrome. Code: https://github.com/ALikesToCode/staffroom (Apache-2.0).
@@ -51,7 +51,7 @@ Every model call goes through Firebase AI Logic. One rule picks the mode for eac
 | Write the lesson and materials | `PREFER_IN_CLOUD` | It sees only the approved text, and the larger model writes better lessons. Offline, or if the stream breaks, Gemini Nano takes over. |
 | Check each step against a child's constraint | `ONLY_ON_DEVICE` | The constraint is private. |
 | Suggest a fit for one child | `ONLY_ON_DEVICE` | It reads the child's note. |
-| Name the saved record | `PREFER_ON_DEVICE` | It reads only the first 240 characters of the already-approved outgoing text, which names the lesson and lettered needs and holds nothing that identifies a pupil. Short and low-stakes, so it runs on the device when it can and in the cloud when it cannot. |
+| Name the saved record | `PREFER_ON_DEVICE` | Reads only the first 240 characters of the already-approved text (no names). Short and low-stakes, so it prefers the device. |
 
 The rest of Firebase does real work too. **App Check** with reCAPTCHA Enterprise protects the cloud calls. **Remote Config** names the cloud model, so it can change without a new build. **Anonymous Authentication** and **Cloud Firestore** hold an optional saved record that stores counts only and is off by default. **Hosting** serves the app with a strict security policy. The app can also be installed from Chrome.
 
@@ -85,7 +85,7 @@ I started by asking which model was big enough for each task. The better questio
 ## Limits
 
 - **It needs a capable computer today.** Chrome's Prompt API requires at least 22 GB of free disk space on the profile volume and either a graphics card with more than 4 GB of video memory or 16 GB of RAM with four or more CPU cores. Most lab PCs in Indian government schools do not have that, and the teachers I build for plan on a phone, which cannot run it yet. On those devices Staffroom still tells the teacher clearly that no on-device model ran, withholds known names and numbers by rule, and requires her to check and approve every word before sending to the cloud — but there is no notebook photo scan, no on-device semantic check, and no offline lesson. Today it fits a teacher with a recent laptop.
-- **The demo's cloud is the free Gemini Developer API.** Under Google's Unpaid Services terms, submitted prompts, instructions, files and outputs may be used to provide, improve and develop Google products, services and machine-learning technologies, and human reviewers may read, annotate and process them; those terms also state not to submit sensitive, confidential or personal information to Unpaid Services. Only the approved text without names goes there. A school should use a paid tier, where Google does not use prompts or outputs to train or improve its models.
+- **The demo's cloud is the free Gemini Developer API.** Under Google's Unpaid Services terms, Google may use submitted text to improve its products and human reviewers may read it, and Google tells developers not to send personal or sensitive data there. Only the approved text without names goes out; a school should use a paid tier, where prompts are not used for training.
 - **The teacher can tick the box without reading.** The app keeps the outgoing text short and shows it beside what was held back. It cannot make her read it.
 - **A letter is not anonymity inside the classroom.** The cloud cannot tell whose need it is. Classmates looking at a printed sheet sometimes can.
 - No teacher has used this in a classroom yet. Every pupil, note and photo is invented.
