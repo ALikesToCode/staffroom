@@ -2226,16 +2226,16 @@ export function App() {
           <span>{replayBanner(replay)}</span>
           <span className="replay-jumps">
             <button className="link" type="button" onClick={() => jumpReplay('review')}>
-              What leaves
+              Check what leaves
             </button>
             <button className="link" type="button" onClick={() => jumpReplay('result')}>
-              Beside each child
+              For each child
             </button>
             <button className="link" type="button" onClick={() => jumpReplay('signed')}>
               Copy preview
             </button>
             <button className="link" type="button" onClick={() => setInspecting(true)}>
-              Inspect
+              How it ran
             </button>
             <button className="link" type="button" onClick={leaveReplay}>
               Leave the recorded run
@@ -2286,6 +2286,10 @@ export function App() {
           onTry={trySample}
           onWrite={() => setComposing(true)}
           onWatch={watch}
+          onPhotoFile={(f) => {
+            setComposing(true);
+            void scanNotebookFile(f);
+          }}
           noModel={noModel}
           needsDownload={device === 'downloadable' || device === 'downloading'}
         />
@@ -2329,9 +2333,9 @@ export function App() {
 
           <div className="lanes">
             {/* ------------------------------------------------ the device */}
-            <section className="lane device" aria-label="On this device">
+            <section className="lane device" aria-label="On this computer">
               <h2 className="lane-title">
-                <span>On this device</span>
+                <span>On this computer</span>
                 {stage === 'review' && <RouteChip route="guard" where={guardWhere} />}
                 {(stage === 'result' || stage === 'signed') && <RouteChip route="check" where={checkWhere} />}
               </h2>
@@ -2478,33 +2482,33 @@ export function App() {
                 <article className="card constraints-card">
                   <div className="card-head">
                     <h3>
-                      Constraints{' '}
+                      What stays private &amp; what is sent{' '}
                       <small>
                         {confirmedCount} of {constraints.length} confirmed
                       </small>
                     </h3>
                     {!replay && constraints.length - confirmedCount > 0 && (
-                      <button className="primary small" onClick={confirmAll}>
+                      <button className="secondary small" onClick={confirmAll}>
                         Confirm all {constraints.length - confirmedCount}
                       </button>
                     )}
                   </div>
                   <p className="hint">
                     {isLesson
-                      ? 'What your note says a child cannot do, or needs. The words and the name stay here. If you switch a need on, the cloud is told the need by a letter, with no name and no reason, and writes for it without knowing whose it is.'
-                      : 'Private facts that rule something out. A confirmed one stays here, and every step of the draft is checked against it on this device.'}
+                      ? 'Each need gets a letter, so no name is sent. Names and reasons stay on this computer; only the letter and short need are sent to the cloud.'
+                      : 'Private facts that rule something out. A confirmed one stays on this computer, and every step of the draft is checked against it here.'}
                   </p>
                   {guardWhere === 'ON_DEVICE' && nanoDiff && !replay && (
                     <p className="nano-summary" role="status">
-                      <b>Gemini Nano on this device:</b> Rules alone found {nanoDiff.rulesOnly} · Gemini Nano added +{nanoDiff.nanoAdded} more.
+                      <b>Gemini Nano on this computer:</b> Rules alone found {nanoDiff.rulesOnly} · Gemini Nano added +{nanoDiff.nanoAdded} more.
                     </p>
                   )}
                   {isLesson && !replay && untold.length > 0 && (
                     <div className="actions">
                       <button className="secondary small" onClick={tellAll}>
-                        Tell the cloud {untold.length === 1 ? 'the 1 need' : `all ${untold.length} needs`}
+                        Send all {untold.length === 1 ? '1 need' : `${untold.length} needs`} (letters only)
                       </button>
-                      <span className="hint">Letters and lines only. Whose each need is stays on this device.</span>
+                      <span className="hint">Each need gets a letter, so no name is sent.</span>
                     </div>
                   )}
                   {constraintGaps?.stopped && <p className="caution">{constraintGaps.stopped} The constraints found by rule still stand.</p>}
@@ -2553,12 +2557,12 @@ export function App() {
             </div>
 
             {/* ------------------------------------------------ the cloud */}
-            <section className="lane cloud" aria-label="The cloud">
+            <section className="lane cloud" aria-label="Sent to the cloud">
               <h2 className="lane-title">
-                <span>The cloud</span>
+                <span>Sent to the cloud</span>
                 <RouteChip route="draft" where={result && stage !== 'review' ? result.where : undefined} />
                 <button className="inspect-btn" onClick={() => setInspecting(true)}>
-                  Inspect
+                  How it ran
                 </button>
               </h2>
 
@@ -2584,6 +2588,8 @@ export function App() {
                     activeNeed={activeNeed}
                     onHoverNeed={setActiveNeed}
                     notSentCount={going.notSent ?? 0}
+                    needsCount={replay ? (replay.needs?.length ?? 0) : (going.lessonNeeds?.length ?? 0)}
+                    withheldCount={withheld.length}
                   />
                 </div>
               )}

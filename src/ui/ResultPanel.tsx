@@ -234,12 +234,12 @@ export function ResultPanel({
           {isLesson && fittingLive && (notesByChild.length > 0 || hits.length > 0) && (
             <div className="actions fit-all">
               {(toFit || fittingLesson) && (
-                <button className="primary small" disabled={signing || adjBusy !== null || fittingLesson} onClick={() => void fitLesson()}>
+                <button className="secondary" disabled={signing || adjBusy !== null || fittingLesson} onClick={() => void fitLesson()}>
                   {fitChild
                     ? `Fitting for ${fitChild.done} of ${fitChild.total} ${fitChild.total === 1 ? 'child' : 'children'}…`
                     : fittingLesson
-                      ? 'Fitting on this device…'
-                      : 'Fit the lesson on this device'}
+                      ? 'Checking on this computer…'
+                      : 'Suggest fits on this computer'}
                 </button>
               )}
               {offered > 1 && (
@@ -289,27 +289,40 @@ export function ResultPanel({
           )}
           {!replay && stage === 'signed' && (
             <div className="signed">
-              <span className="stamp">{keptCount === 0 ? 'Whole draft rejected by teacher' : 'Signed off by teacher'}</span>
+              <span className="stamp">{keptCount === 0 ? 'Whole draft rejected by teacher' : 'Finished by teacher'}</span>
               {storeFailed ? (
                 <p className="caution" role="alert">
-                  This browser could not store the receipt. Copy what you need before you leave this page.
+                  This browser could not store the record. Copy what you need before you leave this page.
                 </p>
               ) : (
                 <p className="receipt-line">
-                  Receipt saved.{' '}
+                  Record saved.{' '}
                   <button className="link" onClick={() => setView('receipts')}>
-                    See the receipt
+                    See the record
                   </button>
                 </p>
               )}
               <div className="actions">
+                {canPrint && isLesson && (
+                  <>
+                    <button className="primary big" onClick={() => printSheet('class-only')}>
+                      Print class copy (no names)
+                      <span className="btn-hi" aria-hidden="true">
+                        कक्षा की कॉपी प्रिंट करें
+                      </span>
+                    </button>
+                    <button className="secondary" onClick={() => printSheet('teacher-only')}>
+                      Print teacher&apos;s copy (private)
+                    </button>
+                  </>
+                )}
                 {keptCount > 0 && task !== 'parents' && (
-                  <button className="primary" onClick={() => copy('all', isLesson ? classPlan : finalText)} disabled={replyBlocked}>
+                  <button className={isLesson && canPrint ? 'link' : 'primary big'} onClick={() => copy('all', isLesson ? classPlan : finalText)} disabled={replyBlocked}>
                     {copyLabel('all', isLesson ? 'Copy the class plan' : 'Copy the text')}
                   </button>
                 )}
                 {keptCount > 0 && isLesson && (
-                  <button className="secondary" onClick={() => setPreviewOpen((o) => !o)}>
+                  <button className="link" onClick={() => setPreviewOpen((o) => !o)}>
                     {previewOpen ? 'Hide copy preview' : 'Preview class & teacher copies'}
                   </button>
                 )}
@@ -318,16 +331,6 @@ export function ResultPanel({
                   <button className="link" onClick={() => setView('lessons')}>
                     Lessons
                   </button>
-                )}
-                {canPrint && isLesson && (
-                  <>
-                    <button className="secondary" onClick={() => printSheet('class-only')}>
-                      Print class copy (no names)
-                    </button>
-                    <button className="secondary" onClick={() => printSheet('teacher-only')}>
-                      Print teacher's copy (private)
-                    </button>
-                  </>
                 )}
                 {canPrint && !isLesson && (
                   <button className="secondary" onClick={() => window.print()}>

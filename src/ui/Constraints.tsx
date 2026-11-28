@@ -97,22 +97,22 @@ export function ConstraintsPanel({
   return (
     <div className="constraints">
       {lesson && constraints.length > 0 && (
-        <div className="filter-bar" role="group" aria-label="Filter constraints">
+        <div className="filter-bar" role="group" aria-label="Filter items">
           <button type="button" className={filter === 'all' ? 'filter-chip on' : 'filter-chip'} onClick={() => setFilter('all')}>
             All ({constraints.length})
           </button>
           <button type="button" className={filter === 'told' ? 'filter-chip on' : 'filter-chip'} onClick={() => setFilter('told')}>
-            Told to cloud ({toldCount})
+            What is sent ({toldCount})
           </button>
           <button type="button" className={filter === 'stays' ? 'filter-chip on' : 'filter-chip'} onClick={() => setFilter('stays')}>
-            Stays here ({staysCount})
+            Stays on this computer ({staysCount})
           </button>
         </div>
       )}
       {constraints.length === 0 ? (
-        <p className="empty">No constraint was found. Add one below if there is one.</p>
+        <p className="empty">Nothing private was found yet. Add something about a child below if needed.</p>
       ) : visible.length === 0 ? (
-        <p className="empty">No constraints in this view.</p>
+        <p className="empty">Nothing in this view.</p>
       ) : (
         <ul className="constraint-list">
           {visible.map((c) => (
@@ -132,7 +132,7 @@ export function ConstraintsPanel({
       )}
       {editable && (
         <details className="constraint-add" open={selection !== '' || undefined}>
-          <summary>Add a constraint</summary>
+          <summary>Add something about a child</summary>
           <div className="add-grid">
             <label>
               About
@@ -342,14 +342,14 @@ function ConstraintRow({
           onBlur={() => letter && onHoverNeed?.(null)}
         >
           <p className="stays">
-            <span className="pair-label">Stays here</span>
+            <span className="pair-label">Stays on this computer</span>
             <q>{c.text}</q>
             <span className="c-who">{who}</span>
           </p>
           {telling && need.line ? (
             <p className="goes">
-              <span className="pair-label">The cloud is told</span>
-              <code className="need-line">{need.line}</code>
+              <span className="pair-label">What is sent</span>
+              <span className="need-line">{need.line}</span>
               {editable && need.typed && !editingNeed && (
                 <button type="button" className="link edit-need-btn" onClick={() => setEditingNeed(true)}>
                   Edit wording
@@ -358,8 +358,8 @@ function ConstraintRow({
             </p>
           ) : (
             <p className="goes nothing">
-              <span className="pair-label">The cloud is told</span>
-              Stays here. Nothing is told.
+              <span className="pair-label">What is sent</span>
+              Stays on this computer. Nothing is sent.
             </p>
           )}
         </div>

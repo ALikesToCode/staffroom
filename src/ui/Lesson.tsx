@@ -23,9 +23,9 @@ import { RECORDED_FIT_LABEL } from '../core/recorded';
 export const MODEL_LABEL = 'Suggested on this device from your private note. Nothing was sent.';
 export const TEACHER_LABEL = 'Written by you';
 /** Said over a line the cloud wrote for a need, placed beside a child here. */
-export const CLOUD_LABEL = 'Cloud · matched to this child here';
+export const CLOUD_LABEL = 'Written by cloud · placed beside this child here';
 /** Said over a line the on-device fallback draft wrote for a need, placed beside a child here. */
-export const LOCAL_DRAFT_LABEL = 'On-device draft · matched to this child here';
+export const LOCAL_DRAFT_LABEL = 'Written on this computer · placed beside this child here';
 /** Said beside a child for a need the cloud was told and wrote nothing for. */
 export const NOTHING_WRITTEN = (letter: string, onDevice = false) =>
   `${onDevice ? 'The on-device draft' : 'The cloud'} wrote nothing for Need ${letter}.`;
@@ -284,7 +284,15 @@ function PointRow({
           ) : (
             <>
               <span className="adj-source">
-                {point.pair ? PAIR_LABEL : point.need && point.source === 'model' ? LOCAL_DRAFT_LABEL : recorded && point.source === 'model' ? RECORDED_FIT_LABEL : POINT_LABEL[point.source]}
+                {point.pair
+                  ? PAIR_LABEL
+                  : point.need && point.source === 'cloud'
+                    ? `Written for Need ${point.need}. Placed beside ${point.child} on this computer.`
+                    : point.need && point.source === 'model'
+                      ? `Written on this computer for Need ${point.need}. Placed beside ${point.child}.`
+                      : recorded && point.source === 'model'
+                        ? RECORDED_FIT_LABEL
+                        : POINT_LABEL[point.source]}
               </span>
               <p>
                 <span className="stage-tag">{stages[point.itemIndex]}</span>
@@ -579,8 +587,11 @@ function LessonCard({
           <button className="secondary small" onClick={() => onAfter(after(ticket))}>
             {said ? 'Save again' : 'Save how it went'}
           </button>
-          <button className="primary small" onClick={onNext}>
+          <button className="primary big" onClick={onNext}>
             Plan the next lesson
+            <span className="btn-hi" aria-hidden="true">
+              अगला पाठ बनाएँ
+            </span>
           </button>
           <button className="link" onClick={onDelete}>
             Delete
@@ -616,7 +627,7 @@ export function Lessons({
   return (
     <main className="page">
       <h2>Lessons</h2>
-      <p className="lede">Signed lessons, kept in this browser only. Say how one went, then plan the next from it.</p>
+      <p className="lede">Finished lessons, kept on this computer only. Mark how it went, then plan the next one.</p>
       {lessons.length === 0 ? (
         <p className="empty">No lesson has been signed off on this device.</p>
       ) : (

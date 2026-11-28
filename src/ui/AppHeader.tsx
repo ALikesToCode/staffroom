@@ -61,7 +61,7 @@ export function AppHeader({
           </span>
         </button>
         <button className={view === 'receipts' ? 'tab on' : 'tab'} onClick={() => setView('receipts')}>
-          Receipts
+          Records
           {/* The badge keeps its place when there is nothing to count, so the header does not shift when it appears. */}
           <span className={receiptsCount > 0 ? 'count' : 'count none'} aria-hidden={receiptsCount === 0}>
             {receiptsCount}

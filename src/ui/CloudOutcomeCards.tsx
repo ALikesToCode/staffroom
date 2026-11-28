@@ -85,8 +85,8 @@ export function CloudOutcomeCards({
           {result && stage !== 'review' && stage !== 'drafting' && (
             <article className="card">
               <div className="card-head">
-                <h3>{result.where === 'IN_CLOUD' ? 'What came back' : 'Written on the device'}</h3>
-                <span className="hint">{result.model}</span>
+                <h3>{result.where === 'IN_CLOUD' ? "From Google's Gemini" : 'Written on this computer'}</h3>
+                <code className="model-tag">{result.model}</code>
               </div>
               {result.where === 'ON_DEVICE' && (
                 <>
@@ -149,8 +149,8 @@ export function CloudOutcomeCards({
           {materials && (
             <article className="card">
               <div className="card-head">
-                <h3>{materials.where === 'IN_CLOUD' ? 'Materials: what came back' : 'Materials: written on the device'}</h3>
-                <span className="hint">{materials.model}</span>
+                <h3>{materials.where === 'IN_CLOUD' ? "Worksheets: from Google's Gemini" : 'Worksheets: written on this computer'}</h3>
+                <code className="model-tag">{materials.model}</code>
               </div>
               <MaterialsWire result={materials.materials} activeNeed={isLesson ? activeNeed : undefined} onHoverNeed={isLesson ? setActiveNeed : undefined} />
               <p className="hint">

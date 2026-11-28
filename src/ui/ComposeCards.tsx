@@ -210,15 +210,17 @@ export function NoteComposeCard({
               e.target.value = '';
             }}
           />
-          <button className="secondary small" type="button" disabled={scanning} onClick={() => fileInputRef.current?.click()}>
-            {scanning ? 'Transcribing on this device…' : 'Scan notebook photo'}
+          <button className="secondary" type="button" disabled={scanning || noModel || imageDevice === 'unsupported' || imageDevice === 'unavailable'} onClick={() => fileInputRef.current?.click()}>
+            {scanning ? 'Reading your notebook on this computer…' : 'Take a photo of my notebook'}
           </button>
           <button className="link" type="button" disabled={scanning} onClick={() => void scanSampleNotebook()}>
             Try sample notebook photo
           </button>
-          {noModel || imageDevice === 'unsupported' || imageDevice === 'unavailable' ? (
-            <span className="hint">Notebook photo transcription requires Chrome's built-in Gemini Nano with image support.</span>
-          ) : null}
+          <span className="hint scan-hint">
+            {noModel || imageDevice === 'unsupported' || imageDevice === 'unavailable'
+              ? 'Notebook photo reading needs Chrome with its built-in image model on a laptop.'
+              : 'Reads clear English or Hinglish handwriting on this computer. Hindi script works best when typed.'}
+          </span>
         </div>
       )}
       {scanPreview && (
@@ -300,13 +302,16 @@ export function NoteComposeCard({
       ) : (
         <div className="actions">
           <button
-            className="primary"
+            className="primary big"
             disabled={note.trim().length < 20 || note.length > NOTE_MAX || (task === 'lesson' && !lessonReady(lesson))}
             onClick={runGuard}
           >
-            Run the guard
+            Hide private details
+            <span className="btn-hi" aria-hidden="true">
+              निजी बातें छिपाएँ
+            </span>
           </button>
-          <span className="hint">Nothing is sent. The guard runs here.</span>
+          <span className="hint">Nothing is sent yet. This runs on this computer.</span>
           {watch && (
             <button className="link" onClick={watch}>
               Watch a recorded run

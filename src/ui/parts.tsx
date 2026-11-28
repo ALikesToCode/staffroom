@@ -146,28 +146,28 @@ export function DeviceText({ text, entities, allowed, mark }: { text: string; en
 }
 
 const WHERE_TEXT: Record<Where, string> = {
-  ON_DEVICE: 'ran on this device',
-  IN_CLOUD: 'ran in the cloud',
-  RULES_ONLY: 'rules only, no model',
-  NOT_RUN: 'did not run',
-  SKIPPED: 'skipped: nothing to check',
+  ON_DEVICE: 'On this computer',
+  IN_CLOUD: 'Sent to the cloud',
+  RULES_ONLY: 'Rules only, no local model',
+  NOT_RUN: 'Did not run',
+  SKIPPED: 'Skipped: nothing to check',
 };
 
-/** Shows which inference mode a step was given, and where it actually ran. */
+/** Shows plain location first, with the Firebase AI Logic mode small and muted beside it. */
 export function RouteChip({ route, where }: { route: RouteId; where?: Where }) {
   const r = ROUTES.find((x) => x.id === route)!;
   return (
     <span className={`route ${where ? `route-${where.toLowerCase()}` : ''}`} title={r.why}>
-      <code>{r.mode.toUpperCase()}</code>
       {where && <span>{WHERE_TEXT[where]}</span>}
+      <code className="route-mode">{r.mode.toUpperCase()}</code>
     </span>
   );
 }
 
 /** The steps of a run, as the teacher meets them. */
-export const STEPS = ['Write', 'What leaves', 'Draft', 'What your device caught', 'Sign off'];
+export const STEPS = ['Write', 'Check what leaves', 'Draft', 'Checked here', 'Finish'];
 /** The same five, as a lesson meets them. */
-export const LESSON_STEPS = ['Write', 'What leaves', 'Lesson', 'Beside each child', 'Sign off'];
+export const LESSON_STEPS = ['Write', 'Check what leaves', 'Lesson', 'For each child', 'Finish'];
 
 export function Stepper({ step, lesson = false, onStep }: { step: number; lesson?: boolean; onStep?: (index: number) => void }) {
   const steps = lesson ? LESSON_STEPS : STEPS;

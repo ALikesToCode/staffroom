@@ -227,7 +227,7 @@ export function Inspect({
   };
 }) {
   return (
-    <Drawer title="Inspect" onClose={onClose}>
+    <Drawer title="How it ran (Inspect)" onClose={onClose}>
       <h3>Where each step runs</h3>
       <ul className="inspect-routes">
         {ROUTES.map((r) => (
@@ -624,19 +624,19 @@ export function Receipts({
 }) {
   return (
     <main className="page">
-      <h2>Receipts</h2>
-      <p className="lede">One line for each run you signed off, kept in this browser.</p>
+      <h2>Records</h2>
+      <p className="lede">One line for each finished lesson, kept on this computer.</p>
       <details className="fold">
-        <summary>What a receipt holds</summary>
+        <summary>What a record holds</summary>
         <p>
-          A receipt holds the text you approved. If you approved your note as written, that is your note. It also holds counts of what was
-          withheld, which model ran where, and how many items you kept and how many you struck. It does not hold the draft or anything you
-          withheld.
+          A record holds the text you approved. If you approved your note as written, that is your note. It also holds counts of what was
+          hidden, which model ran where, and how many items you kept and how many you struck. It does not hold the draft or anything you
+          kept private.
         </p>
       </details>
 
       {receipts.length === 0 ? (
-        <p className="empty">No receipts yet. Finish a run on the desk.</p>
+        <p className="empty">No records yet. Finish a run on the Desk.</p>
       ) : (
         <ul className="receipts">
           {receipts.map((r) => {

@@ -1,15 +1,17 @@
+import { useRef } from 'react';
+
 /** The promise, said once: on the first screen, and beside the name after it. */
 export const PROMISE = 'Your device knows the child. The cloud only knows the need.';
 
 /**
- * The first screen: one sentence, the ways in, and a small picture of the
- * two sides. The picture is a fixed example from the invented class; it is
- * labelled as one.
+ * The first screen: one plain promise, photo-first entry, secondary text/demo links,
+ * and a simple illustration of what stays on this computer vs what goes to the cloud.
  */
 export function Hero({
   onTry,
   onWrite,
   onWatch,
+  onPhotoFile,
   noModel,
   needsDownload = false,
 }: {
@@ -17,11 +19,15 @@ export function Hero({
   onWrite: () => void;
   /** Absent when there is no recorded run to watch. */
   onWatch?: () => void;
+  /** Opens a handwritten notebook photo directly from the hero CTA. */
+  onPhotoFile?: (file: File) => void;
   /** True when this browser has no on-device model. */
   noModel: boolean;
   /** True when the on-device model can be downloaded on first run. */
   needsDownload?: boolean;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+
   return (
     <main className="hero">
       <div className="hero-say">
@@ -29,65 +35,106 @@ export function Hero({
           <span>Your device knows the child.</span> <span>The cloud only knows the need.</span>
         </h2>
         <p className="hero-sub">
-          Plan tomorrow's lesson for the whole class. The cloud writes for each need without knowing whose it is. Your device puts it beside
-          the right child.
+          Plan tomorrow&apos;s lesson for the whole class. Your computer hides every child&apos;s name and private details before anything goes
+          to Google&apos;s Gemini, then puts each child&apos;s line beside the right name.
         </p>
-        {/* Without the on-device model, the recorded run with Nano is the single primary CTA so judges feel the full architecture first. */}
-        {noModel && onWatch ? (
-          <div className="actions">
-            <button className="primary big" onClick={onWatch}>
-              Watch a recorded run with Gemini Nano
-            </button>
-            <button className="secondary big" onClick={onTry}>
-              Try live (rules + cloud)
-            </button>
-            <button className="secondary big" onClick={onWrite}>
-              Write a note
-            </button>
-          </div>
-        ) : (
-          <div className="actions">
-            <button className="primary big" onClick={onTry}>
-              Try an invented class
-            </button>
-            <button className="secondary big" onClick={onWrite}>
-              Write a note
-            </button>
-            {onWatch && (
-              <button className="link" onClick={onWatch}>
-                Watch a recorded run
+
+        {noModel ? (
+          <div className="actions hero-actions">
+            {onWatch ? (
+              <button className="primary big" onClick={onWatch}>
+                Watch a recorded run with Gemini Nano
+                <span className="btn-hi" aria-hidden="true">
+                  रिकॉर्डेड डेमो देखें
+                </span>
+              </button>
+            ) : (
+              <button className="primary big" onClick={onTry}>
+                Try a sample class (rules + cloud)
+                <span className="btn-hi" aria-hidden="true">
+                  उदाहरण कक्षा आज़माएँ
+                </span>
               </button>
             )}
+            <div className="hero-links">
+              {onWatch && (
+                <button className="link" onClick={onTry}>
+                  Try a sample class (rules + cloud)
+                </button>
+              )}
+              <button className="link" onClick={onWrite}>
+                Type instead
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="actions hero-actions">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onPhotoFile?.(file);
+                e.target.value = '';
+              }}
+            />
+            <button
+              className="primary big"
+              type="button"
+              onClick={() => (onPhotoFile ? fileRef.current?.click() : onWrite())}
+            >
+              Take a photo of my notebook
+              <span className="btn-hi" aria-hidden="true">
+                नोटबुक की फोटो लें
+              </span>
+            </button>
+            <div className="hero-links">
+              <button className="link" type="button" onClick={onWrite}>
+                Type instead
+              </button>
+              <button className="link" type="button" onClick={onTry}>
+                Try a sample class
+              </button>
+              {onWatch && (
+                <button className="link" type="button" onClick={onWatch}>
+                  Watch a recorded run
+                </button>
+              )}
+            </div>
           </div>
         )}
+
         {noModel ? (
           <p className="hint hero-mode">
-            This browser has no on-device model, so the guard and the check run by rule here. The cloud draft works the same.
+            This browser cannot run the local model, so names and numbers are hidden by rule here. The cloud lesson works the same.
           </p>
         ) : (
-          needsDownload && (
-            <p className="hint hero-mode">
-              The first run downloads Gemini Nano in Chrome (several GB) and keeps it on this device{onWatch ? ', or watch a recorded run while you wait' : ''}.
-            </p>
-          )
+          <p className="hint hero-mode">
+            Reads clear English or Hinglish handwriting on this computer. Hindi script works best when typed.
+            {needsDownload
+              ? ` First run downloads Gemini Nano in Chrome (several GB) and keeps it on this computer${onWatch ? ', or watch a recorded run while you wait' : ''}.`
+              : ''}
+          </p>
         )}
       </div>
 
-      <figure className="hero-lanes" aria-label="An example from the invented class">
+      <figure className="hero-lanes" aria-label="An example from the sample class">
         <div className="mini device">
           <span className="mini-title">
-            On this device <code className="mini-mode">ONLY_ON_DEVICE</code>
+            <span>On this computer</span> <code className="mini-mode">ONLY_ON_DEVICE</code>
           </span>
           <p className="mini-note">
-            <mark className="k-student held">Tanvi</mark>'s family <mark className="k-private held">does not have a smartphone or an internet connection</mark>.
+            <mark className="k-student held">Tanvi</mark>&apos;s family <mark className="k-private held">does not have a smartphone or an internet connection</mark>.
           </p>
           <p className="mini-catch">
-            <b>Stays here</b>
+            <b>Stays on this computer</b>
             <span>“does not have a smartphone or an internet connection” — Tanvi</span>
           </p>
           <p className="mini-catch">
             <b>Homework, beside Tanvi</b>
-            <span>For Need B: write from two printed pictures given out in class.</span>
+            <span>Need B: write from two printed pictures given out in class.</span>
           </p>
         </div>
         <div className="mini-door" aria-hidden="true">
@@ -95,21 +142,20 @@ export function Hero({
         </div>
         <div className="mini cloud">
           <span className="mini-title">
-            The cloud <code className="mini-mode">PREFER_IN_CLOUD</code>
+            <span>Sent to the cloud</span> <code className="mini-mode">PREFER_IN_CLOUD</code>
           </span>
-          <p className="mini-wire">Lesson: English, describing a place.</p>
+          <p className="mini-wire">Lesson: Class 6 English, describing a place.</p>
           <p className="mini-wire">
-            <b>Not sent</b> what the note says about one pupil
+            <b>Not sent</b> any child&apos;s name or private story
           </p>
           <p className="mini-wire">
-            <b>The cloud is told</b> Need B: no phone or internet at home
+            <b>What is sent</b> Need B: no phone or internet at home
           </p>
           <p className="mini-wire reply">
-            Homework: find two pictures of a place online and write three sentences. For Need B: write from two printed pictures given out
-            in class.
+            Homework: describe two pictures of a place in three sentences. For Need B: use printed pictures handed out in class.
           </p>
         </div>
-        <figcaption>An example. All data in the sample is invented.</figcaption>
+        <figcaption>An example. Every pupil shown is invented.</figcaption>
       </figure>
     </main>
   );

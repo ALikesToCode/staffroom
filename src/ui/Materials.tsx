@@ -58,8 +58,8 @@ export function MaterialsCard({
     return (
       <article className="card materials">
         <div className="card-head">
-          <h3>Materials for this lesson</h3>
-          <span className="hint">{where}</span>
+          <h3>Worksheets &amp; board work</h3>
+          <code className="model-tag">{where}</code>
         </div>
         <p className="hint">{onDevice ? MATERIALS_NOTE_LOCAL : MATERIALS_NOTE}</p>
         {issues.length > 0 && (
@@ -171,16 +171,39 @@ export function MaterialsCard({
   return (
     <article className="card materials">
       <div className="card-head">
-        <h3>Materials for this lesson</h3>
+        <h3>Worksheets &amp; board work</h3>
         <span className={stopped.length === 0 ? 'gate pass' : 'gate stop'}>
-          {stopped.length === 0 ? 'Exit gate: clear' : `Exit gate: ${stopped.length} stopped`}
+          {stopped.length === 0 ? (
+            <>
+              <span>No names or numbers found</span>
+              <code className="gate-tag">Exit gate: clear</code>
+            </>
+          ) : (
+            <>
+              <span>{stopped.length} blocked</span>
+              <code className="gate-tag">Exit gate: {stopped.length} stopped</code>
+            </>
+          )}
         </span>
       </div>
       <div className="actions">
-        <button className="primary" disabled={busy || stopped.length > 0} onClick={onSend}>
-          {busy ? (streamChars > 0 ? `Writing materials (${streamChars} chars streamed)…` : 'Writing the materials…') : 'Make the materials'}
+        <button className="primary big" disabled={busy || stopped.length > 0} onClick={onSend}>
+          {busy ? (
+            streamChars > 0 ? (
+              `Writing worksheets (${streamChars} chars)…`
+            ) : (
+              'Writing board work & worksheets…'
+            )
+          ) : (
+            <>
+              Make board work &amp; worksheets
+              <span className="btn-hi" aria-hidden="true">
+                बोर्ड और वर्कशीट बनाएँ
+              </span>
+            </>
+          )}
         </button>
-        <span className="hint">Board work, a practice sheet, a sheet written out for each need, and an exit ticket — using only your approved plan and nameless need letters.</span>
+        <span className="hint">Board work, a class worksheet, a catch-up sheet for each need, and an exit ticket — using letters only, no names.</span>
       </div>
       {stopped.length > 0 && (
         <div className="caution" role="alert">

@@ -79,7 +79,7 @@ describe('ConstraintsPanel', () => {
     ).replace(/<[^>]+>/g, ' ');
     expect(bare).toMatch(/lives with her aunt\s+the class\s+Who looks after the child/);
     expect(bare).toContain('Looked after by: aunt. No adult is marked not to contact');
-    expect(text).toContain('Add a constraint');
+    expect(text).toContain('Add something about a child');
     // The need line that would be sent is shown beside the switch, before it is switched on.
     expect(text).toContain('Tell the cloud the need (not the reason)');
     expect(text).toMatch(/If you switch it on, the cloud will be told:\s+\[Student 1\] cannot stay after the last bell\./);
@@ -133,9 +133,10 @@ describe('the first screen', () => {
   it('is one sentence and the ways in: no form, and no recorded run until the file has been read and is in the right form', () => {
     const text = renderToStaticMarkup(<App />).replace(/<[^>]+>/g, ' ');
     expect(text).toMatch(/Your device knows the child\.\s+The cloud only knows the need\./);
-    expect(text).toContain('Try an invented class');
-    expect(text).toContain('Write a note');
-    expect(text).not.toContain('Run the guard');
+    expect(text).toContain('Take a photo of my notebook');
+    expect(text).toContain('Type instead');
+    expect(text).toContain('Try a sample class');
+    expect(text).not.toContain('Hide private details');
     expect(renderToStaticMarkup(<App />)).not.toContain('<textarea');
     expect(text).not.toContain('Watch a recorded run');
     expect(text).not.toContain('Recorded run.');
@@ -168,30 +169,31 @@ describe('the lesson as the first job', () => {
     const { LESSON_STEPS, STEPS, Stepper } = await import('./parts');
     const html = renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} noModel={false} />);
     expect(html).toContain('Your device knows the child.');
-    expect(html).toContain('Plan tomorrow&#x27;s lesson for the whole class. The cloud writes for each need without knowing whose it is. Your device puts it beside the right child.');
+    expect(html).toContain('Plan tomorrow&#x27;s lesson for the whole class.');
     expect(html).toContain('Need B: no phone or internet at home');
     // The name is on the device's side only, and the cloud's side has no sentence about one pupil.
     expect(html.slice(html.indexOf('mini cloud'))).not.toContain('Tanvi');
     expect(html.slice(html.indexOf('mini cloud'))).not.toContain('[Student');
-    expect(LESSON_STEPS).toEqual(['Write', 'What leaves', 'Lesson', 'Beside each child', 'Sign off']);
-    expect(renderToStaticMarkup(<Stepper step={3} lesson />)).toContain('Beside each child');
+    expect(LESSON_STEPS).toEqual(['Write', 'Check what leaves', 'Lesson', 'For each child', 'Finish']);
+    expect(renderToStaticMarkup(<Stepper step={3} lesson />)).toContain('For each child');
     expect(renderToStaticMarkup(<Stepper step={3} />)).toContain(STEPS[3]);
   });
 
   it('without the on-device model, promotes the recorded run with Gemini Nano as the single primary CTA', async () => {
     const { Hero } = await import('./Hero');
-    const buttons = (html: string) => [...html.matchAll(/<button class="([^"]+)"[^>]*>([^<]+)<\/button>/g)].map((m) => [m[1], m[2]]);
+    const buttons = (html: string) => [...html.matchAll(/<button class="([^"]+)"[^>]*>([\s\S]*?)<\/button>/g)].map((m) => [m[1], m[2].replace(/<span class="btn-hi"[^>]*>.*?<\/span>/g, '').trim()]);
     const without = renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} onWatch={() => {}} noModel />);
     expect(buttons(without)).toEqual([
       ['primary big', 'Watch a recorded run with Gemini Nano'],
-      ['secondary big', 'Try live (rules + cloud)'],
-      ['secondary big', 'Write a note'],
+      ['link', 'Try a sample class (rules + cloud)'],
+      ['link', 'Type instead'],
     ]);
-    expect(without).toContain('This browser has no on-device model');
-    // With the model, the layout is as it was: the recorded run is a link.
+    expect(without).toContain('This browser cannot run the local model');
+    // With the model, the primary button is notebook photo first, with plain secondary links.
     expect(buttons(renderToStaticMarkup(<Hero onTry={() => {}} onWrite={() => {}} onWatch={() => {}} noModel={false} />))).toEqual([
-      ['primary big', 'Try an invented class'],
-      ['secondary big', 'Write a note'],
+      ['primary big', 'Take a photo of my notebook'],
+      ['link', 'Type instead'],
+      ['link', 'Try a sample class'],
       ['link', 'Watch a recorded run'],
     ]);
     // With no recorded run to watch, nothing offers one.
@@ -453,7 +455,10 @@ describe('AppHeader and ReviewCard', () => {
         notSentCount={0}
       />,
     );
-    expect(html).toContain('Exit gate: 0 known names/IDs · Review required');
+    expect(html).toContain('No names or numbers found. Please read it once.');
+    expect(html).toContain('Exit gate: 0 found');
+    expect(html).toContain('Going to Google&#x27;s Gemini:');
+    expect(html).toContain('Staying on this computer:');
     expect(html).toContain('unanchored phrases (often paraphrases rather than exact words in your note)');
     expect(html).not.toContain('so they were not withheld');
   });
@@ -550,6 +555,6 @@ describe('AppHeader and ReviewCard', () => {
     const heroHtml = renderToStaticMarkup(
       <Hero onTry={() => {}} onWrite={() => {}} onWatch={() => {}} noModel={false} needsDownload />,
     );
-    expect(heroHtml).toContain('The first run downloads Gemini Nano in Chrome (several GB)');
+    expect(heroHtml).toContain('First run downloads Gemini Nano in Chrome (several GB)');
   });
 });

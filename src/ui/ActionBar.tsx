@@ -113,14 +113,14 @@ export function ActionBar({
                 <label className="read-it">
                   <input type="checkbox" checked={readIt} onChange={(e) => setReadKey(e.target.checked ? approval : null)} />
                   {guardWhere === 'RULES_ONLY'
-                    ? 'No model looked for private details. I have read this text and marked them myself.'
-                    : 'I have read this text and I am content to send it.'}
+                    ? 'No local model checked this note. I have read it and hidden private details myself.'
+                    : 'I have read it'}
                 </label>
                 {partsUnread && (
                   <label className="read-it unread-parts">
                     <input type="checkbox" checked={unreadAcked} onChange={(e) => setUnreadKey(e.target.checked ? unreadApproval : null)} />
-                    The on-device model did not read {guardGaps.unread.length === 1 ? 'one part' : `${guardGaps.unread.length} parts`} of this
-                    note. I have read {guardGaps.unread.length === 1 ? 'that part' : 'those parts'} and marked what is private in{' '}
+                    The local model did not read {guardGaps.unread.length === 1 ? 'one part' : `${guardGaps.unread.length} parts`} of this
+                    note. I have read {guardGaps.unread.length === 1 ? 'that part' : 'those parts'} and hidden private details in{' '}
                     {guardGaps.unread.length === 1 ? 'it' : 'them'} myself.
                   </label>
                 )}
@@ -128,16 +128,26 @@ export function ActionBar({
                   <label className="read-it as-written">
                     <input type="checkbox" checked={asWritten} onChange={(e) => setAsWrittenKey(e.target.checked ? asWrittenApproval : null)} />
                     {partOfNote
-                      ? 'Nothing has been withheld. I am sending these sentences of my note as written.'
-                      : 'Nothing has been withheld. I am sending my note as written.'}
+                      ? 'Nothing has been hidden. I am sending these sentences of my note as written.'
+                      : 'Nothing has been hidden. I am sending my note as written.'}
                   </label>
                 )}
               </div>
               <span className="hint bar-say">
-                {policyReady ? `${outgoingLength.toLocaleString()} characters to ${cloudModel}` : 'Loading school policy…'}
+                {policyReady ? (
+                  <>
+                    {outgoingLength.toLocaleString()} characters, to Google&apos;s Gemini{' '}
+                    <code className="bar-model">{cloudModel}</code>
+                  </>
+                ) : (
+                  'Loading school policy…'
+                )}
               </span>
-              <button className="primary send" disabled={!canSend} onClick={approveAndSend}>
-                Approve and send
+              <button className="primary big send" disabled={!canSend} onClick={approveAndSend}>
+                Send
+                <span className="btn-hi" aria-hidden="true">
+                  भेजें
+                </span>
               </button>
             </>
           )}
@@ -190,16 +200,30 @@ export function ActionBar({
               )}
               {isLesson && waitingHits.length === 0 && waitingAcceptablePoints.length > 0 ? (
                 <>
-                  <button className="primary" onClick={acceptWaitingAndSignOff} disabled={signing || undecided > 0 || replyBlocked}>
-                    Accept all {waitingAcceptablePoints.length} & sign off
+                  <button className="primary big" onClick={acceptWaitingAndSignOff} disabled={signing || undecided > 0 || replyBlocked}>
+                    Accept all {waitingAcceptablePoints.length} &amp; finish
+                    <span className="btn-hi" aria-hidden="true">
+                      स्वीकार करें और पूरा करें
+                    </span>
                   </button>
                   <button className="link" onClick={signOff} disabled={signing || undecided > 0 || replyBlocked}>
-                    Sign off without {waitingAcceptablePoints.length} unaccepted
+                    Finish without {waitingAcceptablePoints.length} unaccepted
                   </button>
                 </>
               ) : (
-                <button className="primary" onClick={signOff} disabled={signing || undecided > 0 || replyBlocked || (isLesson && waitingHits.length > 0)}>
-                  {isLesson ? 'Sign off the lesson' : undecided === 0 && keptCount === 0 ? 'Reject the whole draft' : `Sign off ${keptCount} of ${kept.length} items`}
+                <button className="primary big" onClick={signOff} disabled={signing || undecided > 0 || replyBlocked || (isLesson && waitingHits.length > 0)}>
+                  {isLesson ? (
+                    <>
+                      Finish
+                      <span className="btn-hi" aria-hidden="true">
+                        पूरा करें
+                      </span>
+                    </>
+                  ) : undecided === 0 && keptCount === 0 ? (
+                    'Reject the whole draft'
+                  ) : (
+                    `Finish (${keptCount} of ${kept.length} kept)`
+                  )}
                 </button>
               )}
             </>
