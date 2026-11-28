@@ -65,7 +65,7 @@ All of this ran in Chrome 158 with Gemini Nano on one machine, on invented notes
 - **What about the other 9?** Seven were partly caught and two were missed. That is why the teacher reads the outgoing text before it is sent.
 - **Does it hold up on a full class?** On a 35-pupil note, the guard withheld 67 details. Gemini Nano found 17 of them that rules did not. The exit check found no leaked name or number.
 - **Does the device catch a bad cloud suggestion?** On 16 held-out cases run three times, the on-device check caught 24 of 24 real conflicts and wrongly flagged 4 of 24 harmless steps.
-- **How long does a teacher wait?** About 4 seconds for the guard on a paragraph, 3 seconds to read the notebook photo, 4 seconds for the cloud lesson, and 23 seconds for the offline lesson on Gemini Nano.
+- **How long does a teacher wait?** About 4 seconds for the guard on a paragraph, 3 to 6 seconds to read the notebook photo (3.1 s median on the sample page; 6.3 s in the recorded run), 4 seconds for the cloud lesson, and 23 seconds for the offline lesson on Gemini Nano.
 - **500 automated tests** pass.
 
 ## Challenges

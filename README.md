@@ -30,14 +30,21 @@ Every model call goes through Firebase AI Logic (`@firebase/ai`). If an input ca
 
 Raw logs & methodology live under [`docs/evals/2026-11-28/`](docs/evals/2026-11-28/) and [`docs/evals/`](docs/evals/):
 
-| Benchmark | Denominator & Conditions | Rules Alone | Rules + Gemini Nano |
-|---|---|---:|---:|
-| **1-pass Combined Guard** ([`guard-combined-v2.json`](docs/evals/2026-11-28/guard-combined-v2.json)) | `12` distinct invented notes, `60` labelled details total, run `3×` (`180` judgments) | `46/60` (`138/180`), `10/60` partial, `4/60` missed, `3/8` (`9/24`) harmless held, `1/11` constraints matched, `2 ms` | **`153/180`** (`51.0/60` across all 3 runs), `21/180` partial, **`6/180` (`2.0/60`) missed**, `30/57` hard non-rule details caught, `123/123` standard, **`0/24` (`0.0/8`) harmless held**, `12/33` exact constraint matches (`+19` unconfirmed extras), **`3,806 ms` (`3.81s`) median** |
-| **35-Pupil Stress Test** ([`scale-35.json`](docs/evals/2026-11-28/scale-35.json)) | Synthetic `35`-pupil note (`2,177` chars across `16` paragraphs) | `50` withheld, `0` leaked, `0 ms` | **`67` withheld (`+17` Nano)**, `0` unread/dropped/partial, **`0` exit-gate stops, `0` leaked tokens** (`50.3s`) |
-| **On-device Check** (`?set=heldout` / `?set=check`) | `16` held-out single-fact cases (`8` conflicts × `3`; `8` harmless × `3`) | — | **`24/24`** conflicts caught (`4/24` harmless flagged); `18/18` on full-note eval (`0/42` harmless conflicts) |
-| **Multimodal Notebook Scan** (`scan`) | Single sample page (`public/sample-notebook.jpg`), Chrome 158 | — | **`3.1s`** model step (`4.4s` UI end-to-end), `231` chars transcribed, **`0` cloud calls**, `2` names extracted |
-| **Offline-before-send Fallback** (`draft`) | `SAMPLE_NOTE` (`12` needs), Chrome 158 CDP offline before approval | — | **`23.3s`** (`23,298 ms`) `PREFER_IN_CLOUD -> ON_DEVICE` stream + Return Gate: **`12/12` needs written for a stage (`0` missing), `0` `[Student]` brackets** |
+| Benchmark | Rules alone | Rules + Gemini Nano | Time |
+|---|---|---|---:|
+| **1-pass Combined Guard** | 46/60 caught · 3/8 false holds | **51.0/60 caught · 0/8 false holds** | 3.8 s median |
+| **35-Pupil Stress Test** | 50 withheld · 0 leaked | **67 withheld (+17 Nano) · 0 leaked** | 50.3 s |
+| **On-device Check** | — | **24/24 conflicts caught · 4/24 doubts** | — |
+| **Notebook Photo Scan** | — | **231 chars · 0 cloud calls · 2 names** | **3 to 6 s** |
+| **Offline-before-send Fallback** | — | **12/12 needs written · 0 missing** | 23.3 s |
 
+Details for each benchmark:
+
+- **1-pass Combined Guard** ([`guard-combined-v2.json`](docs/evals/2026-11-28/guard-combined-v2.json)): `12` distinct invented notes, `60` labelled details total, run `3×` (`180` judgments). Rules alone: `138/180` (`46/60`) full, `10/60` partial, `4/60` missed, `9/24` (`3/8`) harmless held, `1/11` constraints matched (`2 ms`). Rules + Gemini Nano: **`153/180`** (`51.0/60`) full, `21/180` partial, `6/180` (`2.0/60`) missed, `30/57` hard non-rule details caught, `123/123` standard, **`0/24` (`0.0/8`) harmless held**, `12/33` exact constraint matches (`+19` unconfirmed extras), `3,806 ms` (`3.81 s`) median.
+- **35-Pupil Stress Test** ([`scale-35.json`](docs/evals/2026-11-28/scale-35.json)): Synthetic `35`-pupil note (`2,177` chars across `16` paragraphs). `67` withheld locally (`+17` beyond `50` rule hits), `0` unread/dropped/partial, `0` exit-gate stops, `0` leaked tokens (`50.3 s`).
+- **On-device Check** (`?set=heldout` / `?set=check`): `16` held-out single-fact cases (`8` conflicts × `3`, `8` harmless × `3`) — **`24/24`** conflicts caught (`4/24` harmless flagged); `18/18` on full-note eval (`0/42` harmless conflicts).
+- **Notebook Photo Scan** (`scan`, `public/sample-notebook.jpg`): **`3 to 6 seconds`** (`3.1 s` eval median on the sample page, `4.4 s` UI end-to-end; `6.3 s` in the recorded run), `231` chars transcribed locally, `0` model-host requests, `2` names extracted.
+- **Offline-before-send Fallback** (`draft`, `SAMPLE_NOTE` `12` needs): Chrome 158 CDP offline before approval — `23,298 ms` (`23.3 s`) `PREFER_IN_CLOUD -> ON_DEVICE` stream + Return Gate: `12/12` needs written for a stage (`0` missing), `0` `[Student]` brackets.
 - **Automated suite & security**: **`500/500` unit tests** (`21` Vitest files), `tsc --noEmit` (`0` errors), `pnpm audit --prod` (`0` known vulnerabilities).
 
 ## Limits
@@ -61,7 +68,7 @@ Staffroom is designed for shared computers (notes, class lists, confirmed constr
 ### Module layout & Firebase services
 
 - **UI & state**: [`src/App.tsx`](src/App.tsx), [`src/app/storage.ts`](src/app/storage.ts), and [`src/ui/`](src/ui/).
-- **Hybrid AI routing**: [`src/ai/routes.ts`](src/ai/routes.ts) (`scan`, `guard`, `draft`, `check`, `fit`, `label`). **How it ran (Inspect)** displays all 6 routes alongside `performance.getEntriesByType('resource')` network timing (`0` model-host requests for `scan`, `guard`, `check`, `label`, and `fit`).
+- **Hybrid AI routing**: [`src/ai/routes.ts`](src/ai/routes.ts) (`scan`, `guard`, `draft`, `check`, `fit`, `label`). **How it ran** displays all 6 routes alongside `performance.getEntriesByType('resource')` network timing (`0` model-host requests for `scan`, `guard`, `check`, `label`, and `fit`).
 - **Firebase & PWA**: Firebase AI Logic (`@firebase/ai`), Remote Config (`cloud_model`), App Check (reCAPTCHA Enterprise; debug tokens excluded from production builds), Anonymous Auth + optional count-only Cloud Firestore records (`Keep a copy`, off by default), Hosting strict CSP (`connect-src 'self' data:`), and `vite-plugin-pwa` offline precaching of `dist/`.
 
 ### Run & verify locally
