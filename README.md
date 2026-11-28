@@ -58,14 +58,14 @@ Raw logs & methodology live under [`docs/evals/2026-11-28/`](docs/evals/2026-11-
 | **Multimodal Notebook Scan** (`scan`) | Single sample page (`public/sample-notebook.jpg`), Chrome 158 | — | **`3.1s`** model step (`4.4s` UI end-to-end), `231` chars transcribed, **`0` cloud calls**, `2` names extracted |
 | **Offline-before-send Fallback** (`draft`) | `SAMPLE_NOTE` (12 needs), Chrome 158 CDP offline before approval | — | **`23.3s`** (`23,298 ms`) `PREFER_IN_CLOUD -> ON_DEVICE` stream + Return Gate: **`12/12` needs written for a stage (`0` missing), `0` `[Student]` brackets** |
 
-- **Automated suite & security**: **`497/497` unit tests** (`21` Vitest files, covering structured offline `adjustments` & colon-to-pipe normalization, mid-stream/JSON recovery, sign-out retry & fail-closed gating, Hindi Layer A rules, and Devanagari segmentation), `tsc --noEmit` (`0` errors), `pnpm audit --prod` (`0` known vulnerabilities).
+- **Automated suite & security**: **`499/499` unit tests** (`21` Vitest files, covering structured offline `adjustments` & colon-to-pipe normalization, mid-stream/JSON recovery, sign-out retry & fail-closed gating, Hindi Layer A rules, and Devanagari segmentation), `tsc --noEmit` (`0` errors), `pnpm audit --prod` (`0` known vulnerabilities).
 
 ## Run & verify locally
 
 ```bash
 pnpm install
 pnpm dev              # http://127.0.0.1:5173
-pnpm test             # 497 tests across 21 Vitest files
+pnpm test             # 499 tests across 21 Vitest files
 pnpm typecheck        # tsc --noEmit
 pnpm build            # dist/ + service worker
 pnpm audit

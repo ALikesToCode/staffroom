@@ -9,6 +9,7 @@ import { CloudText, Spinner } from './parts';
 export interface CloudOutcomeCardsProps {
   stage: Stage;
   online: boolean;
+  fallbackActive?: boolean;
   cloudModel: string;
   streamPreview: string;
   result: DraftResult | null;
@@ -35,6 +36,7 @@ export interface CloudOutcomeCardsProps {
 export function CloudOutcomeCards({
   stage,
   online,
+  fallbackActive = false,
   cloudModel,
   streamPreview,
   result,
@@ -54,13 +56,21 @@ export function CloudOutcomeCards({
         <article className="card">
           <Spinner
             label={
-              online
+              fallbackActive
                 ? streamPreview
-                  ? `Streaming draft from ${cloudModel} (${streamPreview.length} chars)…`
-                  : `Asking ${cloudModel} to write the draft`
-                : streamPreview
-                  ? `Offline — streaming on-device draft from Gemini Nano (${streamPreview.length} chars)…`
-                  : 'Offline — trying cloud first; falling back to Gemini Nano on this device…'
+                  ? online
+                    ? `Cloud failed — streaming on-device draft from Gemini Nano (${streamPreview.length} chars)…`
+                    : `Offline — streaming on-device draft from Gemini Nano (${streamPreview.length} chars)…`
+                  : online
+                    ? 'Cloud failed — falling back to Gemini Nano on this device…'
+                    : 'Offline — trying cloud first; falling back to Gemini Nano on this device…'
+                : online
+                  ? streamPreview
+                    ? `Streaming draft from ${cloudModel} (${streamPreview.length} chars)…`
+                    : `Asking ${cloudModel} to write the draft`
+                  : streamPreview
+                    ? `Offline — streaming on-device draft from Gemini Nano (${streamPreview.length} chars)…`
+                    : 'Offline — trying cloud first; falling back to Gemini Nano on this device…'
             }
           />
           {streamPreview && (

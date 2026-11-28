@@ -300,5 +300,17 @@ describe('needs the cloud left out, and two children who work better apart', () 
     ];
     const pts = pairPoints([groupConstraint, groupConstraint2], pairEntities, items, note);
     expect(pts.map((p) => p.itemIndex)).toEqual([0, 0]);
+
+    const hwVariantItems = [
+      { heading: 'Home task (10 minutes)', text: 'Discuss in family groups.' },
+      { heading: 'Take-home task (5 minutes)', text: 'Work with partners at home.' },
+      { heading: 'Stage 4 – Homework', text: 'Complete with groups.' },
+      { heading: 'Starter (5 minutes)', text: 'Read silently alone.' },
+    ];
+    const variantPts = pairPoints([groupConstraint, groupConstraint2], pairEntities, hwVariantItems, note);
+    expect(variantPts.map((p) => p.itemIndex)).toEqual([3, 3]);
+
+    const hwOnlyItems = [{ heading: 'Homework (10 minutes)', text: 'Share at home.' }];
+    expect(pairPoints([groupConstraint, groupConstraint2], pairEntities, hwOnlyItems, note)).toEqual([]);
   });
 });

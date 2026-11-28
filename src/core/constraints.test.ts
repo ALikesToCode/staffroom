@@ -488,5 +488,20 @@ describe('Hinglish and Devanagari constraints', () => {
       ['time-after', 'आखिरी घंटी के बाद नहीं रुक सकती'],
       ['time-before', 'सुबह जल्दी नहीं आ सकती'],
     ]);
+
+    const reversed = readConstraintAnswer(
+      note,
+      note,
+      JSON.stringify({
+        constraints: [{ student: 'मीनल', kind: 'time-before', quote: 'आखिरी घंटी के बाद नहीं रुक सकती' }],
+      }),
+      entities,
+    )!;
+    expect(reversed.constraints.map((c) => [c.kind, c.text])).toEqual([['time-after', 'आखिरी घंटी के बाद नहीं रुक सकती']]);
+
+    expect(proposeConstraints(note, entities).map((c) => [c.kind, c.text])).toEqual([
+      ['time-after', 'आखिरी घंटी के बाद नहीं रुक सकती'],
+      ['time-before', 'सुबह जल्दी नहीं आ सकती'],
+    ]);
   });
 });

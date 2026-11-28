@@ -124,11 +124,14 @@ const PATTERNS: { kind: ConstraintKind; re: RegExp }[] = (
     ],
     ['time-after', `${CANNOT}\\s+stay\\b${REST}`],
     ['time-after', `(?:leaves?|goes home|is collected|is picked up)\\s+(?:school\\s+)?(?:at|with|straight after)\\s+the\\s+(?:last|final)\\s+bell${REST}`],
+    ['time-after', `(?:आखिरी|अंतिम)\\s+घंटी\\s+के\\s+बाद[^;।॥]*?(?:नहीं\\s+(?:रुक|ठहर)|जाना\\s+पड़ता)[^;।॥]*`],
+    ['time-after', `(?:स्कूल|छुट्टी)\\s+के\\s+बाद[^;।॥]*?नहीं\\s+(?:रुक|ठहर)[^;।॥]*`],
     [
       'time-before',
       `(?:now\\s+)?(?:helps?|works?|is helping|is working|has to help|has to work|sells?|delivers?)\\b[^;]{0,80}?\\bbefore\\s+(?:school|the first bell|class(?:es)?)\\b`,
     ],
     ['time-before', `${CANNOT}\\s+(?:come|arrive|reach school|get to school|be at school)\\b[^;]{0,40}?(?:early|before\\s+(?:school|the first bell))${REST}`],
+    ['time-before', `(?:सुबह\\s+जल्दी|पहली\\s+घंटी\\s+से\\s+पहले|स्कूल\\s+से\\s+पहले)[^;।॥]*?नहीं\\s+आ[^;।॥]*`],
     [
       'days-away',
       `(?:is\\s+)?(?:away|absent|not in school|not at school|out of school|misses school|does not come(?: to school)?|doesn't come(?: to school)?|cannot come(?: to school)?)\\s+(?:on|every|each)\\s+${DAYS}`,

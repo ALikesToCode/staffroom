@@ -144,7 +144,11 @@ function isNeedEcho(adj: string, inputNeed?: string): boolean {
 
 function pickOfflineStage(text: string, stages: readonly string[]): string {
   if (/^(?:this\s+lesson\s+already\s+suits|already\s+suited|no\s+change\s+needed)/i.test(text.trim())) return 'none';
-  if (/homework|at home|take[- ]home|after school|before.*(?:bell|end)|school\s+day|assignment|submitted|absent|return|next\s+(?:day|morning)|hand\s*in/i.test(text)) {
+  if (
+    /homework|at\s+home|take[- ]home|before\s+(?:the\s+)?(?:last|final)\s+bell|before\s+the\s+end\s+of\s+the\s+school\s+day|stay\s+after\s+school|assignment|submitted|absent|(?:upon|on)\s+(?:his|her|their)\s+return|next\s+(?:day|morning)|hand\s*in/i.test(
+      text,
+    )
+  ) {
     const hw = stages.find((s) => /homework/i.test(s));
     if (hw) return hw;
   }
@@ -363,6 +367,7 @@ export async function streamContent(
   validate?: (text: string, onDevice: boolean) => boolean,
   fallbackPrompt?: string,
   validateRecovered?: (text: string) => boolean,
+  onFallbackStart?: () => void,
 ): Promise<{ text: string; onDevice: boolean }> {
   try {
     const result = await readStream(model, prompt, onChunk);
@@ -374,6 +379,7 @@ export async function streamContent(
     const deviceModel = fallbackModel?.();
     if (!deviceModel || deviceModel === model) throw err;
     onChunk?.('');
+    onFallbackStart?.();
     let recovered: { text: string; onDevice: boolean };
     try {
       recovered = await readStream(deviceModel, fallbackPrompt ?? prompt, onChunk);
@@ -410,6 +416,30 @@ function validDraftStructure(raw: string): RawOfflineDraft | null {
 }
 
 /**
+ * Validate a recovered on-device fallback draft: requires valid JSON structure,
+ * zero newly invented `[Student N]` brackets, and for lessons with needs, at least half
+ * of the told needs answered.
+ */
+export function isRecoveredDraftValid(
+  raw: string,
+  isLesson: boolean,
+  redacted: string,
+  toldLetters: readonly string[],
+  inputNeeds?: ReadonlyMap<string, string>,
+): boolean {
+  const parsed = validDraftStructure(raw);
+  if (!parsed) return false;
+  if (isLesson && /\[Student\s+\d+\]/i.test(raw) && !/\[Student\s+\d+\]/i.test(redacted)) return false;
+  if (isLesson && toldLetters.length > 0) {
+    const normalized = normalizeOfflineNeeds(parsed, toldLetters, inputNeeds);
+    if (splitVariations(normalized, toldLetters).missing.length > Math.floor(toldLetters.length / 2)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Write the draft from the redacted, teacher-approved text. The route is
  * PREFER_IN_CLOUD: the cloud model writes it, and the on-device model takes
  * over when the cloud cannot be reached.
@@ -419,6 +449,7 @@ export async function writeDraft(
   task: Task,
   cloudModel: string,
   onProgressText?: (partialText: string) => void,
+  onFallbackStart?: () => void,
 ): Promise<DraftResult> {
   const isLesson = task.id === 'lesson';
   const inputNeeds = isLesson ? new Map([...redacted.matchAll(NEEDS_LINE_RE)].map((m) => [m[1], m[2].trim()])) : new Map<string, string>();
@@ -455,7 +486,8 @@ export async function writeDraft(
       return true;
     },
     isLesson ? offlineLessonPrompt(redacted) : undefined,
-    (t) => Boolean(validDraftStructure(t)) && !(isLesson && /\[Student\s+\d+\]/i.test(t) && !/\[Student\s+\d+\]/i.test(redacted)),
+    (t) => isRecoveredDraftValid(t, isLesson, redacted, toldLetters, inputNeeds),
+    onFallbackStart,
   );
   const draft = JSON.parse(text) as RawOfflineDraft;
   if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) {

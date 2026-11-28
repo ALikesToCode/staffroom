@@ -2266,12 +2266,32 @@ describe('sensitive rule refinements', () => {
     expect(hits.map((h) => h.category)).toEqual(['health', 'health', 'family', 'family']);
 
     expect(findSensitive('The class is making a poster on diabetes for science exhibition.')).toEqual([]);
+    for (const harmless of [
+      'Chapter on diabetes: the pancreas makes insulin.',
+      'Lesson on epilepsy: seizures are caused by bursts of electrical activity.',
+      'Topic about asthma: an inhaler opens the airways.',
+      'The class is making a poster on insulin treatment for diabetes.',
+      'The class is making a poster on diabetes because they have a science quiz.',
+      'Project on asthma: students list triggers like dust.',
+      'Making a poster about epilepsy for the science fair.',
+    ]) {
+      expect(findSensitive(harmless)).toEqual([]);
+    }
     for (const disclosure of [
       'Riya, who has seizures, is making a poster on epilepsy.',
+      'Riya, who has seizures, needs extra monitoring.',
       'Meenal is making a poster on epilepsy because her fits started last month.',
       'Aarav wrote an essay about diabetes; he takes insulin at lunch.',
+      'Riya wrote an essay about living with her own epilepsy.',
+      'Aman takes insulin before lunch.',
+      'Riya uses an inhaler.',
+      'Riya is autistic and is making a poster on planets.',
+      'Aarav has TB and missed the lesson on nutrition.',
     ]) {
       expect(findSensitive(disclosure).map((h) => h.category)).toEqual(['health']);
     }
+    expect(findSensitive('Chapter on asthma. Riya uses an inhaler.').map((h) => [h.text, h.category])).toEqual([
+      ['Riya uses an inhaler', 'health'],
+    ]);
   });
 });

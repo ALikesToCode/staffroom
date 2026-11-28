@@ -111,10 +111,11 @@ import {
   NO_MODEL,
   NOTE_KEY,
   read,
+  readSignOutBlocked,
   session,
-  SIGNOUT_BLOCKED_KEY,
   STEP,
   write,
+  writeSignOutBlocked,
   type Gaps,
   type KeptClass,
   type Stage,
@@ -177,14 +178,15 @@ export function App() {
   const [scanPreview, setScanPreview] = useState<{ url: string; summary: string } | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [deskCleared, setDeskCleared] = useState<'ok' | 'signout-failed' | null>(() =>
-    read<boolean>(session, SIGNOUT_BLOCKED_KEY, false) ? 'signout-failed' : null,
+    readSignOutBlocked() ? 'signout-failed' : null,
   );
   const deskClearedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const signOutBlockedRef = useRef(read<boolean>(session, SIGNOUT_BLOCKED_KEY, false));
+  const signOutBlockedRef = useRef(readSignOutBlocked());
   const recordsGenRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [nanoDiff, setNanoDiff] = useState<{ rulesOnly: number; nanoAdded: number } | null>(null);
   const [streamPreview, setStreamPreview] = useState('');
+  const [draftFallback, setDraftFallback] = useState(false);
   const [guardGaps, setGuardGaps] = useState<Gaps>(NO_GAPS);
   const [progress, setProgress] = useState('');
   /** The item the teacher asked to release while only the built-in defaults are in force: asked about before it is released. */
@@ -841,6 +843,7 @@ export function App() {
     const sentOnline = navigator.onLine;
     setError(null);
     setDraftFail(null);
+    setDraftFallback(false);
     setStreamPreview('');
     const approvedAt = new Date().toISOString();
     setSent({ text, at: approvedAt, entities, tokens, online: sentOnline, policy: sentPolicy, constraints, needs: approved.needs, lessonNeeds: approved.lessonNeeds ?? [], language });
@@ -849,7 +852,14 @@ export function App() {
     try {
       drafted = await timed(
         'draft',
-        () => writeDraft(text, currentTask, cloudModel, (partial) => !gone() && setStreamPreview(partial)),
+        () =>
+          writeDraft(
+            text,
+            currentTask,
+            cloudModel,
+            (partial) => !gone() && setStreamPreview(partial),
+            () => !gone() && setDraftFallback(true),
+          ),
         (d) => (d.where === 'ON_DEVICE' ? 'ON_DEVICE' : 'IN_CLOUD'),
       );
     } catch (e) {
@@ -1732,9 +1742,11 @@ export function App() {
     } catch {
       // Storage is switched off.
     }
+    signOutBlockedRef.current = true;
+    writeSignOutBlocked(true);
     const signedOut = await clearUserSession();
     signOutBlockedRef.current = !signedOut;
-    write(session, SIGNOUT_BLOCKED_KEY, true, signedOut);
+    writeSignOutBlocked(!signedOut);
     if (deskClearedTimer.current) {
       clearTimeout(deskClearedTimer.current);
       deskClearedTimer.current = null;
@@ -1749,7 +1761,7 @@ export function App() {
   const retrySignOut = async () => {
     const signedOut = await clearUserSession();
     signOutBlockedRef.current = !signedOut;
-    write(session, SIGNOUT_BLOCKED_KEY, true, signedOut);
+    writeSignOutBlocked(!signedOut);
     if (deskClearedTimer.current) {
       clearTimeout(deskClearedTimer.current);
       deskClearedTimer.current = null;
@@ -2548,6 +2560,7 @@ export function App() {
               <CloudOutcomeCards
                 stage={stage}
                 online={online}
+                fallbackActive={draftFallback}
                 cloudModel={policy.cloudModel}
                 streamPreview={streamPreview}
                 result={result}

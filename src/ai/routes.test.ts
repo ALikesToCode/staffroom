@@ -3,7 +3,7 @@ import { buildVault } from '../core/vault';
 import { splitVariations } from '../core/lessonNeeds';
 import { checkOnDevice } from './check';
 import { constraintsOnDevice } from './constraints';
-import { labelReceipt, normalizeOfflineNeeds, offlineLessonPrompt, streamContent } from './draft';
+import { isRecoveredDraftValid, labelReceipt, normalizeOfflineNeeds, offlineLessonPrompt, streamContent } from './draft';
 import { guardOnDevice } from './guard';
 import { fitForChild, fitStep } from './fit';
 import { transcribeNotebookOnDevice } from './notebook';
@@ -445,5 +445,81 @@ describe('naming the receipt', () => {
         (t) => !/\[Student\s+\d+\]/i.test(t),
       ),
     ).rejects.toThrow(/fallback draft ended incomplete/);
+  });
+
+  it('keeps non-homework return clauses out of Homework, fires onFallbackStart on mid-stream recovery, and rejects recovered lessons missing over half of needs', async () => {
+    const returnDraft = {
+      title: 'Class 6 English',
+      items: [
+        { heading: 'Starter (5 minutes)', text: 'Warm up.' },
+        { heading: 'Teach (10 minutes)', text: 'Model.' },
+        { heading: 'Practise (15 minutes)', text: 'Read in pairs.' },
+        { heading: 'Homework (10 minutes)', text: 'Write three lines at home.' },
+      ],
+      adjustments: [{ letter: 'E', stage: 'none', action: 'Let her return to the text with a partner.' }],
+    };
+    const normalized = normalizeOfflineNeeds(returnDraft, ['E']);
+    const split = splitVariations(normalized, ['E']);
+    expect(split.variations[0]?.itemIndex).toBe(2); // Practise, not Homework
+
+    const cloudErr = new Error('mid-stream reset');
+    const rej = Promise.reject(cloudErr);
+    rej.catch(() => {});
+    const cloudBroken = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            yield { text: () => '{"title":"Partial' };
+            throw cloudErr;
+          },
+        },
+        response: rej,
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+    const localOk = {
+      generateContentStream: async () => ({
+        stream: {
+          async *[Symbol.asyncIterator]() {
+            yield { text: () => '{"title":"OK","items":[{"heading":"Starter","text":"Read."}]}' };
+          },
+        },
+        response: Promise.resolve({
+          text: () => '{"title":"OK","items":[{"heading":"Starter","text":"Read."}]}',
+          inferenceSource: 'on_device',
+        }),
+      }),
+    } as unknown as Parameters<typeof streamContent>[0];
+
+    let startedFallback = 0;
+    const recovered = await streamContent(
+      cloudBroken,
+      'prompt',
+      undefined,
+      () => localOk,
+      undefined,
+      'compact',
+      undefined,
+      () => {
+        startedFallback++;
+      },
+    );
+    expect(recovered.onDevice).toBe(true);
+    expect(startedFallback).toBe(1);
+
+    const tooFewNeeds = JSON.stringify({
+      title: 'Plan',
+      items: [{ heading: 'Starter', text: 'Go.' }],
+      adjustments: [{ letter: 'A', stage: 'Starter', action: 'Check understanding early.' }],
+    });
+    expect(isRecoveredDraftValid(tooFewNeeds, true, 'Need A: x\nNeed B: y\nNeed C: z\nNeed D: w', ['A', 'B', 'C', 'D'])).toBe(false);
+    const halfNeeds = JSON.stringify({
+      title: 'Plan',
+      items: [{ heading: 'Starter', text: 'Go.' }],
+      adjustments: [
+        { letter: 'A', stage: 'Starter', action: 'Check understanding early.' },
+        { letter: 'B', stage: 'Starter', action: 'Provide printed cards.' },
+      ],
+    });
+    expect(isRecoveredDraftValid(halfNeeds, true, 'Need A: x\nNeed B: y\nNeed C: z\nNeed D: w', ['A', 'B', 'C', 'D'])).toBe(true);
   });
 });

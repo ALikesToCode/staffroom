@@ -42,6 +42,17 @@ export const KEEP_CLASS_KEY = 'staffroom.keepClass';
 export const CLASS_KEY = 'staffroom.class.v1';
 export const SIGNOUT_BLOCKED_KEY = 'staffroom.signoutBlocked';
 
+/** Read whether Clear desk failed to end the anonymous Auth session across tabs or reloads. */
+export function readSignOutBlocked(): boolean {
+  return read<boolean>(local, SIGNOUT_BLOCKED_KEY, false) || read<boolean>(session, SIGNOUT_BLOCKED_KEY, false);
+}
+
+/** Persist or clear the fail-closed signout-blocked marker across browser-wide and tab storage. */
+export function writeSignOutBlocked(blocked: boolean): void {
+  write(local, SIGNOUT_BLOCKED_KEY, true, !blocked);
+  write(session, SIGNOUT_BLOCKED_KEY, true, !blocked);
+}
+
 export interface KeptClass {
   note: string;
   classList: string[];

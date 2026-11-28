@@ -12,6 +12,7 @@ import { AppHeader } from './AppHeader';
 import { ReviewCard } from './ReviewCard';
 import { addRequests } from '../core/network';
 import type { Materials } from '../core/materials';
+import { readSignOutBlocked, SIGNOUT_BLOCKED_KEY, writeSignOutBlocked } from '../app/storage';
 
 describe('CloudText', () => {
   it('shows each stand-in literally, square brackets included', () => {
@@ -471,5 +472,44 @@ describe('AppHeader and ReviewCard', () => {
     expect(html).toContain('disabled=""');
     expect(html).toContain('Sign-out failed after Clear desk — use Retry sign-out above before turning copies back on.');
     expect(html).not.toContain('Records in your account');
+  });
+
+  it('persists signoutBlocked across cleared tab sessionStorage on shared browsers and clears cleanly on retry', () => {
+    const store = (init: Record<string, string> = {}) => {
+      const m = new Map(Object.entries(init));
+      return {
+        getItem: (k: string) => m.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          m.set(k, v);
+        },
+        removeItem: (k: string) => {
+          m.delete(k);
+        },
+        clear: () => m.clear(),
+        key: (i: number) => [...m.keys()][i] ?? null,
+        get length() {
+          return m.size;
+        },
+      } as Storage;
+    };
+    const origLocal = globalThis.localStorage;
+    const origSession = globalThis.sessionStorage;
+    const localMock = store();
+    const sessionMock = store();
+    Object.defineProperty(globalThis, 'localStorage', { value: localMock, configurable: true });
+    Object.defineProperty(globalThis, 'sessionStorage', { value: sessionMock, configurable: true });
+    try {
+      writeSignOutBlocked(true);
+      expect(readSignOutBlocked()).toBe(true);
+      sessionMock.clear();
+      expect(localMock.getItem(SIGNOUT_BLOCKED_KEY)).toBe('true');
+      expect(readSignOutBlocked()).toBe(true);
+      writeSignOutBlocked(false);
+      expect(readSignOutBlocked()).toBe(false);
+      expect(localMock.getItem(SIGNOUT_BLOCKED_KEY)).toBeNull();
+    } finally {
+      Object.defineProperty(globalThis, 'localStorage', { value: origLocal, configurable: true });
+      Object.defineProperty(globalThis, 'sessionStorage', { value: origSession, configurable: true });
+    }
   });
 });

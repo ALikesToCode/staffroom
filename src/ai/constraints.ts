@@ -76,6 +76,8 @@ export function readConstraintAnswer(note: string, paragraph: string, raw: strin
     }
     if (kind === 'time-after' && MORNING_BEFORE_RE.test(quote) && !AFTER_SCHOOL_RE.test(quote)) {
       kind = 'time-before';
+    } else if (kind === 'time-before' && AFTER_SCHOOL_RE.test(quote) && !MORNING_BEFORE_RE.test(quote)) {
+      kind = 'time-after';
     }
     if ((kind === 'time-after' || kind === 'time-before') && !TIME_OF_DAY_CUE.test(quote)) {
       continue;

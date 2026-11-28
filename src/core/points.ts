@@ -286,13 +286,16 @@ export const pairLine = (a: string, b: string, together = true) => (together ? `
  * stage does, one line on the Practise stage (the first stage if there is
  * none) to seat them apart. Offered, like every line.
  */
+const isHomeworkStage = (item: DraftItem) =>
+  stageOf(item, true) === 'homework' || /\b(?:homework|home\s+task|take[- ]home)\b/i.test(stageName(item.heading));
+
 export function pairPoints(constraints: readonly Constraint[], entities: Entity[], items: readonly DraftItem[], note: string): Point[] {
   const apart = constraints.filter((c) => c.confirmed && c.kind === 'learning' && c.learn === 'group' && c.about && c.at !== undefined);
-  const together = items.flatMap((item, i) =>
-    stageOf(item, true) !== 'homework' && !/^homework$/i.test(stageName(item.heading).trim()) && TOGETHER.test(item.text) ? [i] : [],
-  );
-  const practise = items.findIndex((item) => /^practi[sc]e$/i.test(stageName(item.heading).trim()));
-  const stages = together.length > 0 ? together : items.length > 0 ? [practise >= 0 ? practise : 0] : [];
+  const together = items.flatMap((item, i) => (!isHomeworkStage(item) && TOGETHER.test(item.text) ? [i] : []));
+  const practise = items.findIndex((item) => !isHomeworkStage(item) && /^practi[sc]e$/i.test(stageName(item.heading).trim()));
+  const firstClassStage = items.findIndex((item) => !isHomeworkStage(item));
+  const fallbackStage = practise >= 0 ? practise : firstClassStage;
+  const stages = together.length > 0 ? together : fallbackStage >= 0 ? [fallbackStage] : [];
   const out: Point[] = [];
   for (const at of new Set(apart.map((c) => c.at))) {
     const ids = [...new Set(apart.filter((c) => c.at === at).map((c) => c.about!))];
